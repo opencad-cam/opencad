@@ -1,0 +1,33 @@
+# Build directory
+build/
+cmake-build-*/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+.idea/
+*.user
+
+# Compiled
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.o
+*.obj
+*.pdb
+
+# Qt
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.qm
+
+# OS
+.DS_Store
+Thumbs.db

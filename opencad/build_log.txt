@@ -1,0 +1,280 @@
+=== OpenCAD Build Script (MinGW + Ninja) ===
+
+=== Configuring with CMake (Ninja) ===
+-- The CXX compiler identification is GNU 13.1.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Qt/Tools/mingw1310_64/bin/g++.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found ZLIB: optimized;C:/vcpkg/installed/x64-mingw-dynamic/lib/libzlib.dll.a;debug;C:/vcpkg/installed/x64-mingw-dynamic/debug/lib/libzlibd.dll.a (found version "1.3.1")
+-- OpenCASCADE found: C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Performing Test HAVE_STDATOMIC
+-- Performing Test HAVE_STDATOMIC - Success
+-- Found WrapAtomic: TRUE
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- Found OpenGL: opengl32
+-- Eigen3 found: C:/vcpkg/installed/x64-mingw-dynamic/include/eigen3
+-- 
+-- === OpenCAD Configuration ===
+-- Version:     0.1.0
+-- C++ Standard: 17
+-- Qt Version:  ON
+-- Build Tests: ON
+-- Python:      ON
+-- =============================
+-- Configuring done (4.3s)
+-- Generating done (0.4s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_C_COMPILER
+
+
+-- Build files have been written to: C:/Projects/opencadandsimulation/opencad/build
+
+=== Building ===
+ninja: Entering directory `build'
+[1/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/SketchPlane.cpp.obj
+[2/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/PerpendicularConstraint.cpp.obj
+[3/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/ParallelConstraint.cpp.obj
+[4/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchEntity.cpp.obj
+[5/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchArc.cpp.obj
+[6/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/TangentConstraint.cpp.obj
+[7/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchRectangle.cpp.obj
+[8/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/Constraint.cpp.obj
+[9/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchPoint.cpp.obj
+[10/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/VerticalConstraint.cpp.obj
+[11/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchCircle.cpp.obj
+[12/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/CoincidentConstraint.cpp.obj
+[13/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchLine.cpp.obj
+[14/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/EqualConstraint.cpp.obj
+[15/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchEllipse.cpp.obj
+[16/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/HorizontalConstraint.cpp.obj
+[17/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/entities/SketchSpline.cpp.obj
+[18/64] Building CXX object src/core/CMakeFiles/opencad_core.dir/geometry/Shape.cpp.obj
+[19/64] Building CXX object src/core/CMakeFiles/opencad_core.dir/geometry/BooleanOps.cpp.obj
+[20/64] Building CXX object src/core/CMakeFiles/opencad_core.dir/geometry/Transform.cpp.obj
+[21/64] Building CXX object src/core/CMakeFiles/opencad_core.dir/geometry/Primitives.cpp.obj
+[22/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/FixConstraint.cpp.obj
+[23/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/ConcentricConstraint.cpp.obj
+[24/64] Linking CXX static library lib\libopencad_core.a
+[25/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/constraints/DimensionConstraint.cpp.obj
+[26/64] Building CXX object tests/CMakeFiles/test_geometry.dir/test_geometry.cpp.obj
+[27/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/Sketch.cpp.obj
+[28/64] Building CXX object src/io/CMakeFiles/opencad_io.dir/step/StepWriter.cpp.obj
+[29/64] Building CXX object src/io/CMakeFiles/opencad_io.dir/step/StepReader.cpp.obj
+[30/64] Building CXX object src/io/CMakeFiles/opencad_io.dir/mesh/StlWriter.cpp.obj
+[31/64] Linking CXX static library lib\libopencad_io.a
+[32/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/LoftFeature.cpp.obj
+[33/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/SweepFeature.cpp.obj
+[34/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/FilletFeature.cpp.obj
+[35/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/ShellFeature.cpp.obj
+[36/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/PatternFeature.cpp.obj
+[37/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/ChamferFeature.cpp.obj
+[38/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/MirrorFeature.cpp.obj
+[39/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/CutFeature.cpp.obj
+[40/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/ExtrudeFeature.cpp.obj
+[41/64] Building CXX object src/part/CMakeFiles/opencad_part.dir/WireBuilder.cpp.obj
+[42/64] Linking CXX executable bin\test_geometry.exe
+[43/64] Building CXX object src/sketch/CMakeFiles/opencad_sketch.dir/solver/ConstraintSolver.cpp.obj
+[44/64] Linking CXX static library lib\libopencad_sketch.a
+[45/64] Linking CXX static library lib\libopencad_part.a
+[46/64] Automatic MOC and UIC for target opencad_ui
+[47/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/MirrorDialog.cpp.obj
+[48/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/FilletDialog.cpp.obj
+[49/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/SketchPlaneDialog.cpp.obj
+[50/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/ChamferDialog.cpp.obj
+[51/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/ShellDialog.cpp.obj
+[52/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/SweepDialog.cpp.obj
+[53/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/PatternDialog.cpp.obj
+[54/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/dialogs/LoftDialog.cpp.obj
+[55/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/viewport/ViewportController.cpp.obj
+[56/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/sketch/SketchView2D.cpp.obj
+FAILED: src/ui/CMakeFiles/opencad_ui.dir/sketch/SketchView2D.cpp.obj 
+C:\Qt\Tools\mingw1310_64\bin\g++.exe -DHAVE_FREETYPE -DHAVE_OPENGL_EXT -DMINGW_HAS_SECURE_API=1 -DOCC_CONVERT_SIGNALS -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_USE_MATH_DEFINES -D_WIN32_WINNT=0x0601 -D_WIN64 -IC:/Projects/opencadandsimulation/opencad/build/src/ui/opencad_ui_autogen/include -IC:/Projects/opencadandsimulation/opencad/src -IC:/Projects/opencadandsimulation/opencad/src/ui -IC:/Projects/opencadandsimulation/opencad/src/core -IC:/Projects/opencadandsimulation/opencad/src/io -IC:/Projects/opencadandsimulation/opencad/src/sketch -IC:/Projects/opencadandsimulation/opencad/src/part/.. -isystem C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade -isystem C:/vcpkg/installed/x64-mingw-dynamic/include -isystem C:/vcpkg/installed/x64-mingw-dynamic/include/eigen3 -isystem C:/Qt/6.10.1/mingw_64/include/QtCore -isystem C:/Qt/6.10.1/mingw_64/include -isystem C:/Qt/6.10.1/mingw_64/mkspecs/win32-g++ -isystem C:/Qt/6.10.1/mingw_64/include/QtWidgets -isystem C:/Qt/6.10.1/mingw_64/include/QtGui -isystem C:/Qt/6.10.1/mingw_64/include/QtOpenGL -isystem C:/Qt/6.10.1/mingw_64/include/QtOpenGLWidgets -O3 -DNDEBUG -std=c++17 -MD -MT src/ui/CMakeFiles/opencad_ui.dir/sketch/SketchView2D.cpp.obj -MF src\ui\CMakeFiles\opencad_ui.dir\sketch\SketchView2D.cpp.obj.d -o src/ui/CMakeFiles/opencad_ui.dir/sketch/SketchView2D.cpp.obj -c C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp
+C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp: In member function 'void opencad::ui::SketchView2D::drawEntity(QPainter&, const opencad::sketch::SketchEntity*)':
+C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp:280:30: error: aggregate 'QPainterPath path' has incomplete type and cannot be defined
+  280 |                 QPainterPath path;
+      |                              ^~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp: In member function 'void opencad::ui::SketchView2D::finishCurrentEntity()':
+C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp:594:33: error: no matching function for call to 'opencad::sketch::Sketch::addArc(Standard_Real, Standard_Real, double&, double&, double)'
+  594 |                 m_sketch->addArc(m_startPoint.X(), m_startPoint.Y(),
+      |                 ~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  595 |                                 radius, startAngle, M_PI/2);  // 90 degree arc
+      |                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp:7:
+C:/Projects/opencadandsimulation/opencad/src/sketch/Sketch.h:65:20: note: candidate: 'opencad::sketch::SketchArc::Ptr opencad::sketch::Sketch::addArc(const gp_Pnt2d&, double, double, double)'
+   65 |     SketchArc::Ptr addArc(const gp_Pnt2d& center, double radius, double startAngle, double endAngle);
+      |                    ^~~~~~
+C:/Projects/opencadandsimulation/opencad/src/sketch/Sketch.h:65:20: note:   candidate expects 4 arguments, 5 provided
+C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp:603:52: error: cannot convert 'Standard_Real' {aka 'double'} to 'const gp_Pnt2d&'
+  603 |                 m_sketch->addEllipse(m_startPoint.X(), m_startPoint.Y(), rx, ry);
+      |                                      ~~~~~~~~~~~~~~^~
+      |                                                    |
+      |                                                    Standard_Real {aka double}
+C:/Projects/opencadandsimulation/opencad/src/sketch/Sketch.h:71:51: note:   initializing argument 1 of 'opencad::sketch::SketchEllipse::Ptr opencad::sketch::Sketch::addEllipse(const gp_Pnt2d&, double, double, double)'
+   71 |     SketchEllipse::Ptr addEllipse(const gp_Pnt2d& center, double majorR, double minorR, double angle = 0);
+      |                                   ~~~~~~~~~~~~~~~~^~~~~~
+[57/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/viewport/Viewport3D.cpp.obj
+C:/Projects/opencadandsimulation/opencad/src/ui/viewport/Viewport3D.cpp: In member function 'void opencad::ui::Viewport3D::handlePick(int, int)':
+C:/Projects/opencadandsimulation/opencad/src/ui/viewport/Viewport3D.cpp:252:22: warning: 'AIS_StatusOfPick AIS_InteractiveContext::Select(Standard_Boolean)' is deprecated: This method is deprecated - SelectDetected() taking AIS_SelectionScheme_Replace should be called instead [-Wdeprecated-declarations]
+  252 |     m_context->Select(true);
+      |     ~~~~~~~~~~~~~~~~~^~~~~~
+In file included from C:/Projects/opencadandsimulation/opencad/src/ui/viewport/Viewport3D.h:14,
+                 from C:/Projects/opencadandsimulation/opencad/src/ui/viewport/Viewport3D.cpp:6:
+C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade/AIS_InteractiveContext.hxx:1289:36: note: declared here
+ 1289 |   Standard_EXPORT AIS_StatusOfPick Select(const Standard_Boolean theToUpdateViewer);
+      |                                    ^~~~~~
+[58/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/opencad_ui_autogen/mocs_compilation.cpp.obj
+[59/64] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/MainWindow.cpp.obj
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp: In member function 'void opencad::ui::MainWindow::setupMenus()':
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:128:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  128 |     fileMenu->addAction("&New", this, &MainWindow::onNewFile, QKeySequence::New);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenubar.h:9,
+                 from C:/Qt/6.10.1/mingw_64/include/QtWidgets/QMenuBar:1,
+                 from C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.h:11,
+                 from C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:6:
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:129:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  129 |     fileMenu->addAction("&Open...", this, &MainWindow::onOpenFile, QKeySequence::Open);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:131:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  131 |     fileMenu->addAction("&Save", this, &MainWindow::onSaveFile, QKeySequence::Save);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:132:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  132 |     fileMenu->addAction("Save &As...", this, &MainWindow::onSaveAs, QKeySequence::SaveAs);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:137:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  137 |     fileMenu->addAction("E&xit", this, &MainWindow::onExit, QKeySequence::Quit);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:141:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  141 |     editMenu->addAction("&Undo", this, &MainWindow::onUndo, QKeySequence::Undo);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:142:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  142 |     editMenu->addAction("&Redo", this, &MainWindow::onRedo, QKeySequence::Redo);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:146:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  146 |     viewMenu->addAction("&Fit All", this, &MainWindow::onViewFit, Qt::Key_F);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:148:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  148 |     viewMenu->addAction("Front", this, &MainWindow::onViewFront, Qt::Key_1);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:150:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  150 |     viewMenu->addAction("Top", this, &MainWindow::onViewTop, Qt::Key_7);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:152:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  152 |     viewMenu->addAction("Left", this, &MainWindow::onViewLeft, Qt::Key_3);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:154:24: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  154 |     viewMenu->addAction("Isometric", this, &MainWindow::onViewIsometric, Qt::Key_0);
+      |     ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:158:26: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  158 |     sketchMenu->addAction("New Sketch", this, &MainWindow::onNewSketch, Qt::Key_S);
+      |     ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:161:26: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  161 |     sketchMenu->addAction("Finish Sketch", this, &MainWindow::onFinishSketch, Qt::Key_Escape);
+      |     ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:165:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  165 |     sketchGeomMenu->addAction("Line", this, &MainWindow::onSketchLine, Qt::Key_L);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:166:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  166 |     sketchGeomMenu->addAction("Rectangle", this, &MainWindow::onSketchRectangle, Qt::Key_R);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:167:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  167 |     sketchGeomMenu->addAction("Circle", this, &MainWindow::onSketchCircle, Qt::Key_C);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:168:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  168 |     sketchGeomMenu->addAction("Arc", this, &MainWindow::onSketchArc, Qt::Key_A);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:169:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  169 |     sketchGeomMenu->addAction("Point", this, &MainWindow::onSketchPoint, Qt::Key_P);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:174:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  174 |     constraintMenu->addAction("Horizontal", this, &MainWindow::onConstraintHorizontal, Qt::Key_H);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:175:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  175 |     constraintMenu->addAction("Vertical", this, &MainWindow::onConstraintVertical, Qt::Key_V);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:177:30: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  177 |     constraintMenu->addAction("Distance", this, &MainWindow::onConstraintDistance, Qt::Key_D);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:185:28: warning: 'typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type QMenu::addAction(const QString&, const Obj*, Func1, const QKeySequence&) [with Obj = opencad::ui::MainWindow; Func1 = void (opencad::ui::MainWindow::*)(); typename std::enable_if<((! std::is_same<const char*, Func1>::value) && QtPrivate::IsPointerToTypeDerivedFromQObject<T*>::Value), QAction*>::type = QAction*]' is deprecated: Use addAction(text, shortcut, object, slot) instead. [-Wdeprecated-declarations]
+  185 |     featuresMenu->addAction("Extrude", this, &MainWindow::onExtrude, Qt::Key_E);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Qt/6.10.1/mingw_64/include/QtWidgets/qmenu.h:79:9: note: declared here
+   79 |         addAction(const QString &text, const Obj *object, Func1 slot,
+      |         ^~~~~~~~~
+ninja: build stopped: subcommand failed.
+Build failed!
+Press any key to continue . . . 
