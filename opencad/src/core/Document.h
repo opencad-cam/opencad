@@ -200,6 +200,21 @@ signals:
   void featureRemoved(Feature *feature);
 
   /**
+   * @brief Emitted when a sketch is added
+   */
+  void sketchAdded(sketch::Sketch *sketch);
+
+  /**
+   * @brief Emitted when a sketch is removed
+   */
+  void sketchRemoved(sketch::Sketch *sketch);
+
+  /**
+   * @brief Emitted when sketches are cleared
+   */
+  void sketchesCleared();
+
+  /**
    * @brief Emitted when regeneration completes
    */
   void regenerationCompleted(bool success);
