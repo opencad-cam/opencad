@@ -9,8 +9,6 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
-#include <gp_Pln.hxx>
-#include <gp_Dir.hxx>
 #include <memory>
 
 
@@ -73,8 +71,7 @@ private:
   std::string m_error;
 
   // Internal: apply draft to prism
-  TopoDS_Shape applyDraft(const TopoDS_Shape &shape, const gp_Pln &neutralPlane,
-                          const gp_Dir &pullDir, double angleDeg);
+  TopoDS_Shape applyDraft(const TopoDS_Shape &shape, double angleDeg);
 };
 
 } // namespace part
