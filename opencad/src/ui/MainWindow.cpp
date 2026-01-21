@@ -3450,7 +3450,8 @@ void MainWindow::onToolApply() {
     TopoDS_Face profileFace;
 
     try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
+      // Use sketch plane for face creation to ensure robustness on non-XY planes
+      BRepBuilderAPI_MakeFace faceBuilder(m_currentSketch->plane().plane(), selectedWire, true);
       if (faceBuilder.IsDone()) {
         profileFace = faceBuilder.Face();
         qDebug() << "Extrude: Profile face created successfully";
@@ -3815,7 +3816,8 @@ void MainWindow::onToolApply() {
     TopoDS_Face profileFace;
 
     try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
+      // Use sketch plane for face creation
+      BRepBuilderAPI_MakeFace faceBuilder(m_currentSketch->plane().plane(), selectedWire, true);
       if (faceBuilder.IsDone()) {
         profileFace = faceBuilder.Face();
       }
@@ -3920,7 +3922,8 @@ void MainWindow::onToolApply() {
     TopoDS_Wire selectedWire = closedProfiles[m_selectedProfileIndex];
 
     try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
+      // Use sketch plane for face creation
+      BRepBuilderAPI_MakeFace faceBuilder(m_currentSketch->plane().plane(), selectedWire, true);
       if (faceBuilder.IsDone()) {
         TopoDS_Face profileFace = faceBuilder.Face();
         gp_Dir cutDir = m_currentSketch->plane().normal();
