@@ -1,12 +1,12 @@
 @echo off
 echo === OpenCAD Build Script (MinGW + Ninja) ===
 
-:: Set MinGW and Qt paths
-set MINGW_PATH=C:\Qt\Tools\mingw1310_64\bin
-set QT_PATH=C:\Qt\6.10.1\mingw_64
-set CMAKE_PATH=C:\Qt\Tools\CMake_64\bin
-set NINJA_PATH=C:\Qt\Tools\Ninja
-set VCPKG_ROOT=C:\vcpkg
+:: Set MinGW and Qt paths (Customize these or set environment variables before running)
+if "%MINGW_PATH%"=="" set MINGW_PATH=C:\Qt\Tools\mingw1310_64\bin
+if "%QT_PATH%"=="" set QT_PATH=C:\Qt\6.10.1\mingw_64
+if "%CMAKE_PATH%"=="" set CMAKE_PATH=C:\Qt\Tools\CMake_64\bin
+if "%NINJA_PATH%"=="" set NINJA_PATH=C:\Qt\Tools\Ninja
+if "%VCPKG_ROOT%"=="" set VCPKG_ROOT=C:\vcpkg
 
 :: Add to PATH
 set PATH=%CMAKE_PATH%;%NINJA_PATH%;%MINGW_PATH%;%PATH%

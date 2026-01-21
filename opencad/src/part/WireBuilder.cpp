@@ -224,7 +224,18 @@ TopoDS_Face WireBuilder::buildFace(const TopoDS_Wire &wire) {
 
 TopoDS_Face WireBuilder::buildFace(const sketch::Sketch &sketch) {
   TopoDS_Wire wire = buildWire(sketch);
-  return buildFace(wire);
+  if (wire.IsNull()) {
+    return TopoDS_Face();
+  }
+
+  const gp_Pln& plane = sketch.plane().plane();
+  BRepBuilderAPI_MakeFace faceMaker(plane, wire, true);
+  if (faceMaker.IsDone()) {
+    return faceMaker.Face();
+  } else {
+    // Fallback
+    return buildFace(wire);
+  }
 }
 
 bool WireBuilder::isClosed(const TopoDS_Wire &wire) {

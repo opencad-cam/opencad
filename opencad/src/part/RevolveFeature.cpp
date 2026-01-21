@@ -73,20 +73,36 @@ TopoDS_Shape RevolveFeature::execute(const sketch::Sketch &sketch,
 
   try {
     // Build face from sketch
-    TopoDS_Face face = sketch.buildFace();
-    if (face.IsNull()) {
-      // Try building wire and creating face
-      TopoDS_Wire wire = sketch.buildWire();
-      if (wire.IsNull()) {
-        m_error = "Failed to build wire from sketch";
-        return TopoDS_Shape();
+    // Use sketch plane for robust face creation
+    const gp_Pln& plane = sketch.plane().plane();
+    TopoDS_Wire wire = sketch.buildWire();
+
+    if (wire.IsNull()) {
+      m_error = "Failed to build wire from sketch";
+      return TopoDS_Shape();
+    }
+
+    // Try building face using the sketch plane
+    TopoDS_Face face;
+    try {
+      BRepBuilderAPI_MakeFace makeFace(plane, wire, true);
+      if (makeFace.IsDone()) {
+        face = makeFace.Face();
+      } else {
+        // Fallback: Try without plane (legacy behavior)
+        BRepBuilderAPI_MakeFace makeFaceLegacy(wire, true);
+        if (makeFaceLegacy.IsDone()) {
+          face = makeFaceLegacy.Face();
+        }
       }
-      BRepBuilderAPI_MakeFace makeFace(wire, true);
-      if (!makeFace.IsDone()) {
+    } catch (...) {
+       m_error = "Exception during face creation";
+       return TopoDS_Shape();
+    }
+
+    if (face.IsNull()) {
         m_error = "Failed to build face from wire";
         return TopoDS_Shape();
-      }
-      face = makeFace.Face();
     }
 
     // Get rotation axis
@@ -149,19 +165,22 @@ TopoDS_Shape RevolveFeature::execute(const sketch::Sketch &sketch,
   m_error.clear();
 
   try {
-    TopoDS_Face face = sketch.buildFace();
-    if (face.IsNull()) {
-      TopoDS_Wire wire = sketch.buildWire();
-      if (wire.IsNull()) {
-        m_error = "Failed to build wire from sketch";
-        return TopoDS_Shape();
-      }
-      BRepBuilderAPI_MakeFace makeFace(wire, true);
-      if (!makeFace.IsDone()) {
+    // Use sketch plane for robust face creation
+    const gp_Pln& plane = sketch.plane().plane();
+    TopoDS_Wire wire = sketch.buildWire();
+
+    if (wire.IsNull()) {
+      m_error = "Failed to build wire from sketch";
+      return TopoDS_Shape();
+    }
+
+    TopoDS_Face face;
+    BRepBuilderAPI_MakeFace makeFace(plane, wire, true);
+    if (makeFace.IsDone()) {
+      face = makeFace.Face();
+    } else {
         m_error = "Failed to build face from wire";
         return TopoDS_Shape();
-      }
-      face = makeFace.Face();
     }
 
     BRepPrimAPI_MakeRevol revolve(face, axis, toRadians(angleDeg), true);

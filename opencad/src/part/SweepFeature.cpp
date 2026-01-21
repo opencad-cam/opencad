@@ -32,9 +32,11 @@ TopoDS_Shape SweepFeature::execute(const TopoDS_Shape &profile,
 
   try {
     // If profile is a wire, make it a face first
+    // Note: This relies on the wire being planar.
+    // Ideally, the caller should provide a Face or a Wire with a Plane context.
     TopoDS_Shape profileShape = profile;
     if (profile.ShapeType() == TopAbs_WIRE) {
-      BRepBuilderAPI_MakeFace faceMaker(TopoDS::Wire(profile));
+      BRepBuilderAPI_MakeFace faceMaker(TopoDS::Wire(profile), true); // true = only planar
       if (faceMaker.IsDone()) {
         profileShape = faceMaker.Face();
       }
