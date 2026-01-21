@@ -233,7 +233,7 @@ bool WireBuilder::isClosed(const TopoDS_Wire &wire) {
   return BRepAlgo::IsValid(wire) && wire.Closed();
 }
 
-TopoDS_Shape WireBuilder::buildFaces(const std::vector<TopoDS_Wire> &wires) {
+TopoDS_Shape WireBuilder::buildFaces(const std::vector<TopoDS_Wire> &wires, const gp_Pln* plane) {
   if (wires.empty())
     return TopoDS_Shape();
 
@@ -248,9 +248,21 @@ TopoDS_Shape WireBuilder::buildFaces(const std::vector<TopoDS_Wire> &wires) {
       continue;
 
     try {
-      BRepBuilderAPI_MakeFace faceMaker(wire, true);
-      if (faceMaker.IsDone()) {
-        builder.Add(resultCompound, faceMaker.Face());
+      TopoDS_Face face;
+      if (plane) {
+        BRepBuilderAPI_MakeFace faceMaker(*plane, wire, true);
+        if (faceMaker.IsDone()) {
+          face = faceMaker.Face();
+        }
+      } else {
+        BRepBuilderAPI_MakeFace faceMaker(wire, true);
+        if (faceMaker.IsDone()) {
+          face = faceMaker.Face();
+        }
+      }
+
+      if (!face.IsNull()) {
+        builder.Add(resultCompound, face);
         addedAny = true;
       }
     } catch (...) {

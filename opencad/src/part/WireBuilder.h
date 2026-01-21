@@ -9,6 +9,7 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
+#include <gp_Pln.hxx>
 #include <memory>
 #include <vector>
 
@@ -42,7 +43,7 @@ public:
   static bool isClosed(const TopoDS_Wire &wire);
 
   /// Build faces from multiple wires (supports holes)
-  static TopoDS_Shape buildFaces(const std::vector<TopoDS_Wire> &wires);
+  static TopoDS_Shape buildFaces(const std::vector<TopoDS_Wire> &wires, const gp_Pln* plane = nullptr);
 };
 
 } // namespace part

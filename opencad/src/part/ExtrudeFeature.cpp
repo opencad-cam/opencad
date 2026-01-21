@@ -47,7 +47,8 @@ TopoDS_Shape ExtrudeFeature::execute(const sketch::Sketch &sketch,
   }
 
   // Build topology (faces with holes) from profiles
-  TopoDS_Shape profileShape = WireBuilder::buildFaces(profiles);
+  const gp_Pln& plane = sketch.plane().plane();
+  TopoDS_Shape profileShape = WireBuilder::buildFaces(profiles, &plane);
   if (profileShape.IsNull()) {
     m_error = "Failed to build valid face architecture from profiles.";
     return TopoDS_Shape();
