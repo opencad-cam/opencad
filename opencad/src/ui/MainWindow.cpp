@@ -2025,49 +2025,78 @@ void MainWindow::onExtrude() {
 
   // Reset selected profile
   m_selectedProfileIndex = -1;
-
-  if (!m_currentSketch || m_currentSketch->entities().empty()) {
-    QMessageBox::information(this, "Extrude",
-                             "Create a closed sketch profile first.\n"
-                             "Use Sketch > New Sketch and draw geometry.");
-    return;
-  }
-
-  // Detect all closed profiles in sketch
-  auto closedProfiles = m_currentSketch->detectClosedProfiles();
-
-  if (closedProfiles.empty()) {
-    QMessageBox::information(
-        this, "Extrude",
-        "No closed profiles found in sketch.\n"
-        "Draw closed shapes (circles, rectangles, or connected lines).");
-    return;
-  }
-
-  // Set active tool
-  m_pendingOperation = PendingOperation::Extrude;
   m_activePartTool = ActivePartTool::Extrude;
 
-  // Update profile list in ToolSettingsPanel
-  if (m_toolSettingsPanel) {
-    QStringList profileNames;
-    for (size_t i = 0; i < closedProfiles.size(); ++i) {
-      profileNames << QString("Profile %1").arg(i + 1);
+  // Check if we have a valid sketch
+  bool hasSketch = m_currentSketch && !m_currentSketch->entities().empty();
+
+  // Check if we have a selected face (Direct Face Extrusion)
+  bool hasSelectedFace = false;
+  if (m_viewport) {
+    hasSelectedFace = !m_viewport->selectedFace().IsNull();
+  }
+
+  if (!hasSketch && !hasSelectedFace) {
+    QMessageBox::information(this, "Extrude",
+                             "Select a sketch profile OR a face to extrude.\n"
+                             "1. Select a sketch in the tree or create a new one.\n"
+                             "2. Or select a planar face on an existing solid.");
+    return;
+  }
+
+  if (hasSelectedFace && !hasSketch) {
+    // Face extrusion mode
+    if (m_toolSettingsPanel) {
+      m_toolSettingsPanel->updateProfileList({"Selected Face"});
+      m_toolSettingsPanel->setProfileIndex(0);
     }
-    m_toolSettingsPanel->updateProfileList(profileNames);
+    statusBar()->showMessage("Extruding selected face. Adjust settings and click Apply.");
+    return;
   }
 
-  // Enable visual profile selection (SolidWorks-style)
-  if (m_sketchView) {
-    m_sketchView->enterProfileSelectMode();
-    m_sketchDock->show();
-    m_sketchDock->raise();
-  }
+  // Sketch extrusion mode
+  if (hasSketch) {
+    // Detect all closed profiles in sketch
+    auto closedProfiles = m_currentSketch->detectClosedProfiles();
 
-  statusBar()->showMessage(
-      QString("Click profile to select (%1 "
-              "available), adjust settings in panel, then Apply")
-          .arg(closedProfiles.size()));
+    if (closedProfiles.empty()) {
+      QMessageBox::information(
+          this, "Extrude",
+          "No closed profiles found in sketch.\n"
+          "Draw closed shapes (circles, rectangles, or connected lines).");
+      return;
+    }
+
+    // Set active tool
+    m_pendingOperation = PendingOperation::Extrude;
+
+    // Update profile list in ToolSettingsPanel
+    if (m_toolSettingsPanel) {
+      QStringList profileNames;
+      for (size_t i = 0; i < closedProfiles.size(); ++i) {
+        profileNames << QString("Profile %1").arg(i + 1);
+      }
+      m_toolSettingsPanel->updateProfileList(profileNames);
+
+      // Auto-select first profile if only one exists
+      if (closedProfiles.size() == 1) {
+          m_selectedProfileIndex = 0;
+          m_toolSettingsPanel->setProfileIndex(0);
+      }
+    }
+
+    // Enable visual profile selection (SolidWorks-style)
+    if (m_sketchView) {
+      m_sketchView->enterProfileSelectMode();
+      m_sketchDock->show();
+      m_sketchDock->raise();
+    }
+
+    statusBar()->showMessage(
+        QString("Click profile to select (%1 "
+                "available), adjust settings in panel, then Apply")
+            .arg(closedProfiles.size()));
+  }
 }
 
 void MainWindow::onRevolve() {
@@ -2130,35 +2159,61 @@ void MainWindow::onCut() {
     m_toolSettingsPanel->showCutSettings();
 
   m_selectedProfileIndex = -1;
-
-  if (!m_currentSketch || m_currentSketch->entities().empty()) {
-    QMessageBox::information(this, "Cut",
-                             "Create a closed sketch profile first.");
-    return;
-  }
-
-  auto closedProfiles = m_currentSketch->detectClosedProfiles();
-  if (closedProfiles.empty()) {
-    QMessageBox::warning(this, "Cut", "No closed profiles found.");
-    return;
-  }
-
-  m_pendingOperation = PendingOperation::Cut;
   m_activePartTool = ActivePartTool::Cut;
 
-  if (m_toolSettingsPanel) {
-    QStringList profileNames;
-    for (size_t i = 0; i < closedProfiles.size(); ++i) {
-      profileNames << QString("Profile %1").arg(i + 1);
-    }
-    m_toolSettingsPanel->updateProfileList(profileNames);
+  // Check valid sketch
+  bool hasSketch = m_currentSketch && !m_currentSketch->entities().empty();
+  bool hasSelectedFace = false;
+  if (m_viewport) {
+    hasSelectedFace = !m_viewport->selectedFace().IsNull();
   }
 
-  if (m_sketchView) {
-    m_sketchView->enterProfileSelectMode();
-    m_sketchDock->show();
-    m_sketchDock->raise();
-    statusBar()->showMessage("Select profile to cut, adjust depth, then Apply");
+  if (!hasSketch && !hasSelectedFace) {
+    QMessageBox::information(this, "Cut",
+                             "Select a sketch profile OR a face to cut.\n"
+                             "1. Select a sketch in the tree or create a new one.\n"
+                             "2. Or select a planar face on an existing solid.");
+    return;
+  }
+
+  if (hasSelectedFace && !hasSketch) {
+    if (m_toolSettingsPanel) {
+      m_toolSettingsPanel->updateProfileList({"Selected Face"});
+      m_toolSettingsPanel->setProfileIndex(0);
+    }
+    statusBar()->showMessage("Cutting with selected face. Adjust settings and click Apply.");
+    return;
+  }
+
+  if (hasSketch) {
+    auto closedProfiles = m_currentSketch->detectClosedProfiles();
+    if (closedProfiles.empty()) {
+      QMessageBox::warning(this, "Cut", "No closed profiles found in active sketch.");
+      return;
+    }
+
+    m_pendingOperation = PendingOperation::Cut;
+
+    if (m_toolSettingsPanel) {
+      QStringList profileNames;
+      for (size_t i = 0; i < closedProfiles.size(); ++i) {
+        profileNames << QString("Profile %1").arg(i + 1);
+      }
+      m_toolSettingsPanel->updateProfileList(profileNames);
+
+      // Auto-select first profile if only one
+      if (closedProfiles.size() == 1) {
+          m_selectedProfileIndex = 0;
+          m_toolSettingsPanel->setProfileIndex(0);
+      }
+    }
+
+    if (m_sketchView) {
+      m_sketchView->enterProfileSelectMode();
+      m_sketchDock->show();
+      m_sketchDock->raise();
+      statusBar()->showMessage("Select profile to cut, adjust depth, then Apply");
+    }
   }
 }
 
@@ -3419,24 +3474,53 @@ void MainWindow::onToolApply() {
   // Handle Apply button click based on active Part tool
   switch (m_activePartTool) {
   case ActivePartTool::Extrude: {
-    // Extrude the selected profile with panel settings
-    if (!m_currentSketch) {
-      QMessageBox::warning(this, "Extrude", "No sketch available.");
-      return;
+    // Determine profile face
+    TopoDS_Face profileFace;
+    gp_Dir extrudeDir(0, 0, 1);
+
+    // Case 1: Extrude from Sketch
+    if (m_currentSketch && !m_currentSketch->entities().empty()) {
+        // Get profile selection from ToolSettingsPanel
+        int profileIndex =
+            m_toolSettingsPanel ? m_toolSettingsPanel->selectedProfile() : -1;
+
+        auto closedProfiles = m_currentSketch->detectClosedProfiles();
+
+        if (profileIndex >= 0 && profileIndex < static_cast<int>(closedProfiles.size())) {
+            TopoDS_Wire selectedWire = closedProfiles[profileIndex];
+            try {
+              BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
+              if (faceBuilder.IsDone()) {
+                profileFace = faceBuilder.Face();
+              }
+            } catch (...) {}
+            extrudeDir = m_currentSketch->plane().normal();
+        }
     }
 
-    // Get profile selection from ToolSettingsPanel
-    int profileIndex =
-        m_toolSettingsPanel ? m_toolSettingsPanel->selectedProfile() : -1;
-    if (profileIndex < 0) {
-      QMessageBox::warning(this, "Extrude",
-                           "Please select a profile from Tool Settings.");
-      return;
+    // Case 2: Extrude from Selected Face (Fallback)
+    if (profileFace.IsNull() && m_viewport && !m_viewport->selectedFace().IsNull()) {
+        profileFace = m_viewport->selectedFace();
+
+        // Determine normal from face
+        try {
+            BRepAdaptor_Surface surface(BRep_Tool::Surface(profileFace));
+            // Sample center point
+            double u = (surface.FirstUParameter() + surface.LastUParameter()) * 0.5;
+            double v = (surface.FirstVParameter() + surface.LastVParameter()) * 0.5;
+            gp_Pnt p;
+            gp_Vec d1u, d1v;
+            surface.D1(u, v, p, d1u, d1v);
+            gp_Vec normal = d1u.Crossed(d1v);
+            if (profileFace.Orientation() == TopAbs_REVERSED) normal.Reverse();
+            extrudeDir = gp_Dir(normal);
+        } catch (...) {
+            extrudeDir = gp_Dir(0, 0, 1);
+        }
     }
 
-    auto closedProfiles = m_currentSketch->detectClosedProfiles();
-    if (profileIndex >= static_cast<int>(closedProfiles.size())) {
-      QMessageBox::warning(this, "Extrude", "Invalid profile selection.");
+    if (profileFace.IsNull()) {
+      QMessageBox::warning(this, "Extrude", "No valid profile or face selected.");
       return;
     }
 
@@ -3448,39 +3532,7 @@ void MainWindow::onToolApply() {
     double draftAngle =
         m_toolSettingsPanel ? m_toolSettingsPanel->extrudeDraftAngle() : 0.0;
 
-    // Build face from selected profile
-    TopoDS_Wire selectedWire = closedProfiles[profileIndex];
-    TopoDS_Face profileFace;
-
-    try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
-      if (faceBuilder.IsDone()) {
-        profileFace = faceBuilder.Face();
-        qDebug() << "Extrude: Profile face created successfully";
-      } else {
-        qDebug() << "Extrude: BRepBuilderAPI_MakeFace failed";
-      }
-    } catch (const std::exception &e) {
-      qDebug() << "Extrude: Exception creating face:" << e.what();
-      QMessageBox::warning(this, "Extrude",
-                           "Could not create face from profile.");
-      return;
-    } catch (...) {
-      qDebug() << "Extrude: Unknown exception creating face";
-      QMessageBox::warning(this, "Extrude",
-                           "Could not create face from profile.");
-      return;
-    }
-
-    if (profileFace.IsNull()) {
-      qDebug() << "Extrude: Profile face is NULL";
-      QMessageBox::warning(this, "Extrude", "Invalid profile face.");
-      return;
-    }
-
-    // Get direction from sketch plane
-    gp_Dir dir = m_currentSketch->plane().normal();
-    gp_Vec vec(dir);
+    gp_Vec vec(extrudeDir);
     vec.Scale(depth);
 
     TopoDS_Shape extrudedShape;
@@ -3521,7 +3573,12 @@ void MainWindow::onToolApply() {
 
         // Use sketch plane as neutral plane and extrusion direction as draft direction
         gp_Dir draftDir = dir;
-        gp_Pln neutralPlane = m_currentSketch->plane().plane();
+        // Use face center plane as neutral plane
+        BRepAdaptor_Surface surface(BRep_Tool::Surface(profileFace));
+        double u = (surface.FirstUParameter() + surface.LastUParameter()) * 0.5;
+        double v = (surface.FirstVParameter() + surface.LastVParameter()) * 0.5;
+        gp_Pnt center = surface.Value(u, v);
+        gp_Pln neutralPlane(center, extrudeDir);
 
         BRepOffsetAPI_DraftAngle draftOp(extrudedShape);
         TopExp_Explorer explorer(extrudedShape, TopAbs_FACE);
@@ -3907,29 +3964,57 @@ void MainWindow::onToolApply() {
   } break;
 
   case ActivePartTool::Cut: {
-    // Cut logic similar to Extrude but with cut direction
-    if (m_selectedProfileIndex < 0 || !m_currentSketch) {
-      QMessageBox::warning(this, "Cut", "No profile selected.");
-      return;
-    }
-
     if (m_document->getAllShapes().empty()) {
       QMessageBox::warning(this, "Cut", "No solid body to cut from.");
       return;
     }
 
-    auto closedProfiles = m_currentSketch->detectClosedProfiles();
+    TopoDS_Face profileFace;
+    gp_Dir cutDir(0, 0, 1);
+
+    // Case 1: Sketch
+    if (m_currentSketch && !m_currentSketch->entities().empty()) {
+        int profileIndex = m_selectedProfileIndex;
+        if (profileIndex < 0 && m_toolSettingsPanel) profileIndex = m_toolSettingsPanel->selectedProfile();
+
+        auto closedProfiles = m_currentSketch->detectClosedProfiles();
+        if (profileIndex >= 0 && profileIndex < static_cast<int>(closedProfiles.size())) {
+            TopoDS_Wire selectedWire = closedProfiles[profileIndex];
+            try {
+                BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
+                if (faceBuilder.IsDone()) profileFace = faceBuilder.Face();
+            } catch(...) {}
+            cutDir = m_currentSketch->plane().normal();
+        }
+    }
+
+    // Case 2: Selected Face
+    if (profileFace.IsNull() && m_viewport && !m_viewport->selectedFace().IsNull()) {
+        profileFace = m_viewport->selectedFace();
+        try {
+            BRepAdaptor_Surface surface(BRep_Tool::Surface(profileFace));
+            // Sample center point
+            double u = (surface.FirstUParameter() + surface.LastUParameter()) * 0.5;
+            double v = (surface.FirstVParameter() + surface.LastVParameter()) * 0.5;
+            gp_Pnt p;
+            gp_Vec d1u, d1v;
+            surface.D1(u, v, p, d1u, d1v);
+            gp_Vec normal = d1u.Crossed(d1v);
+            if (profileFace.Orientation() == TopAbs_REVERSED) normal.Reverse();
+            cutDir = gp_Dir(normal);
+        } catch (...) {}
+    }
+
+    if (profileFace.IsNull()) {
+        QMessageBox::warning(this, "Cut", "No valid profile or face selected.");
+        return;
+    }
+
     double depth = m_toolSettingsPanel ? m_toolSettingsPanel->cutDepth() : 20.0;
-    TopoDS_Wire selectedWire = closedProfiles[m_selectedProfileIndex];
+    gp_Vec cutVec(cutDir);
+    cutVec.Scale(-depth); // Cut goes opposite to normal usually
 
     try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
-      if (faceBuilder.IsDone()) {
-        TopoDS_Face profileFace = faceBuilder.Face();
-        gp_Dir cutDir = m_currentSketch->plane().normal();
-        gp_Vec cutVec(cutDir);
-        cutVec.Scale(-depth);
-
         BRepPrimAPI_MakePrism prism(profileFace, cutVec);
         if (prism.IsDone()) {
           TopoDS_Shape cutTool = prism.Shape();
@@ -3944,7 +4029,6 @@ void MainWindow::onToolApply() {
             updateWindowTitle();
           }
         }
-      }
     } catch (...) {
       QMessageBox::warning(this, "Cut Failed", "Operation failed.");
     }
