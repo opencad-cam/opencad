@@ -179,6 +179,7 @@ void Document::addSketch(std::shared_ptr<sketch::Sketch> sketch) {
   if (sketch) {
     m_sketches.push_back(sketch);
     setModified(true);
+    emit sketchAdded(sketch.get());
   }
 }
 
@@ -191,6 +192,7 @@ void Document::removeSketch(sketch::Sketch *sketch) {
   if (it != m_sketches.end()) {
     m_sketches.erase(it);
     setModified(true);
+    emit sketchRemoved(sketch);
   }
 }
 
@@ -266,6 +268,8 @@ void Document::newDocument() {
   // Clear all data
   m_featureTree->clear();
   m_sketches.clear();
+  emit sketchesCleared();
+
   m_undoRedoManager->clear();
 
   // Reset metadata
