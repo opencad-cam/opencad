@@ -109,14 +109,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   // Create central document
   m_document = std::make_unique<core::Document>(this);
 
-  // Connect sketch signals
-  connect(m_document.get(), &core::Document::sketchAdded, this,
-          [this](sketch::Sketch *) { updateFeatureList(); });
-  connect(m_document.get(), &core::Document::sketchRemoved, this,
-          [this](sketch::Sketch *) { updateFeatureList(); });
-  connect(m_document.get(), &core::Document::sketchesCleared, this,
-          &MainWindow::updateFeatureList);
-
   // Create central viewport
   m_viewport = std::make_unique<Viewport3D>(this);
   setCentralWidget(m_viewport.get());
@@ -738,7 +730,6 @@ void MainWindow::updateWindowTitle() {
 // File menu slots
 void MainWindow::onNewFile() {
   clearShapes();
-  m_currentSketch.reset();
   m_currentFile.clear();
   m_modified = false;
   updateWindowTitle();
@@ -1458,6 +1449,12 @@ void MainWindow::onFaceSelected() {
 
     m_sketchMode = true;
     updateSketchToolsEnabled(true);
+
+    if (m_featureList) {
+      m_featureList->addItem("?? " +
+                             QString::fromStdString(m_currentSketch->name()) +
+                             " (on face)");
+    }
 
     showSketchEditor();
     if (m_sketchView) {
@@ -4115,6 +4112,8 @@ void MainWindow::onToolApply() {
       m_sketchDock->raise();
     }
 
+    m_featureList->addItem(QString::fromStdString(m_currentSketch->name()) +
+                           " (" + planeName + ")");
     statusBar()->showMessage("New Sketch created on " + planeName, 3000);
     m_activePartTool = ActivePartTool::None;
   } break;
@@ -4138,15 +4137,6 @@ void MainWindow::updateFeatureList() {
   m_featureList->addItem("  ⬜ XY Plane");
   m_featureList->addItem("  ⬜ XZ Plane");
   m_featureList->addItem("  ⬜ YZ Plane");
-
-  // Add sketches
-  for (const auto &sketch : m_document->sketches()) {
-    QString name = "✏️ " + QString::fromStdString(sketch->name());
-    auto *item = new QListWidgetItem(name);
-    // Use UserRole + 1 for sketches
-    item->setData(Qt::UserRole + 1, QVariant::fromValue((void *)sketch.get()));
-    m_featureList->addItem(item);
-  }
 
   // Add features from document
   for (auto *feature : m_document->featureTree()->allFeatures()) {
@@ -4177,41 +4167,22 @@ void MainWindow::onFeatureSelected(QListWidgetItem *item) {
     return;
   }
 
-  // Check if it is a feature
+  // Get feature from item data
   auto *feature =
       static_cast<core::Feature *>(item->data(Qt::UserRole).value<void *>());
-  if (feature) {
-    // Highlight feature shape in viewport
-    if (feature->hasValidResult()) {
-      // TODO: Add highlight method to viewport
-      // m_viewport->highlightShape(feature->resultShape());
-    }
-
-    statusBar()->showMessage(
-        QString("Selected Feature: %1 (%2)")
-            .arg(feature->name())
-            .arg(core::featureTypeToString(feature->type())));
+  if (!feature)
     return;
+
+  // Highlight feature shape in viewport
+  if (feature->hasValidResult()) {
+    // TODO: Add highlight method to viewport
+    // m_viewport->highlightShape(feature->resultShape());
   }
 
-  // Check if it is a sketch
-  auto *sketch =
-      static_cast<sketch::Sketch *>(item->data(Qt::UserRole + 1).value<void *>());
-  if (sketch) {
-    // Find shared_ptr in document
-    for (const auto &s : m_document->sketches()) {
-      if (s.get() == sketch) {
-        m_currentSketch = s;
-        // Ensure sketch view has the correct sketch
-        if (m_sketchView) {
-          m_sketchView->setSketch(m_currentSketch);
-        }
-        statusBar()->showMessage(
-            QString("Selected Sketch: %1").arg(QString::fromStdString(sketch->name())));
-        return;
-      }
-    }
-  }
+  statusBar()->showMessage(
+      QString("Selected: %1 (%2)")
+          .arg(feature->name())
+          .arg(core::featureTypeToString(feature->type())));
 }
 
 void MainWindow::onFeatureContextMenu(const QPoint &pos) {
