@@ -3515,11 +3515,8 @@ void MainWindow::onToolApply() {
       if (!extrudedShape.IsNull() && std::abs(draftAngle) > 0.001) {
         qDebug() << "Extrude: Applying draft angle:" << draftAngle;
         double angleRad = draftAngle * M_PI / 180.0;
-
-        // Use sketch plane as neutral plane and extrusion direction as draft direction
-        gp_Dir draftDir = dir;
-        gp_Pln neutralPlane = m_currentSketch->plane().plane();
-
+        gp_Dir draftDir(0, 0, 1);
+        gp_Pln neutralPlane(gp_Pnt(0, 0, 0), draftDir);
         BRepOffsetAPI_DraftAngle draftOp(extrudedShape);
         TopExp_Explorer explorer(extrudedShape, TopAbs_FACE);
         while (explorer.More()) {

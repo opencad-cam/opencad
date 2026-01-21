@@ -92,8 +92,7 @@ TopoDS_Shape ExtrudeFeature::execute(const sketch::Sketch &sketch,
 
     // Apply draft angle if specified
     if (!result.IsNull() && std::abs(params.draftAngle) > 0.001) {
-      // Use sketch plane as neutral plane and extrusion direction as draft direction
-      result = applyDraft(result, sketch.plane().plane(), normal, params.draftAngle);
+      result = applyDraft(result, params.draftAngle);
     }
 
     if (result.IsNull()) {
@@ -148,10 +147,7 @@ TopoDS_Shape ExtrudeFeature::executeWithDraft(const TopoDS_Face &profile,
 
     // Apply draft if needed
     if (std::abs(draftAngleDeg) > 0.001) {
-      // Default to Z draft for manual extrusion (assuming profile on XY)
-      gp_Pln neutralPlane(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-      gp_Dir draftDir(0, 0, 1);
-      result = applyDraft(result, neutralPlane, draftDir, draftAngleDeg);
+      result = applyDraft(result, draftAngleDeg);
     }
 
     return result;
@@ -162,23 +158,25 @@ TopoDS_Shape ExtrudeFeature::executeWithDraft(const TopoDS_Face &profile,
 }
 
 TopoDS_Shape ExtrudeFeature::applyDraft(const TopoDS_Shape &shape,
-                                        const gp_Pln &neutralPlane,
-                                        const gp_Dir &pullDir,
                                         double angleDeg) {
   // Convert angle to radians
   double angleRad = angleDeg * M_PI / 180.0;
 
   try {
+    // Create draft operation
+    gp_Dir draftDir(0, 0, 1); // Draft direction (typically Z)
+    gp_Pln neutralPlane(gp_Pnt(0, 0, 0), draftDir);
+
     BRepOffsetAPI_DraftAngle draftOp(shape);
 
-    // Apply draft to all lateral faces
+    // Apply draft to all vertical faces
     TopExp_Explorer explorer(shape, TopAbs_FACE);
     while (explorer.More()) {
       TopoDS_Face face = TopoDS::Face(explorer.Current());
 
       // Try to add draft to this face
       try {
-        draftOp.Add(face, pullDir, angleRad, neutralPlane);
+        draftOp.Add(face, draftDir, angleRad, neutralPlane);
       } catch (...) {
         // Some faces may not be draftable, skip them
       }
