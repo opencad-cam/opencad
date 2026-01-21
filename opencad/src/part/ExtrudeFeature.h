@@ -50,6 +50,11 @@ public:
   TopoDS_Shape execute(const sketch::Sketch &sketch,
                        const ExtrudeParams &params);
 
+  /// Extrude a specific face with parameters and context
+  TopoDS_Shape execute(const TopoDS_Face& face,
+                       const ExtrudeParams& params,
+                       const gp_Pln& sketchPlane);
+
   /// Extrude a wire profile with draft angle
   TopoDS_Shape executeWithDraft(const TopoDS_Wire &profile, double depth,
                                 double draftAngleDeg);

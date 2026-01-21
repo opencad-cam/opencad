@@ -3454,102 +3454,27 @@ void MainWindow::onToolApply() {
       BRepBuilderAPI_MakeFace faceBuilder(m_currentSketch->plane().plane(), selectedWire, true);
       if (faceBuilder.IsDone()) {
         profileFace = faceBuilder.Face();
-        qDebug() << "Extrude: Profile face created successfully";
-      } else {
-        qDebug() << "Extrude: BRepBuilderAPI_MakeFace failed";
       }
-    } catch (const std::exception &e) {
-      qDebug() << "Extrude: Exception creating face:" << e.what();
-      QMessageBox::warning(this, "Extrude",
-                           "Could not create face from profile.");
-      return;
     } catch (...) {
-      qDebug() << "Extrude: Unknown exception creating face";
       QMessageBox::warning(this, "Extrude",
                            "Could not create face from profile.");
       return;
     }
 
     if (profileFace.IsNull()) {
-      qDebug() << "Extrude: Profile face is NULL";
       QMessageBox::warning(this, "Extrude", "Invalid profile face.");
       return;
     }
 
-    // Get direction from sketch plane
-    gp_Dir dir = m_currentSketch->plane().normal();
-    gp_Vec vec(dir);
-    vec.Scale(depth);
+    // Use ExtrudeFeature to handle the operation
+    part::ExtrudeFeature extrude;
+    part::ExtrudeParams params;
+    params.depth = depth;
+    params.symmetric = symmetric;
+    params.draftAngle = draftAngle;
+    params.reversed = false; // Default direction
 
-    TopoDS_Shape extrudedShape;
-    try {
-      qDebug() << "Extrude: Creating prism with depth:" << depth
-               << "symmetric:" << symmetric;
-
-      if (symmetric) {
-        // Mid-plane extrude
-        gp_Vec halfVec = vec;
-        halfVec.Scale(0.5);
-        gp_Vec backVec = halfVec.Reversed();
-        gp_Trsf moveBack;
-        moveBack.SetTranslation(backVec);
-        BRepBuilderAPI_Transform transform(profileFace, moveBack, true);
-        TopoDS_Face movedFace = TopoDS::Face(transform.Shape());
-        BRepPrimAPI_MakePrism prism(movedFace, vec);
-        if (prism.IsDone()) {
-          extrudedShape = prism.Shape();
-          qDebug() << "Extrude: Symmetric prism created successfully";
-        } else {
-          qDebug() << "Extrude: Symmetric prism FAILED";
-        }
-      } else {
-        BRepPrimAPI_MakePrism prism(profileFace, vec);
-        if (prism.IsDone()) {
-          extrudedShape = prism.Shape();
-          qDebug() << "Extrude: Prism created successfully";
-        } else {
-          qDebug() << "Extrude: Prism creation FAILED";
-        }
-      }
-
-      // Apply draft angle if specified
-      if (!extrudedShape.IsNull() && std::abs(draftAngle) > 0.001) {
-        qDebug() << "Extrude: Applying draft angle:" << draftAngle;
-        double angleRad = draftAngle * M_PI / 180.0;
-
-        // Use sketch plane as neutral plane and extrusion direction as draft direction
-        gp_Dir draftDir = dir;
-        gp_Pln neutralPlane = m_currentSketch->plane().plane();
-
-        BRepOffsetAPI_DraftAngle draftOp(extrudedShape);
-        TopExp_Explorer explorer(extrudedShape, TopAbs_FACE);
-        while (explorer.More()) {
-          TopoDS_Face face = TopoDS::Face(explorer.Current());
-          try {
-            draftOp.Add(face, draftDir, angleRad, neutralPlane);
-          } catch (...) {
-          }
-          explorer.Next();
-        }
-        draftOp.Build();
-        if (draftOp.IsDone()) {
-          extrudedShape = draftOp.Shape();
-          qDebug() << "Extrude: Draft angle applied successfully";
-        } else {
-          qDebug() << "Extrude: Draft angle application FAILED";
-        }
-      }
-    } catch (const std::exception &e) {
-      qDebug() << "Extrude: Exception during extrusion:" << e.what();
-      QMessageBox::warning(this, "Extrude Failed",
-                           "Could not create extrusion.");
-      return;
-    } catch (...) {
-      qDebug() << "Extrude: Unknown exception during extrusion";
-      QMessageBox::warning(this, "Extrude Failed",
-                           "Could not create extrusion.");
-      return;
-    }
+    TopoDS_Shape extrudedShape = extrude.execute(profileFace, params, m_currentSketch->plane().plane());
 
     if (!extrudedShape.IsNull()) {
       // Validate the shape

@@ -54,14 +54,48 @@ TopoDS_Shape ExtrudeFeature::execute(const sketch::Sketch &sketch,
     return TopoDS_Shape();
   }
 
-  // Extrusion direction based on sketch plane normal
-  gp_Dir normal = sketch.plane().normal();
+  // Delegate to the Face overload
+  // Note: profileShape from buildFaces is usually a Compound of Faces or a single Face
+  // For simplicity, we treat it as a Face-like shape (Prism can take a Shape)
+  // But our new execute takes a TopoDS_Face.
+  // If profileShape is a compound, we should iterate?
+  // Prism works on Shapes.
+
+  // Let's allow passing profileShape (TopoDS_Shape) to the logic.
+  // Ideally, profileShape is a Face.
+
+  TopoDS_Face face;
+  if (profileShape.ShapeType() == TopAbs_FACE) {
+      face = TopoDS::Face(profileShape);
+  } else {
+      // If it's a compound, find the first face? Or fuse them?
+      TopExp_Explorer exp(profileShape, TopAbs_FACE);
+      if(exp.More()) {
+          face = TopoDS::Face(exp.Current());
+      }
+  }
+
+  if (face.IsNull()) {
+      m_error = "Could not extract valid face from sketch.";
+      return TopoDS_Shape();
+  }
+
+  return execute(face, params, plane);
+}
+
+TopoDS_Shape ExtrudeFeature::execute(const TopoDS_Face& face,
+                                     const ExtrudeParams& params,
+                                     const gp_Pln& sketchPlane) {
+  m_error.clear();
+
+  gp_Dir normal = sketchPlane.Axis().Direction();
   if (params.reversed) {
     normal.Reverse();
   }
 
   double depth = params.depth;
-  gp_Vec extrudeVec(normal.X() * depth, normal.Y() * depth, normal.Z() * depth);
+  gp_Vec extrudeVec(normal);
+  extrudeVec.Scale(depth);
 
   TopoDS_Shape result;
 
@@ -75,7 +109,7 @@ TopoDS_Shape ExtrudeFeature::execute(const sketch::Sketch &sketch,
       gp_Trsf moveBack;
       gp_Vec backVec = halfVec.Reversed();
       moveBack.SetTranslation(backVec);
-      BRepBuilderAPI_Transform transform(profileShape, moveBack, true);
+      BRepBuilderAPI_Transform transform(face, moveBack, true);
       TopoDS_Shape movedProfile = transform.Shape();
 
       BRepPrimAPI_MakePrism prism(movedProfile, extrudeVec);
@@ -84,7 +118,7 @@ TopoDS_Shape ExtrudeFeature::execute(const sketch::Sketch &sketch,
         result = prism.Shape();
       }
     } else {
-      BRepPrimAPI_MakePrism prism(profileShape, extrudeVec);
+      BRepPrimAPI_MakePrism prism(face, extrudeVec);
       prism.Build();
       if (prism.IsDone()) {
         result = prism.Shape();
@@ -94,7 +128,7 @@ TopoDS_Shape ExtrudeFeature::execute(const sketch::Sketch &sketch,
     // Apply draft angle if specified
     if (!result.IsNull() && std::abs(params.draftAngle) > 0.001) {
       // Use sketch plane as neutral plane and extrusion direction as draft direction
-      result = applyDraft(result, sketch.plane().plane(), normal, params.draftAngle);
+      result = applyDraft(result, sketchPlane, normal, params.draftAngle);
     }
 
     if (result.IsNull()) {
