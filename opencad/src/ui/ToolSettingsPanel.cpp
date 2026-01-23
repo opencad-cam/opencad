@@ -75,17 +75,6 @@ void ToolSettingsPanel::setupUI() {
 
   // === PART FEATURE SETTINGS ===
 
-  // Profile selection (shared by multiple tools)
-  m_profileLabel = new QLabel("Profile:", this);
-  m_profileLabel->setStyleSheet("font-weight: bold; color: #2196F3;");
-  m_profileCombo = new QComboBox(this);
-  m_profileCombo->addItem("No profiles available");
-  m_profileCombo->setEnabled(false);
-  mainLayout->addWidget(m_profileLabel);
-  mainLayout->addWidget(m_profileCombo);
-  m_profileLabel->hide();
-  m_profileCombo->hide();
-
   // Extrude settings
   m_extrudeGroup = new QGroupBox("📦 Extrude", this);
   m_extrudeGroup->setStyleSheet("QGroupBox { font-weight: bold; }");
@@ -373,11 +362,14 @@ void ToolSettingsPanel::setupUI() {
   m_splitGroup->hide();
 
   // Apply button
-  m_applyButton = new QPushButton("Apply", this);
+  m_applyButton = new QPushButton("Apply (Enter)", this);
   m_applyButton->setStyleSheet(
       "QPushButton { background-color: #4CAF50; color: white; padding: 8px; "
       "font-weight: bold; border-radius: 4px; } "
       "QPushButton:hover { background-color: #45a049; }");
+  m_applyButton->setShortcut(
+      QKeySequence(Qt::Key_Return)); // Enter key shortcut
+  m_applyButton->setDefault(true);   // Make it the default button
   mainLayout->addWidget(m_applyButton);
   m_applyButton->hide();
 
@@ -395,8 +387,10 @@ void ToolSettingsPanel::setupUI() {
           this, &ToolSettingsPanel::onSlotWidthChanged);
   connect(m_polygonInscribedCheck, &QCheckBox::toggled, this,
           &ToolSettingsPanel::onPolygonInscribedToggled);
-  connect(m_applyButton, &QPushButton::clicked, this,
-          &ToolSettingsPanel::applyClicked);
+  connect(m_applyButton, &QPushButton::clicked, this, [this]() {
+    qDebug() << "=== Apply button CLICKED ===";
+    emit applyClicked();
+  });
 
   // Connect all spins to settingsChanged
   connect(m_extrudeDepthSpin,
@@ -422,10 +416,6 @@ void ToolSettingsPanel::setupUI() {
   connect(m_patternSpacingSpin,
           QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
           &ToolSettingsPanel::onSettingsChanged);
-
-  // Profile selection signal
-  connect(m_profileCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, &ToolSettingsPanel::onProfileChanged);
 
   // New settings signals
   connect(m_revolveAngleSpin,
@@ -544,8 +534,6 @@ void ToolSettingsPanel::hideAllSettings() {
   m_splitGroup->hide();
   m_sketchPlaneGroup->hide();
   m_constraintGroup->hide();
-  m_profileLabel->hide();
-  m_profileCombo->hide();
   m_applyButton->hide();
 }
 
@@ -558,8 +546,6 @@ void ToolSettingsPanel::showExtrudeSettings() {
   hideAllSettings();
   m_toolLabel->setText("📦 Extrude");
   m_descriptionLabel->setText("Select profile and set extrusion parameters.");
-  m_profileLabel->show();
-  m_profileCombo->show();
   m_extrudeGroup->show();
   m_applyButton->show();
 }
@@ -568,8 +554,6 @@ void ToolSettingsPanel::showCutSettings() {
   hideAllSettings();
   m_toolLabel->setText("🔪 Cut");
   m_descriptionLabel->setText("Select profile to cut material from solid.");
-  m_profileLabel->show();
-  m_profileCombo->show();
   m_cutGroup->show();
   m_applyButton->show();
 }
@@ -667,8 +651,6 @@ void ToolSettingsPanel::showRevolveSettings() {
   hideAllSettings();
   m_toolLabel->setText("🔄 Revolve");
   m_descriptionLabel->setText("Create solid by revolving profile around axis.");
-  m_profileLabel->show();
-  m_profileCombo->show();
   m_revolveGroup->show();
   m_applyButton->show();
 }
@@ -677,8 +659,6 @@ void ToolSettingsPanel::showSweepSettings() {
   hideAllSettings();
   m_toolLabel->setText("🔀 Sweep");
   m_descriptionLabel->setText("Create solid by sweeping profile along path.");
-  m_profileLabel->show();
-  m_profileCombo->show();
   m_sweepGroup->show();
   m_applyButton->show();
 }
@@ -687,8 +667,6 @@ void ToolSettingsPanel::showLoftSettings() {
   hideAllSettings();
   m_toolLabel->setText("📐 Loft");
   m_descriptionLabel->setText("Create solid by blending between profiles.");
-  m_profileLabel->show();
-  m_profileCombo->show();
   m_loftGroup->show();
   m_applyButton->show();
 }
@@ -735,37 +713,6 @@ double ToolSettingsPanel::splitOffset() const {
 
 int ToolSettingsPanel::splitKeepPart() const {
   return m_splitKeepPartCombo->currentIndex();
-}
-
-// Profile selection
-void ToolSettingsPanel::updateProfileList(const QStringList &profiles) {
-  m_profileCombo->clear();
-  if (profiles.isEmpty()) {
-    m_profileCombo->addItem("No profiles available");
-    m_profileCombo->setEnabled(false);
-  } else {
-    for (int i = 0; i < profiles.size(); ++i) {
-      m_profileCombo->addItem(QString("Profile %1").arg(i + 1));
-    }
-    m_profileCombo->setEnabled(true);
-  }
-}
-
-void ToolSettingsPanel::setProfileIndex(int index) {
-  if (m_profileCombo->isEnabled() && index >= 0 &&
-      index < m_profileCombo->count()) {
-    m_profileCombo->setCurrentIndex(index);
-  }
-}
-
-int ToolSettingsPanel::selectedProfile() const {
-  return m_profileCombo->isEnabled() ? m_profileCombo->currentIndex() : -1;
-}
-
-void ToolSettingsPanel::clearProfileSelection() {
-  m_profileCombo->clear();
-  m_profileCombo->addItem("No profiles available");
-  m_profileCombo->setEnabled(false);
 }
 
 // Getters
@@ -841,12 +788,6 @@ void ToolSettingsPanel::onPolygonInscribedToggled(bool checked) {
 }
 
 void ToolSettingsPanel::onSettingsChanged() { emit settingsChanged(); }
-
-void ToolSettingsPanel::onProfileChanged(int index) {
-  if (m_profileCombo->isEnabled() && index >= 0) {
-    emit profileSelected(index);
-  }
-}
 
 // Additional getters
 double ToolSettingsPanel::patternAngle() const {

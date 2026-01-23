@@ -212,6 +212,8 @@ private:
   class ParameterEditor *m_parameterEditor = nullptr;
   QDockWidget *m_toolSettingsDock = nullptr;
   class ToolSettingsPanel *m_toolSettingsPanel = nullptr;
+  QDockWidget *m_profileSelectionDock = nullptr;
+  class ProfileSelectionPanel *m_profileSelectionPanel = nullptr;
 
   // Toolbars
   QToolBar *m_sketchToolbar = nullptr;

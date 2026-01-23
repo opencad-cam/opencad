@@ -9,6 +9,7 @@ set(UI_SOURCES
     PropertiesPanel.cpp
     ParameterEditor.cpp
     ToolSettingsPanel.cpp
+    ProfileSelectionPanel.cpp
     viewport/Viewport3D.cpp
     viewport/ViewportController.cpp
     sketch/SketchView2D.cpp
@@ -30,6 +31,7 @@ set(UI_HEADERS
     PropertiesPanel.h
     ParameterEditor.h
     ToolSettingsPanel.h
+    ProfileSelectionPanel.h
     viewport/Viewport3D.h
     viewport/ViewportController.h
     sketch/SketchView2D.h

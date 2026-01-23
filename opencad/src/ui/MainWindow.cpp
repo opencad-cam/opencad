@@ -51,6 +51,7 @@
 
 // Panels
 #include "ParameterEditor.h"
+#include "ProfileSelectionPanel.h"
 #include "PropertiesPanel.h"
 #include "ToolSettingsPanel.h"
 
@@ -135,18 +136,65 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   updateFeatureList();
 
   updateWindowTitle();
+
+  // Add Enter shortcut to show Tool Settings when in part tool mode
+  auto *enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), this);
+  connect(enterShortcut, &QShortcut::activated, this, [this]() {
+    if (m_activePartTool != ActivePartTool::None) {
+      qDebug() << "Enter shortcut activated - showing Tool Settings";
+      if (m_toolSettingsDock && m_toolSettingsPanel) {
+        m_toolSettingsDock->setFloating(false);
+        addDockWidget(Qt::LeftDockWidgetArea, m_toolSettingsDock);
+        m_toolSettingsDock->show();
+        m_toolSettingsDock->raise();
+
+        if (m_activePartTool == ActivePartTool::Extrude) {
+          m_toolSettingsPanel->showExtrudeSettings();
+        } else if (m_activePartTool == ActivePartTool::Cut) {
+          m_toolSettingsPanel->showCutSettings();
+        } else if (m_activePartTool == ActivePartTool::Revolve) {
+          m_toolSettingsPanel->showRevolveSettings();
+        }
+      }
+      statusBar()->showMessage("Adjust settings and click Apply");
+    }
+  });
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
-  // Only intercept events from the sketch view to avoid blocking menus
-  if (obj == m_sketchView && event->type() == QEvent::KeyPress) {
+  if (event->type() == QEvent::KeyPress) {
     QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-    if (keyEvent->key() == Qt::Key_Escape) {
+
+    // Handle ESC from sketch view only
+    if (obj == m_sketchView && keyEvent->key() == Qt::Key_Escape) {
       if (m_sketchMode && m_sketchView && m_sketchView->isVisible()) {
         qDebug() << "SketchView EventFilter caught ESC";
         m_sketchView->handleEscPress();
-        return true; // Mark handled
+        return true;
       }
+    }
+
+    // Handle Enter from ANY widget when we have an active part tool
+    if ((keyEvent->key() == Qt::Key_Return ||
+         keyEvent->key() == Qt::Key_Enter) &&
+        m_activePartTool != ActivePartTool::None) {
+      qDebug() << "MainWindow EventFilter caught Enter - showing Tool Settings";
+      if (m_toolSettingsDock && m_toolSettingsPanel) {
+        m_toolSettingsDock->setFloating(false);
+        addDockWidget(Qt::LeftDockWidgetArea, m_toolSettingsDock);
+        m_toolSettingsDock->show();
+        m_toolSettingsDock->raise();
+
+        if (m_activePartTool == ActivePartTool::Extrude) {
+          m_toolSettingsPanel->showExtrudeSettings();
+        } else if (m_activePartTool == ActivePartTool::Cut) {
+          m_toolSettingsPanel->showCutSettings();
+        } else if (m_activePartTool == ActivePartTool::Revolve) {
+          m_toolSettingsPanel->showRevolveSettings();
+        }
+      }
+      statusBar()->showMessage("Adjust settings and click Apply");
+      return true;
     }
   }
   return QMainWindow::eventFilter(obj, event);
@@ -565,6 +613,27 @@ void MainWindow::setupDockWidgets() {
   m_toolSettingsDock->setMinimumWidth(200);
   addDockWidget(Qt::LeftDockWidgetArea, m_toolSettingsDock);
 
+  // Profile Selection Panel (floating, shown when Extrude/Cut activated)
+  m_profileSelectionDock = new QDockWidget("Profile Selection", this);
+  m_profileSelectionPanel = new ProfileSelectionPanel(m_profileSelectionDock);
+  m_profileSelectionDock->setWidget(m_profileSelectionPanel);
+  m_profileSelectionDock->setMinimumWidth(280);
+  m_profileSelectionDock->setFloating(true);
+  m_profileSelectionDock->resize(300, 200);
+  m_profileSelectionDock->hide(); // Initially hidden
+
+  // Connect ProfileSelectionPanel signals
+  connect(m_profileSelectionPanel, &ProfileSelectionPanel::applyClicked, this,
+          &MainWindow::onToolApply);
+  connect(m_profileSelectionPanel, &ProfileSelectionPanel::profileSelected,
+          this, &MainWindow::onProfileSelected);
+  connect(m_profileSelectionPanel, &ProfileSelectionPanel::cancelClicked, this,
+          [this]() {
+            m_profileSelectionDock->hide();
+            m_pendingOperation = PendingOperation::None;
+            m_activePartTool = ActivePartTool::None;
+          });
+
   // Connect tool changed signal to update settings panel
   connect(m_sketchView, &SketchView2D::toolChanged, m_toolSettingsPanel,
           &ToolSettingsPanel::updateForTool);
@@ -599,6 +668,30 @@ void MainWindow::setupDockWidgets() {
           &MainWindow::onRingSelected);
   connect(m_sketchView, &SketchView2D::multiProfilesConfirmed, this,
           &MainWindow::onMultiProfilesConfirmed);
+  connect(m_sketchView, &SketchView2D::profileSelectionConfirmed, this,
+          [this]() {
+            // Exit profile select mode and show Tool Settings for adjustment
+            qDebug() << "Enter pressed - showing Tool Settings panel";
+
+            // Show Tool Settings dock on left side (docked, not floating)
+            if (m_toolSettingsDock && m_toolSettingsPanel) {
+              m_toolSettingsDock->setFloating(false);
+              addDockWidget(Qt::LeftDockWidgetArea, m_toolSettingsDock);
+              m_toolSettingsDock->show();
+              m_toolSettingsDock->raise();
+
+              // Show appropriate settings based on active tool
+              if (m_activePartTool == ActivePartTool::Extrude) {
+                m_toolSettingsPanel->showExtrudeSettings();
+              } else if (m_activePartTool == ActivePartTool::Cut) {
+                m_toolSettingsPanel->showCutSettings();
+              } else if (m_activePartTool == ActivePartTool::Revolve) {
+                m_toolSettingsPanel->showRevolveSettings();
+              }
+            }
+            statusBar()->showMessage(
+                "Adjust settings and click Apply (or press Enter)");
+          });
   connect(m_sketchView, &SketchView2D::profileSelectionCancelled, this,
           &MainWindow::onProfileSelectionCancelled);
 
@@ -609,8 +702,6 @@ void MainWindow::setupDockWidgets() {
   // ToolSettingsPanel connections
   connect(m_toolSettingsPanel, &ToolSettingsPanel::applyClicked, this,
           &MainWindow::onToolApply);
-  connect(m_toolSettingsPanel, &ToolSettingsPanel::profileSelected, this,
-          &MainWindow::onProfileSelected);
 
   // Feature tree connections
   m_featureList->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -2012,13 +2103,25 @@ void MainWindow::onConstraintPerpendicular() {
 // ============================================================================
 
 void MainWindow::onExtrude() {
-  // Show Extrude settings panel immediately
+  // DEBUG: Use QMessageBox to confirm function is called
+  qDebug() << "=== onExtrude() CALLED ===";
+
+  // Show Extrude settings panel immediately - AGGRESSIVE SHOW
   if (m_toolSettingsDock) {
+    m_toolSettingsDock->setFloating(true); // Make it a separate window
+    m_toolSettingsDock->resize(300, 400);  // Ensure visible size
+    m_toolSettingsDock->move(100, 100);    // Position on screen
     m_toolSettingsDock->show();
     m_toolSettingsDock->raise();
+    m_toolSettingsDock->activateWindow();
+    qDebug() << "Tool Settings Dock: floating="
+             << m_toolSettingsDock->isFloating()
+             << "visible=" << m_toolSettingsDock->isVisible();
   }
-  if (m_toolSettingsPanel)
+  if (m_toolSettingsPanel) {
     m_toolSettingsPanel->showExtrudeSettings();
+    qDebug() << "Extrude settings shown in panel";
+  }
 
   // Reset selected profile
   m_selectedProfileIndex = -1;
@@ -2032,6 +2135,7 @@ void MainWindow::onExtrude() {
 
   // Detect all closed profiles in sketch
   auto closedProfiles = m_currentSketch->detectClosedProfiles();
+  qDebug() << "Detected closed profiles:" << closedProfiles.size();
 
   if (closedProfiles.empty()) {
     QMessageBox::information(
@@ -2045,25 +2149,40 @@ void MainWindow::onExtrude() {
   m_pendingOperation = PendingOperation::Extrude;
   m_activePartTool = ActivePartTool::Extrude;
 
-  // Update profile list in ToolSettingsPanel
-  if (m_toolSettingsPanel) {
+  // Update profile list in ProfileSelectionPanel
+  if (m_profileSelectionPanel) {
     QStringList profileNames;
     for (size_t i = 0; i < closedProfiles.size(); ++i) {
       profileNames << QString("Profile %1").arg(i + 1);
     }
-    m_toolSettingsPanel->updateProfileList(profileNames);
+    m_profileSelectionPanel->updateProfileList(profileNames);
+    m_profileSelectionPanel->setOperationTitle("Extrude");
+    // Automatically select first profile so Apply works immediately
+    if (!closedProfiles.empty()) {
+      m_profileSelectionPanel->setProfileIndex(0);
+      m_selectedProfileIndex = 0;
+      qDebug() << "Extrude: Auto-selected Profile 1";
+    }
   }
 
   // Enable visual profile selection (SolidWorks-style)
   if (m_sketchView) {
     m_sketchView->enterProfileSelectMode();
     m_sketchDock->show();
-    m_sketchDock->raise();
+  }
+
+  // IMPORTANT: Raise Tool Settings Panel after showing sketch dock
+  // so Apply button is visible
+  if (m_toolSettingsDock) {
+    m_toolSettingsDock->show();
+    m_toolSettingsDock->raise();
+    qDebug() << "Extrude: Tool Settings Panel raised, Apply button should be "
+                "visible";
   }
 
   statusBar()->showMessage(
       QString("Click profile to select (%1 "
-              "available), adjust settings in panel, then Apply")
+              "available), adjust settings in panel, then click Apply")
           .arg(closedProfiles.size()));
 }
 
@@ -2097,13 +2216,14 @@ void MainWindow::onRevolve() {
   m_pendingOperation = PendingOperation::None; // Revolve uses Apply directly
   m_activePartTool = ActivePartTool::Revolve;
 
-  // Update profile list in ToolSettingsPanel
-  if (m_toolSettingsPanel) {
+  // Update profile list in ProfileSelectionPanel
+  if (m_profileSelectionPanel) {
     QStringList profileNames;
     for (size_t i = 0; i < closedProfiles.size(); ++i) {
       profileNames << QString("Profile %1").arg(i + 1);
     }
-    m_toolSettingsPanel->updateProfileList(profileNames);
+    m_profileSelectionPanel->updateProfileList(profileNames);
+    m_profileSelectionPanel->setOperationTitle("Revolve");
     // Auto-select first profile
     m_selectedProfileIndex = 0;
   }
@@ -2143,12 +2263,19 @@ void MainWindow::onCut() {
   m_pendingOperation = PendingOperation::Cut;
   m_activePartTool = ActivePartTool::Cut;
 
-  if (m_toolSettingsPanel) {
+  if (m_profileSelectionPanel) {
     QStringList profileNames;
     for (size_t i = 0; i < closedProfiles.size(); ++i) {
       profileNames << QString("Profile %1").arg(i + 1);
     }
-    m_toolSettingsPanel->updateProfileList(profileNames);
+    m_profileSelectionPanel->updateProfileList(profileNames);
+    m_profileSelectionPanel->setOperationTitle("Cut");
+    // Automatically select first profile so Apply works immediately
+    if (!closedProfiles.empty()) {
+      m_profileSelectionPanel->setProfileIndex(0);
+      m_selectedProfileIndex = 0;
+      qDebug() << "Cut: Auto-selected Profile 1";
+    }
   }
 
   if (m_sketchView) {
@@ -2388,9 +2515,9 @@ void MainWindow::onProfileSelected(int profileIndex) {
   // Save selected profile index (panel is already showing settings)
   m_selectedProfileIndex = profileIndex;
 
-  // Sync selection with ToolSettingsPanel ComboBox (bidirectional sync)
-  if (m_toolSettingsPanel) {
-    m_toolSettingsPanel->setProfileIndex(profileIndex);
+  // Sync selection with ProfileSelectionPanel ComboBox (bidirectional sync)
+  if (m_profileSelectionPanel) {
+    m_profileSelectionPanel->setProfileIndex(profileIndex);
   }
 
   statusBar()->showMessage(
@@ -3413,18 +3540,24 @@ void MainWindow::onConstraintConcentric() {
 }
 
 void MainWindow::onToolApply() {
+  qDebug() << "=== onToolApply() called ===";
+  qDebug() << "m_activePartTool:" << static_cast<int>(m_activePartTool);
+
   // Handle Apply button click based on active Part tool
   switch (m_activePartTool) {
   case ActivePartTool::Extrude: {
+    qDebug() << "Entering Extrude case";
     // Extrude the selected profile with panel settings
     if (!m_currentSketch) {
       QMessageBox::warning(this, "Extrude", "No sketch available.");
       return;
     }
 
-    // Get profile selection from ToolSettingsPanel
-    int profileIndex =
-        m_toolSettingsPanel ? m_toolSettingsPanel->selectedProfile() : -1;
+    // Get profile selection from ProfileSelectionPanel or
+    // m_selectedProfileIndex
+    int profileIndex = m_profileSelectionPanel
+                           ? m_profileSelectionPanel->selectedProfile()
+                           : m_selectedProfileIndex;
     if (profileIndex < 0) {
       QMessageBox::warning(this, "Extrude",
                            "Please select a profile from Tool Settings.");

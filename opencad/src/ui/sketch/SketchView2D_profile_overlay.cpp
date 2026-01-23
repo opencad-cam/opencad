@@ -59,8 +59,8 @@ void SketchView2D::drawProfileOverlays(QPainter &painter) {
             gp_Pnt point3D;
             curve->D0(param, point3D);
 
-            // Convert 3D point to 2D sketch coordinates
-            gp_Pnt2d point2D(point3D.X(), point3D.Y());
+            // Convert 3D point to 2D sketch coordinates using sketch plane
+            gp_Pnt2d point2D = m_sketch->plane().to2D(point3D);
             QPointF screenPt = worldToScreen(point2D);
 
             if (j > 0) {

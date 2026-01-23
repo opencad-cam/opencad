@@ -61,12 +61,6 @@ public:
   void showScaleSettings();
   void showHoleSettings();
 
-  // Profile selection
-  void updateProfileList(const QStringList &profiles);
-  void setProfileIndex(int index); // Sync click selection with ComboBox
-  int selectedProfile() const;
-  void clearProfileSelection();
-
   // Get current values
   double extrudeDepth() const;
   bool extrudeSymmetric() const;
@@ -115,7 +109,6 @@ signals:
   void polygonInscribedChanged(bool inscribed);
   void settingsChanged();
   void applyClicked();
-  void profileSelected(int index);
 
 private slots:
   void onPolygonSidesChanged(int value);
@@ -124,7 +117,6 @@ private slots:
   void onToleranceChanged(double value);
   void onPolygonInscribedToggled(bool checked);
   void onSettingsChanged();
-  void onProfileChanged(int index);
 
 private:
   void setupUI();
@@ -155,10 +147,6 @@ private:
   QDoubleSpinBox *m_slotWidthSpin;
 
   // === PART FEATURE SETTINGS ===
-
-  // Profile selection (shared by Extrude/Cut/Revolve/etc)
-  QComboBox *m_profileCombo;
-  QLabel *m_profileLabel;
 
   // Extrude settings
   QGroupBox *m_extrudeGroup;

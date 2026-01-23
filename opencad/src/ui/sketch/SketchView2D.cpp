@@ -1876,12 +1876,18 @@ void SketchView2D::keyPressEvent(QKeyEvent *event) {
 
   case Qt::Key_Return:
   case Qt::Key_Enter:
-    // Confirm multi-profile selection
+    // Confirm profile selection and show Tool Settings
     if (m_currentTool == SketchToolType::ProfileSelect) {
+      qDebug() << "ProfileSelect: Enter pressed, confirming selection";
       if (!m_selectedProfiles.empty()) {
         emit multiProfilesConfirmed(m_selectedProfiles);
       }
-      exitProfileSelectMode();
+      emit profileSelectionConfirmed(); // Show Tool Settings in MainWindow
+      // Exit profile select mode WITHOUT emitting profileSelectionCancelled
+      m_profiles.clear();
+      m_hoveredProfileIndex = -1;
+      setTool(SketchToolType::Select);
+      update();
     }
     // Finish spline with Enter key
     else if (m_currentTool == SketchToolType::Spline &&
@@ -2100,8 +2106,8 @@ void SketchView2D::drawProfileOverlays(QPainter &painter) {
           double param = first + (last - first) * j / numSamples;
           gp_Pnt point3D = curveAdaptor.Value(param);
 
-          // Convert 3D point to 2D sketch coordinates
-          gp_Pnt2d point2D(point3D.X(), point3D.Y());
+          // Convert 3D point to 2D sketch coordinates using sketch plane
+          gp_Pnt2d point2D = m_sketch->plane().to2D(point3D);
           QPointF screenPt = worldToScreen(point2D);
 
           if (j > 0) {
@@ -2251,6 +2257,11 @@ void SketchView2D::enterProfileSelectMode() {
   m_selectedProfiles.clear(); // Clear previous selections
   m_hoveredProfileIndex = -1;
   setTool(SketchToolType::ProfileSelect);
+
+  // IMPORTANT: Set focus so we receive key events (Enter)
+  setFocus(Qt::OtherFocusReason);
+  setFocusPolicy(Qt::StrongFocus);
+
   update();
 }
 

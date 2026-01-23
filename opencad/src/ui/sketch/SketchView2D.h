@@ -139,6 +139,8 @@ signals:
   multiProfilesConfirmed(const std::vector<std::pair<int, int>>
                              &selections); // (outer, inner), inner=-1 for solid
   void profileHovered(int profileIndex);
+  void profileSelectionConfirmed(); // Emitted when Enter pressed in
+                                    // ProfileSelect mode
   void profileSelectionCancelled();
 
 protected:
