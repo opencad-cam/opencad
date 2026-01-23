@@ -70,7 +70,7 @@ void Viewport3D::initViewer() {
 
   // Create AIS context
   m_context = new AIS_InteractiveContext(m_viewer);
-  m_context->SetDisplayMode(AIS_Shaded, true);
+  m_context->SetDisplayMode(AIS_WireFrame, true);
 
   // Create view
   m_view = m_viewer->CreateView();
@@ -120,7 +120,7 @@ void Viewport3D::displayShape(const core::Shape &shape) {
     return;
 
   Handle(AIS_Shape) aisShape = new AIS_Shape(shape.occShape());
-  m_context->Display(aisShape, AIS_Shaded, 0, true);
+  m_context->Display(aisShape, AIS_WireFrame, 0, true);
   m_aisShapes.push_back(aisShape); // Store for selection
   fitAll();
 }
@@ -148,7 +148,7 @@ void Viewport3D::displayShape(const TopoDS_Shape &shape) {
 
   Handle(AIS_Shape) aisShape = new AIS_Shape(shape);
   qDebug() << "Viewport3D::displayShape - Displaying shape in AIS context...";
-  m_context->Display(aisShape, AIS_Shaded, 0, true);
+  m_context->Display(aisShape, AIS_WireFrame, 0, true);
   m_aisShapes.push_back(aisShape); // Store for selection
   qDebug() << "Viewport3D::displayShape - Shape displayed, total AIS shapes:"
            << m_aisShapes.size();
