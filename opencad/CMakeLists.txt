@@ -64,6 +64,7 @@ add_subdirectory(src/core)
 add_subdirectory(src/io)
 add_subdirectory(src/sketch)
 add_subdirectory(src/part)
+add_subdirectory(src/assembly)
 add_subdirectory(src/ui)
 
 # Main Application
