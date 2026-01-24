@@ -181,6 +181,9 @@ public:
   SketchStatus status() const { return m_status; }
   void setStatus(SketchStatus status) { m_status = status; }
 
+  bool isVisible() const { return m_visible; }
+  void setVisible(bool visible) { m_visible = visible; }
+
   // === Undo/Redo Support ===
 
   /// Add entity directly (for undo/redo restore)
@@ -213,6 +216,7 @@ private:
   std::vector<Constraint::Ptr> m_constraints;
   ConstraintSolver m_solver;
   SketchStatus m_status;
+  bool m_visible = true;
 
   // Undo/Redo history - stores snapshots of entities
   struct Snapshot {

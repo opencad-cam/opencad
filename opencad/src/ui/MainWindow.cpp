@@ -252,7 +252,7 @@ void MainWindow::displayAllShapes() {
     // Display sketch wires in viewport (cyan color for visibility)
     qDebug() << "Total sketches:" << m_document->sketches().size();
     for (const auto &sketch : m_document->sketches()) {
-      if (sketch) {
+      if (sketch && sketch->isVisible()) {
         TopoDS_Compound compound = sketch->buildCompound();
         if (!compound.IsNull()) {
           m_viewport->displaySketchWire(compound); // Holographic cyan compound
@@ -1334,6 +1334,12 @@ void MainWindow::onEditSketch() {
     return;
   }
   m_sketchMode = true;
+
+  // Make sure sketch is visible when editing
+  if (m_currentSketch) {
+    m_currentSketch->setVisible(true);
+  }
+
   updateSketchToolsEnabled(true);
   showSketchEditor();
   statusBar()->showMessage("Editing: " +
@@ -3749,6 +3755,11 @@ void MainWindow::onToolApply() {
       // Save undo state AFTER adding shape
       saveUndoState("Extrude");
 
+      // Hide the consumed sketch
+      if (m_currentSketch) {
+        m_currentSketch->setVisible(false);
+      }
+
       qDebug() << "Extrude: Calling displayAllShapes()...";
       displayAllShapes();
       qDebug() << "Extrude: displayAllShapes() completed";
@@ -4017,6 +4028,11 @@ void MainWindow::onToolApply() {
         }
       }
 
+      // Hide the consumed sketch
+      if (m_currentSketch) {
+        m_currentSketch->setVisible(false);
+      }
+
       displayAllShapes();
       m_featureList->addItem(
           QString("?? Revolve (%1� around %2)").arg(angle).arg(axisName));
@@ -4067,6 +4083,12 @@ void MainWindow::onToolApply() {
           if (cutOp.IsDone()) {
             saveUndoState("Cut");
             m_document->temporaryShapes()[0] = cutOp.Shape();
+
+            // Hide the consumed sketch
+            if (m_currentSketch) {
+              m_currentSketch->setVisible(false);
+            }
+
             displayAllShapes();
             m_featureList->addItem(QString("?? Cut (%1)").arg(depth));
             statusBar()->showMessage("Cut completed", 3000);
