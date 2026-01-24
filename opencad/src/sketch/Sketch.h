@@ -181,8 +181,8 @@ public:
   SketchStatus status() const { return m_status; }
   void setStatus(SketchStatus status) { m_status = status; }
 
-  bool isVisible() const { return m_visible; }
-  void setVisible(bool visible) { m_visible = visible; }
+  bool isVisible() const;
+  void setVisible(bool visible);
 
   // === Undo/Redo Support ===
 

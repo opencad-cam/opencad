@@ -252,10 +252,14 @@ void MainWindow::displayAllShapes() {
     // Display sketch wires in viewport (cyan color for visibility)
     qDebug() << "Total sketches:" << m_document->sketches().size();
     for (const auto &sketch : m_document->sketches()) {
-      if (sketch && sketch->isVisible()) {
-        TopoDS_Compound compound = sketch->buildCompound();
-        if (!compound.IsNull()) {
-          m_viewport->displaySketchWire(compound); // Holographic cyan compound
+      if (sketch) {
+        qDebug() << "  Sketch" << QString::fromStdString(sketch->name())
+                 << "visible:" << sketch->isVisible();
+        if (sketch->isVisible()) {
+          TopoDS_Compound compound = sketch->buildCompound();
+          if (!compound.IsNull()) {
+            m_viewport->displaySketchWire(compound); // Holographic cyan compound
+          }
         }
       }
     }
@@ -3758,6 +3762,8 @@ void MainWindow::onToolApply() {
       // Hide the consumed sketch
       if (m_currentSketch) {
         m_currentSketch->setVisible(false);
+        qDebug() << "Extrude: Sketch" << QString::fromStdString(m_currentSketch->name())
+                 << "hidden (visible=false)";
       }
 
       qDebug() << "Extrude: Calling displayAllShapes()...";
@@ -4031,6 +4037,8 @@ void MainWindow::onToolApply() {
       // Hide the consumed sketch
       if (m_currentSketch) {
         m_currentSketch->setVisible(false);
+        qDebug() << "Revolve: Sketch" << QString::fromStdString(m_currentSketch->name())
+                 << "hidden (visible=false)";
       }
 
       displayAllShapes();
@@ -4087,6 +4095,8 @@ void MainWindow::onToolApply() {
             // Hide the consumed sketch
             if (m_currentSketch) {
               m_currentSketch->setVisible(false);
+              qDebug() << "Cut: Sketch" << QString::fromStdString(m_currentSketch->name())
+                       << "hidden (visible=false)";
             }
 
             displayAllShapes();

@@ -122,6 +122,10 @@ Sketch::Sketch(const SketchPlane &plane)
     : m_name("Sketch1"), m_plane(plane), m_status(SketchStatus::Open),
       m_visible(true) {}
 
+bool Sketch::isVisible() const { return m_visible; }
+
+void Sketch::setVisible(bool visible) { m_visible = visible; }
+
 void Sketch::addEntity(SketchEntity::Ptr entity) {
   m_entities.push_back(entity);
 }
