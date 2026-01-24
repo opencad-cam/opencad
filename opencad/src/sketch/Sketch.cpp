@@ -114,10 +114,13 @@ TopoDS_Edge CreateArc3Points(const gp_Pnt &pStart, const gp_Pnt &pMid,
 namespace opencad {
 namespace sketch {
 
-Sketch::Sketch() : m_name("Sketch1"), m_plane(), m_status(SketchStatus::Open) {}
+Sketch::Sketch()
+    : m_name("Sketch1"), m_plane(), m_status(SketchStatus::Open),
+      m_visible(true) {}
 
 Sketch::Sketch(const SketchPlane &plane)
-    : m_name("Sketch1"), m_plane(plane), m_status(SketchStatus::Open) {}
+    : m_name("Sketch1"), m_plane(plane), m_status(SketchStatus::Open),
+      m_visible(true) {}
 
 void Sketch::addEntity(SketchEntity::Ptr entity) {
   m_entities.push_back(entity);
