@@ -1420,8 +1420,8 @@ void SketchView2D::mousePressEvent(QMouseEvent *event) {
         if (!ctrlHeld) {
           // Start box selection
           m_isBoxSelecting = true;
-          m_boxSelectStart = event->pos();
-          m_boxSelectEnd = event->pos();
+          m_boxSelectStart = worldToScreen(snappedPos);
+          m_boxSelectEnd = worldToScreen(snappedPos);
           clearSelection();
         }
         m_isDragging = false;
@@ -1518,7 +1518,7 @@ void SketchView2D::mouseMoveEvent(QMouseEvent *event) {
   if (m_currentTool == SketchToolType::Select) {
     // Box selection update
     if (m_isBoxSelecting) {
-      m_boxSelectEnd = event->pos();
+      m_boxSelectEnd = worldToScreen(m_currentSnap.point);
       update();
       return;
     }
