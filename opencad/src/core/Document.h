@@ -11,6 +11,7 @@
 #include "FeatureTree.h"
 #include "Parameter.h"
 #include "UndoRedoManager.h"
+#include "assembly/Assembly.h"
 #include <QDateTime>
 #include <QObject>
 #include <QString>
@@ -129,6 +130,12 @@ public:
   void clearTemporaryShapes();
   std::vector<TopoDS_Shape> &temporaryShapes() { return m_temporaryShapes; }
 
+  // Assembly management
+  std::shared_ptr<assembly::Assembly> assembly() { return m_assembly; }
+  const std::shared_ptr<assembly::Assembly> assembly() const {
+    return m_assembly;
+  }
+
   // Regeneration
   /**
    * @brief Regenerate all features
@@ -226,6 +233,9 @@ private:
 
   // Sketches (separate from features for now)
   std::vector<std::shared_ptr<sketch::Sketch>> m_sketches;
+
+  // Assembly
+  std::shared_ptr<assembly::Assembly> m_assembly;
 
   // Temporary shape storage (backward compatibility)
   std::vector<TopoDS_Shape> m_temporaryShapes;

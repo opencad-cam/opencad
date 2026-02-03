@@ -1,29 +1,56 @@
 #pragma once
-#include <vector>
-#include <memory>
-#include "Component.h"
 #include "AssemblyConstraint.h"
+#include "AssemblyNode.h"
+#include "Component.h"
+#include <memory>
+#include <vector>
+
 
 namespace opencad {
 namespace assembly {
 
 class Assembly {
 public:
-    Assembly() = default;
-    ~Assembly() = default;
+  Assembly() = default;
+  ~Assembly() = default;
 
-    void addComponent(std::shared_ptr<Component> component);
-    void removeComponent(std::shared_ptr<Component> component);
-    const std::vector<std::shared_ptr<Component>>& getComponents() const;
+  // Node management
+  void addNode(std::shared_ptr<AssemblyNode> node);
+  void removeNode(std::shared_ptr<AssemblyNode> node);
+  const std::vector<std::shared_ptr<AssemblyNode>> &getNodes() const {
+    return m_nodes;
+  }
 
-    void addConstraint(std::shared_ptr<AssemblyConstraint> constraint);
-    const std::vector<std::shared_ptr<AssemblyConstraint>>& getConstraints() const;
+  // Reordering
+  // Move 'count' items starting at 'index' to 'destIndex'
+  // Simplified for now: just move one item
+  void moveNode(std::shared_ptr<AssemblyNode> node,
+                std::shared_ptr<AssemblyNode> newParent, int index = -1);
 
-    bool solve();
+  // Backward compatibility helpers
+  void addComponent(std::shared_ptr<Component> component);
+  void removeComponent(std::shared_ptr<Component> component);
+
+  /**
+   * @brief Get all leaf components recursively
+   */
+  std::vector<std::shared_ptr<Component>> getComponents() const;
+
+  void addConstraint(std::shared_ptr<AssemblyConstraint> constraint);
+  void removeConstraint(std::shared_ptr<AssemblyConstraint> constraint);
+  const std::vector<std::shared_ptr<AssemblyConstraint>> &
+  getConstraints() const;
+
+  void clear();
+
+  bool solve();
 
 private:
-    std::vector<std::shared_ptr<Component>> m_components;
-    std::vector<std::shared_ptr<AssemblyConstraint>> m_constraints;
+  void collectComponents(std::shared_ptr<AssemblyNode> node,
+                         std::vector<std::shared_ptr<Component>> &list) const;
+
+  std::vector<std::shared_ptr<AssemblyNode>> m_nodes; // Root nodes
+  std::vector<std::shared_ptr<AssemblyConstraint>> m_constraints;
 };
 
 } // namespace assembly

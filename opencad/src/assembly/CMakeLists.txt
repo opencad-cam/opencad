@@ -4,12 +4,16 @@ set(ASSEMBLY_SOURCES
     Assembly.cpp
     Component.cpp
     AssemblyConstraint.cpp
+    ConstraintSolver.cpp
 )
 
 set(ASSEMBLY_HEADERS
     Assembly.h
     Component.h
     AssemblyConstraint.h
+    AssemblyNode.h
+    ComponentGroup.h
+    ConstraintSolver.h
 )
 
 add_library(opencad_assembly STATIC ${ASSEMBLY_SOURCES} ${ASSEMBLY_HEADERS})
@@ -22,4 +26,5 @@ target_link_libraries(opencad_assembly PUBLIC
     opencad_core
     TKernel
     TKMath
+    TKBRep
 )

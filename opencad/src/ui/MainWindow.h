@@ -17,6 +17,8 @@
 #include <memory>
 #include <vector>
 
+class QStackedWidget; // Forward declaration
+
 // Forward declarations
 namespace opencad {
 namespace sketch {
@@ -24,13 +26,23 @@ class Sketch;
 }
 namespace core {
 class Document;
+class Shape; // Added
 } // namespace core
+
+namespace assembly {
+class Component;
+}
+
 } // namespace opencad
+
+#include <AIS_InteractiveObject.hxx>
+#include <map>
 
 namespace opencad {
 namespace ui {
 
 class Viewport3D;
+class AssemblyTreeWidget;
 
 /**
  * @class MainWindow
@@ -103,6 +115,7 @@ private slots:
   void onSketchPoint();
   void onSketchSpline();
   void onSketchEllipse();
+  void onSketchProject(); // Added
 
   // Sketch constraints
   void onConstraintHorizontal();
@@ -180,6 +193,9 @@ private slots:
   void onToggleFeatureSuppression();
   void onFeatureReordered();
 
+  // Assembly tree interaction
+  void onAssemblyTreeSelection(std::shared_ptr<assembly::Component> component);
+
 private:
   void setupMenus();
   void setupToolbars();
@@ -187,6 +203,7 @@ private:
   void setupDockWidgets();
   void updateFeatureList();
   void updateWindowTitle();
+  void updateInterfaceMode();
   void updateSketchToolsEnabled(bool enabled);
   void showSketchEditor();
 
@@ -203,6 +220,7 @@ private:
 
   // Dock widgets
   QDockWidget *m_featureTreeDock = nullptr;
+  QStackedWidget *m_treeStack = nullptr; // Added
   QListWidget *m_featureList = nullptr;
   QDockWidget *m_sketchDock = nullptr;
   class SketchView2D *m_sketchView = nullptr;
@@ -214,11 +232,13 @@ private:
   class ToolSettingsPanel *m_toolSettingsPanel = nullptr;
   QDockWidget *m_profileSelectionDock = nullptr;
   class ProfileSelectionPanel *m_profileSelectionPanel = nullptr;
+  AssemblyTreeWidget *m_assemblyTree = nullptr; // Fixed type
 
   // Toolbars
   QToolBar *m_sketchToolbar = nullptr;
   QToolBar *m_constraintToolbar = nullptr;
   QToolBar *m_featureToolbar = nullptr;
+  QToolBar *m_assemblyToolbar = nullptr;
 
   // Profile selection state (for visual Extrude/Cut)
   enum class PendingOperation { None, Extrude, Cut };
@@ -279,9 +299,60 @@ private:
     Boolean,
     ReferencePlane,
     Split,
-    NewSketch
+    NewSketch,
+    Project // Added
   };
   ActivePartTool m_activePartTool = ActivePartTool::None;
+
+  // Assembly
+  bool m_assemblyMode = false;
+
+  enum class AssemblyAction { None, Move, Constraint };
+  AssemblyAction m_currentAssemblyAction = AssemblyAction::None;
+
+  // Track selected components for assembly operations
+  std::vector<std::shared_ptr<assembly::Component>> m_selectedComponents;
+
+  // Mate selection state
+  enum class MateStep { None, SelectFirst, SelectSecond };
+  MateStep m_mateStep = MateStep::None;
+  TopoDS_Shape m_mateShape1; // First selected sub-shape
+  TopoDS_Shape m_mateShape2; // Second selected sub-shape
+  std::shared_ptr<assembly::Component> m_mateComponent1; // First component
+
+  // Helper find component from shape
+  std::shared_ptr<assembly::Component>
+  findComponentFromShape(const TopoDS_Shape &shape);
+
+  // Handle generic geometry selection (including Shapes for assembly)
+  void onGeometrySelected(const QString &type);
+
+  // Optimized visual update
+  void updateAssemblyVisuals();
+
+  // Assembly slots
+  void onNewAssembly();
+  void onInsertComponent();
+  void onAssemblyConstraint();
+  void onMoveComponent();
+  void onMoveMultipleComponents();  // Batch move multiple selected components
+  void onGroupSelectedComponents(); // Group selected components into a group
+  void onSolveConstraints();        // Manually trigger constraint solving
+
+  // Parametric assembly operations
+  void onParametricMove();  // Move with precise X/Y/Z input
+  void onRotateComponent(); // Rotate component around an axis
+  void onCopyComponent();   // Copy selected component
+  void onMoveToOrigin();    // Reset component position to origin
+
+  // Selection Sync
+  void onShapeSelected(const TopoDS_Shape &shape,
+                       Handle(AIS_InteractiveObject) object);
+
+private:
+  // Visual Map for Selection Sync: AIS Object -> Component
+  std::map<Handle(AIS_InteractiveObject), std::weak_ptr<assembly::Component>>
+      m_visualMap;
 };
 
 } // namespace ui

@@ -4,7 +4,9 @@
  */
 
 #include "MainWindow.h"
+#include "AssemblyTreeWidget.h"
 #include "viewport/Viewport3D.h"
+#include <QStackedWidget>
 
 // Core geometry
 #include "core/geometry/BooleanOps.h"
@@ -54,6 +56,8 @@
 #include "ProfileSelectionPanel.h"
 #include "PropertiesPanel.h"
 #include "ToolSettingsPanel.h"
+#include "dialogs/MateDialog.h"
+#include "dialogs/NewDocumentDialog.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -82,6 +86,7 @@
 #include <Geom_Line.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopLoc_Location.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
@@ -100,6 +105,16 @@
 // Core
 #include "core/Document.h"
 
+// Assembly
+#include "assembly/Assembly.h"
+#include "assembly/AssemblyConstraint.h"
+#include "assembly/Component.h"
+#include "assembly/ComponentGroup.h"
+#include "assembly/ConstraintSolver.h"
+
+// IO
+#include "io/step/StepReader.h"
+
 namespace opencad {
 namespace ui {
 
@@ -117,6 +132,39 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   // Connect face selection signal
   connect(m_viewport.get(), &Viewport3D::faceSelected, this,
           &MainWindow::onFaceSelected);
+  connect(m_viewport.get(), &Viewport3D::geometrySelected, this,
+          &MainWindow::onGeometrySelected);
+  connect(m_viewport.get(), &Viewport3D::shapeSelected, this,
+          &MainWindow::onShapeSelected);
+
+  // Connect component drag signal for assembly move
+  connect(m_viewport.get(), &Viewport3D::componentDragEnded, this,
+          [this](Handle(AIS_InteractiveObject) aisObj, gp_Pnt dropPoint) {
+            if (!m_assemblyMode || !m_document->assembly())
+              return;
+
+            // Find the component from the AIS object
+            auto it = m_visualMap.find(aisObj);
+            if (it != m_visualMap.end()) {
+              auto compWeak = it->second;
+              if (auto comp = compWeak.lock()) {
+                // Calculate translation from original position
+                gp_Trsf currentPlacement = comp->getPlacement();
+                gp_Trsf newPlacement;
+                newPlacement.SetTranslation(gp_Vec(gp_Pnt(0, 0, 0), dropPoint));
+                comp->setPlacement(newPlacement);
+
+                displayAllShapes();
+                statusBar()->showMessage(
+                    QString("Moved component '%1'")
+                        .arg(QString::fromStdString(comp->getName())));
+              }
+            }
+
+            // Disable drag mode after drop
+            m_viewport->enableComponentDragMode(false);
+            m_currentAssemblyAction = AssemblyAction::None;
+          });
 
   setupMenus();
   setupToolbars();
@@ -235,6 +283,9 @@ void MainWindow::displayAllShapes() {
   if (m_viewport) {
     m_viewport->clearAll(); // FIX: clearDisplay() doesn't exist!
 
+    // Clear visual map
+    m_visualMap.clear();
+
     // Display solid shapes from document
     auto shapes = m_document->getAllShapes();
     qDebug() << "Total shapes to display:" << shapes.size();
@@ -247,6 +298,28 @@ void MainWindow::displayAllShapes() {
         qDebug() << "  Shape" << shapeIndex << "displayed";
       }
       shapeIndex++;
+    }
+
+    // Display assembly components
+    if (m_document->assembly()) {
+      for (const auto &component : m_document->assembly()->getComponents()) {
+        if (component && component->isVisible()) {
+          // Use base shape + SetLocation for performance optimization
+          // This allows us to update position without re-meshing/re-displaying
+          if (component->getShape()) {
+            TopoDS_Shape baseShape = component->getShape()->occShape();
+            if (!baseShape.IsNull()) {
+              auto aisShape = m_viewport->displayShape(baseShape);
+              if (!aisShape.IsNull()) {
+                // Apply current placement
+                m_viewport->context()->SetLocation(aisShape,
+                                                   component->getPlacement());
+                m_visualMap[aisShape] = component;
+              }
+            }
+          }
+        }
+      }
     }
 
     // Display sketch wires in viewport (cyan color for visibility)
@@ -263,6 +336,28 @@ void MainWindow::displayAllShapes() {
     m_viewport->fitAll();
     qDebug() << "=== displayAllShapes done ===";
   }
+}
+
+void MainWindow::updateAssemblyVisuals() {
+  if (!m_viewport)
+    return;
+
+  auto ctx = m_viewport->context();
+  if (ctx.IsNull())
+    return;
+
+  // Batch update locations without creating new objects
+  for (const auto &pair : m_visualMap) {
+    Handle(AIS_InteractiveObject) aisObj = pair.first;
+    auto weakComp = pair.second;
+    auto comp = weakComp.lock();
+
+    if (comp && !aisObj.IsNull()) {
+      TopLoc_Location loc(comp->getPlacement());
+      ctx->SetLocation(aisObj, loc);
+    }
+  }
+  ctx->UpdateCurrentViewer();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -283,6 +378,56 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   } else {
     event->accept();
   }
+}
+
+void MainWindow::onNewFile() {
+  if (m_modified) {
+    auto result = QMessageBox::question(
+        this, "Unsaved Changes",
+        "You have unsaved changes. Do you want to save before creating a new "
+        "document?",
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+    if (result == QMessageBox::Save) {
+      onSaveFile();
+    } else if (result == QMessageBox::Cancel) {
+      return;
+    }
+  }
+
+  // Show New Document Dialog
+  opencad::ui::NewDocumentDialog dialog(this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  auto type = dialog.getSelectedType();
+
+  // Reset Document
+  m_document->newDocument();
+  m_currentFile.clear();
+  m_modified = false;
+  updateWindowTitle();
+
+  // Set Mode
+  if (type == opencad::ui::DocumentType::Assembly) {
+    m_assemblyMode = true;
+    m_sketchMode = false;
+    statusBar()->showMessage("New Assembly created");
+  } else {
+    m_assemblyMode = false;
+    m_sketchMode = false;
+    statusBar()->showMessage("New Part created");
+  }
+
+  updateInterfaceMode();
+
+  // Clear views
+  if (m_viewport)
+    m_viewport->clearAll();
+  if (m_assemblyTree)
+    m_assemblyTree->updateTree();
+  updateFeatureList();
 }
 
 void MainWindow::setupMenus() {
@@ -490,6 +635,29 @@ void MainWindow::setupMenus() {
   // Help Menu
   auto *helpMenu = menuBar()->addMenu("&Help");
   helpMenu->addAction("&About OpenCAD", this, &MainWindow::onAbout);
+
+  // Assembly Menu
+  auto *assemblyMenu = menuBar()->addMenu("&Assembly");
+  assemblyMenu->addAction("New Assembly", this, &MainWindow::onNewAssembly);
+  assemblyMenu->addAction("Insert Component...", this,
+                          &MainWindow::onInsertComponent);
+  assemblyMenu->addSeparator();
+  assemblyMenu->addAction("Move Component", this, &MainWindow::onMoveComponent);
+  assemblyMenu->addAction("Add Constraint", this,
+                          &MainWindow::onAssemblyConstraint);
+  assemblyMenu->addSeparator();
+  assemblyMenu->addAction("Solve Constraints", this,
+                          &MainWindow::onSolveConstraints);
+  assemblyMenu->addAction("Move Multiple...", this,
+                          &MainWindow::onMoveMultipleComponents);
+  assemblyMenu->addAction("Group Selected...", this,
+                          &MainWindow::onGroupSelectedComponents);
+  assemblyMenu->addSeparator();
+  assemblyMenu->addAction("Precise Move...", this,
+                          &MainWindow::onParametricMove);
+  assemblyMenu->addAction("Rotate...", this, &MainWindow::onRotateComponent);
+  assemblyMenu->addAction("Copy...", this, &MainWindow::onCopyComponent);
+  assemblyMenu->addAction("Move to Origin", this, &MainWindow::onMoveToOrigin);
 }
 
 void MainWindow::setupToolbars() {
@@ -556,18 +724,61 @@ void MainWindow::setupToolbars() {
   auto *selectToolbar = addToolBar("Selection");
   selectToolbar->addAction("?? Shape", this, &MainWindow::onSelectShape);
   selectToolbar->addAction("? Face", this, &MainWindow::onSelectFace);
-  selectToolbar->addAction("� Edge", this, &MainWindow::onSelectEdge);
-  selectToolbar->addAction("� Vertex", this, &MainWindow::onSelectVertex);
+  selectToolbar->addAction(" Edge", this, &MainWindow::onSelectEdge);
+  selectToolbar->addAction(" Vertex", this, &MainWindow::onSelectVertex);
+
+  // Assembly toolbar
+  m_assemblyToolbar = addToolBar("Assembly");
+  m_assemblyToolbar->addAction("📄 Asm", this, &MainWindow::onNewAssembly);
+  m_assemblyToolbar->addAction("📥 Insert", this,
+                               &MainWindow::onInsertComponent);
+  m_assemblyToolbar->addAction("✋ Move", this, &MainWindow::onMoveComponent);
+  m_assemblyToolbar->addAction("🔗 Mate", this,
+                               &MainWindow::onAssemblyConstraint);
+  m_assemblyToolbar->addAction("⚙️ Solve", this,
+                               &MainWindow::onSolveConstraints);
+  m_assemblyToolbar->addAction("↔️ Multi-Move", this,
+                               &MainWindow::onMoveMultipleComponents);
+  m_assemblyToolbar->addAction("📁 Group", this,
+                               &MainWindow::onGroupSelectedComponents);
+  m_assemblyToolbar->addSeparator();
+  m_assemblyToolbar->addAction("📐 Precise", this,
+                               &MainWindow::onParametricMove);
+  m_assemblyToolbar->addAction("🔄 Rotate", this,
+                               &MainWindow::onRotateComponent);
+  m_assemblyToolbar->addAction("📋 Copy", this, &MainWindow::onCopyComponent);
+  m_assemblyToolbar->addAction("🎯 Origin", this, &MainWindow::onMoveToOrigin);
 
   // Initially disable sketch tools (until sketch is created)
   updateSketchToolsEnabled(false);
+  updateInterfaceMode();
 }
 
 void MainWindow::setupDockWidgets() {
   // Feature Tree (left)
   m_featureTreeDock = new QDockWidget("Feature Tree", this);
-  m_featureList = new QListWidget(m_featureTreeDock);
-  m_featureTreeDock->setWidget(m_featureList);
+  m_treeStack = new QStackedWidget(m_featureTreeDock);
+  m_featureTreeDock->setWidget(m_treeStack);
+
+  // 1. Part Feature List
+  m_featureList = new QListWidget(m_treeStack);
+  m_treeStack->addWidget(m_featureList);
+
+  // 2. Assembly Tree Widget
+  m_assemblyTree = new AssemblyTreeWidget(m_treeStack);
+  m_assemblyTree->setAssembly(m_document->assembly());
+  m_treeStack->addWidget(m_assemblyTree);
+
+  connect(m_assemblyTree, &AssemblyTreeWidget::componentSelected, this,
+          &MainWindow::onAssemblyTreeSelection);
+  connect(m_assemblyTree, &AssemblyTreeWidget::visibilityChanged, this,
+          &MainWindow::displayAllShapes);
+  connect(m_assemblyTree, &AssemblyTreeWidget::structChanged, this, [this]() {
+    // Structure changed might assume display doesn't change,
+    // but if we deleted something, we need to redraw
+    displayAllShapes();
+  });
+
   addDockWidget(Qt::LeftDockWidgetArea, m_featureTreeDock);
 
   // Add default items
@@ -819,13 +1030,7 @@ void MainWindow::updateWindowTitle() {
 }
 
 // File menu slots
-void MainWindow::onNewFile() {
-  clearShapes();
-  m_currentFile.clear();
-  m_modified = false;
-  updateWindowTitle();
-  statusBar()->showMessage("New file created");
-}
+// onNewFile moved to line 311
 
 void MainWindow::onOpenFile() {
   QString filename = QFileDialog::getOpenFileName(
@@ -970,12 +1175,17 @@ void MainWindow::onUndo() {
 
   if (m_document->undo()) {
     displayAllShapes();
+    if (m_assemblyTree) {
+      m_assemblyTree->updateTree();
+    }
     statusBar()->showMessage(
         QString("Undo: %1").arg(m_document->undoDescription()), 2000);
 
     // Update feature list (remove last item)
     if (m_featureList && m_featureList->count() > 0) {
-      delete m_featureList->takeItem(m_featureList->count() - 1);
+      // TODO: improvements to feature list sync
+      // delete m_featureList->takeItem(m_featureList->count() - 1);
+      updateFeatureList(); // Safer to just refresh
     }
   }
 }
@@ -1002,12 +1212,15 @@ void MainWindow::onRedo() {
 
   if (m_document->redo()) {
     displayAllShapes();
+    if (m_assemblyTree) {
+      m_assemblyTree->updateTree();
+    }
     statusBar()->showMessage(
         QString("Redo: %1").arg(m_document->redoDescription()), 2000);
 
     // Add feature back to list
     if (m_featureList) {
-      m_featureList->addItem(m_document->redoDescription());
+      updateFeatureList();
     }
   }
 }
@@ -1768,10 +1981,11 @@ void MainWindow::onConvertEntities() {
 
           // Only add if line has significant length
           if (pt1_2d.Distance(pt2_2d) > 0.01) {
-            auto line = std::make_shared<sketch::SketchLine>(pt1_2d, pt2_2d);
-            line->setConstruction(true);
-            m_currentSketch->addEntity(line);
-            addedCount++;
+            if (pt1_2d.Distance(pt2_2d) > 0.01) {
+              auto line = std::make_shared<sketch::SketchLine>(pt1_2d, pt2_2d);
+              line->setConstruction(true);
+              m_currentSketch->addEntity(line);
+            }
           }
         } else if (curve->IsKind(STANDARD_TYPE(Geom_Circle))) {
           Handle(Geom_Circle) gc = Handle(Geom_Circle)::DownCast(curve);
@@ -3655,7 +3869,8 @@ void MainWindow::onToolApply() {
         qDebug() << "Extrude: Applying draft angle:" << draftAngle;
         double angleRad = draftAngle * M_PI / 180.0;
 
-        // Use sketch plane as neutral plane and extrusion direction as draft direction
+        // Use sketch plane as neutral plane and extrusion direction as draft
+        // direction
         gp_Dir draftDir = dir;
         gp_Pln neutralPlane = m_currentSketch->plane().plane();
 
@@ -4430,6 +4645,637 @@ void MainWindow::onFeatureReordered() {
 
   m_document->checkpoint("Reorder Features");
   statusBar()->showMessage("Features reordered");
+}
+
+void MainWindow::onNewAssembly() {
+  if (!close()) {
+    return;
+  }
+
+  m_document->newDocument();
+  m_assemblyMode = true;
+  if (m_treeStack)
+    m_treeStack->setCurrentIndex(1); // Switch to Assembly Tree
+  if (m_assemblyTree)
+    m_assemblyTree->updateTree(); // Clear/refresh
+
+  updateWindowTitle();
+  statusBar()->showMessage("New Assembly created");
+}
+
+void MainWindow::onInsertComponent() {
+  QString fileName = QFileDialog::getOpenFileName(
+      this, "Insert Component", QString(),
+      "STEP Files (*.stp *.step);;All Files (*.*)");
+
+  if (fileName.isEmpty()) {
+    return;
+  }
+
+  // Load backend (basic STEP import for now)
+  // We can also allow selecting other opencad files later
+
+  opencad::io::StepReader reader;
+  if (!reader.read(fileName.toStdString())) {
+    QMessageBox::critical(this, "Error",
+                          QString::fromStdString(reader.errorMessage()));
+    return;
+  }
+
+  auto shape = std::make_shared<core::Shape>(reader.getShape());
+  auto component = std::make_shared<assembly::Component>(shape);
+
+  // Add to assembly
+  m_document->assembly()->addComponent(component);
+
+  // Update Assembly Tree
+  if (m_assemblyTree) {
+    m_assemblyTree->updateTree();
+  }
+
+  displayAllShapes();
+  statusBar()->showMessage("Component inserted");
+}
+
+void MainWindow::onSketchProject() {
+  if (!m_sketchMode || !m_currentSketch) {
+    statusBar()->showMessage("Create or edit a sketch to use Project.");
+    return;
+  }
+
+  m_activePartTool = ActivePartTool::Project;
+
+  if (m_viewport) {
+    // Enable edge and vertex selection
+    m_viewport->enableEdgeSelection(true);
+    statusBar()->showMessage(
+        "Select an edge to project onto the sketch plane.");
+  }
+}
+
+void MainWindow::onMoveComponent() {
+  m_currentAssemblyAction = AssemblyAction::Move;
+  m_selectedComponents.clear();
+
+  if (m_viewport) {
+    m_viewport->enableComponentDragMode(true);
+  }
+  statusBar()->showMessage(
+      "Move Component: Click and drag a component to move it");
+}
+
+void MainWindow::onAssemblyConstraint() {
+  m_currentAssemblyAction = AssemblyAction::Constraint;
+  m_selectedComponents.clear();
+
+  // Initialize mate selection
+  m_mateStep = MateStep::SelectFirst;
+  m_mateShape1.Nullify();
+  m_mateShape2.Nullify();
+  m_mateComponent1.reset();
+
+  if (m_viewport) {
+    m_viewport->enableMateSelection(
+        true); // Allow selecting faces/edges/vertices
+  }
+  statusBar()->showMessage("Constraint Mode: Select first face/edge/vertex");
+}
+
+void MainWindow::onMoveMultipleComponents() {
+  if (!m_assemblyMode || !m_assemblyTree)
+    return;
+
+  auto selectedComps = m_assemblyTree->getSelectedComponents();
+  if (selectedComps.size() < 2) {
+    QMessageBox::warning(this, "Multi-Move",
+                         "Please select at least 2 components.");
+    return;
+  }
+
+  // Get translation vector from user
+  bool ok;
+  double dx = QInputDialog::getDouble(this, "Move Components", "X Offset:", 0,
+                                      -10000, 10000, 2, &ok);
+  if (!ok)
+    return;
+  double dy = QInputDialog::getDouble(this, "Move Components", "Y Offset:", 0,
+                                      -10000, 10000, 2, &ok);
+  if (!ok)
+    return;
+  double dz = QInputDialog::getDouble(this, "Move Components", "Z Offset:", 0,
+                                      -10000, 10000, 2, &ok);
+  if (!ok)
+    return;
+
+  // Apply translation to all selected components
+  gp_Trsf translation;
+  translation.SetTranslation(gp_Vec(dx, dy, dz));
+
+  for (auto &comp : selectedComps) {
+    gp_Trsf current = comp->getPlacement();
+    current.Multiply(translation);
+    comp->setPlacement(current);
+  }
+
+  displayAllShapes();
+  statusBar()->showMessage(
+      QString("Moved %1 components").arg(selectedComps.size()));
+}
+
+void MainWindow::onGroupSelectedComponents() {
+  if (!m_assemblyMode || !m_assemblyTree || !m_document->assembly())
+    return;
+
+  auto selectedComps = m_assemblyTree->getSelectedComponents();
+  if (selectedComps.size() < 2) {
+    QMessageBox::warning(this, "Group Components",
+                         "Please select at least 2 components to group.");
+    return;
+  }
+
+  bool ok;
+  QString groupName =
+      QInputDialog::getText(this, "Group Components",
+                            "Group Name:", QLineEdit::Normal, "New Group", &ok);
+  if (!ok || groupName.isEmpty())
+    return;
+
+  // Create new group
+  auto group =
+      std::make_shared<assembly::ComponentGroup>(groupName.toStdString());
+
+  // Move selected components into the group
+  auto assembly = m_document->assembly();
+  for (auto &comp : selectedComps) {
+    // Remove from current parent
+    auto parent = comp->getParent();
+    if (parent && parent->isGroup()) {
+      std::static_pointer_cast<assembly::ComponentGroup>(parent)->removeChild(
+          comp);
+    } else {
+      assembly->removeNode(comp);
+    }
+    // Add to new group
+    group->addChild(comp);
+  }
+
+  // Add group to assembly
+  assembly->addNode(group);
+
+  m_assemblyTree->updateTree();
+  displayAllShapes();
+  statusBar()->showMessage(QString("Grouped %1 components into '%2'")
+                               .arg(selectedComps.size())
+                               .arg(groupName));
+}
+
+void MainWindow::onSolveConstraints() {
+  if (!m_assemblyMode || !m_document->assembly())
+    return;
+
+  bool success = m_document->assembly()->solve();
+  if (success) {
+    displayAllShapes();
+    statusBar()->showMessage("Constraints solved successfully");
+  } else {
+    QMessageBox::warning(this, "Constraint Solver",
+                         "Could not satisfy all constraints. Some components "
+                         "may not be fully positioned.");
+  }
+}
+
+void MainWindow::onParametricMove() {
+  if (!m_assemblyMode || !m_assemblyTree)
+    return;
+
+  auto selectedComps = m_assemblyTree->getSelectedComponents();
+  if (selectedComps.empty()) {
+    QMessageBox::warning(this, "Parametric Move",
+                         "Please select a component first.");
+    return;
+  }
+
+  // Get X, Y, Z absolute position from user
+  bool ok;
+  double x = QInputDialog::getDouble(this, "Parametric Move", "X Position:", 0,
+                                     -100000, 100000, 2, &ok);
+  if (!ok)
+    return;
+  double y = QInputDialog::getDouble(this, "Parametric Move", "Y Position:", 0,
+                                     -100000, 100000, 2, &ok);
+  if (!ok)
+    return;
+  double z = QInputDialog::getDouble(this, "Parametric Move", "Z Position:", 0,
+                                     -100000, 100000, 2, &ok);
+  if (!ok)
+    return;
+
+  // Apply absolute position to all selected components
+  for (auto &comp : selectedComps) {
+    gp_Trsf newPlacement;
+    newPlacement.SetTranslation(gp_Vec(x, y, z));
+    comp->setPlacement(newPlacement);
+  }
+
+  displayAllShapes();
+  statusBar()->showMessage(QString("Moved %1 component(s) to (%2, %3, %4)")
+                               .arg(selectedComps.size())
+                               .arg(x)
+                               .arg(y)
+                               .arg(z));
+}
+
+void MainWindow::onRotateComponent() {
+  if (!m_assemblyMode || !m_assemblyTree)
+    return;
+
+  auto selectedComps = m_assemblyTree->getSelectedComponents();
+  if (selectedComps.empty()) {
+    QMessageBox::warning(this, "Rotate Component",
+                         "Please select a component first.");
+    return;
+  }
+
+  // Get rotation axis and angle
+  QStringList axes = {"X", "Y", "Z"};
+  bool ok;
+  QString axis = QInputDialog::getItem(this, "Rotate Component",
+                                       "Rotation Axis:", axes, 2, false, &ok);
+  if (!ok)
+    return;
+
+  double angle = QInputDialog::getDouble(
+      this, "Rotate Component", "Angle (degrees):", 0, -360, 360, 2, &ok);
+  if (!ok)
+    return;
+
+  // Convert degrees to radians
+  double angleRad = angle * M_PI / 180.0;
+
+  // Create rotation around selected axis
+  gp_Ax1 rotationAxis;
+  if (axis == "X")
+    rotationAxis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0));
+  else if (axis == "Y")
+    rotationAxis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 1, 0));
+  else
+    rotationAxis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+
+  for (auto &comp : selectedComps) {
+    gp_Trsf current = comp->getPlacement();
+    gp_Trsf rotation;
+    rotation.SetRotation(rotationAxis, angleRad);
+    current.Multiply(rotation);
+    comp->setPlacement(current);
+  }
+
+  displayAllShapes();
+  statusBar()->showMessage(
+      QString("Rotated %1 component(s) by %2° around %3 axis")
+          .arg(selectedComps.size())
+          .arg(angle)
+          .arg(axis));
+}
+
+void MainWindow::onCopyComponent() {
+  if (!m_assemblyMode || !m_assemblyTree || !m_document->assembly())
+    return;
+
+  auto selectedComps = m_assemblyTree->getSelectedComponents();
+  if (selectedComps.empty()) {
+    QMessageBox::warning(this, "Copy Component",
+                         "Please select a component to copy.");
+    return;
+  }
+
+  // Get offset for the copy
+  bool ok;
+  double offsetX = QInputDialog::getDouble(
+      this, "Copy Component", "X Offset for copy:", 50, -10000, 10000, 2, &ok);
+  if (!ok)
+    return;
+
+  auto assembly = m_document->assembly();
+  int copyCount = 0;
+
+  for (auto &comp : selectedComps) {
+    // Create a new component with the same shape
+    auto newComp = std::make_shared<assembly::Component>(comp->getShape());
+    newComp->setName(comp->getName() + "_copy");
+
+    // Apply offset to placement
+    gp_Trsf newPlacement = comp->getPlacement();
+    gp_Trsf offset;
+    offset.SetTranslation(gp_Vec(offsetX, 0, 0));
+    newPlacement.Multiply(offset);
+    newComp->setPlacement(newPlacement);
+
+    assembly->addNode(newComp);
+    copyCount++;
+  }
+
+  m_assemblyTree->updateTree();
+  displayAllShapes();
+  statusBar()->showMessage(QString("Created %1 copy(s)").arg(copyCount));
+}
+
+void MainWindow::onMoveToOrigin() {
+  if (!m_assemblyMode || !m_assemblyTree)
+    return;
+
+  auto selectedComps = m_assemblyTree->getSelectedComponents();
+  if (selectedComps.empty()) {
+    QMessageBox::warning(this, "Move to Origin",
+                         "Please select a component first.");
+    return;
+  }
+
+  // Reset placement to identity (origin)
+  for (auto &comp : selectedComps) {
+    comp->setPlacement(gp_Trsf()); // Identity transform
+  }
+
+  displayAllShapes();
+  statusBar()->showMessage(
+      QString("Moved %1 component(s) to origin").arg(selectedComps.size()));
+}
+
+std::shared_ptr<assembly::Component>
+MainWindow::findComponentFromShape(const TopoDS_Shape &shape) {
+  if (!m_document->assembly())
+    return nullptr;
+
+  for (const auto &component : m_document->assembly()->getComponents()) {
+    // In a real app, we need to map the display shape back to the component
+    // For now, checks if IsEqual (this might need tracking of AIS_Shape to
+    // Component)
+    if (component->getTransformedShape().IsEqual(shape)) {
+      return component;
+    }
+    // Fallback: since we might be selecting the original shape instance
+    // displayed We might need a more robust mapping if transformations are
+    // involved
+    if (component->getShape()->occShape().IsEqual(shape)) {
+      return component;
+    }
+  }
+  return nullptr;
+}
+
+void MainWindow::onGeometrySelected(const QString &type) {
+  if (!m_viewport)
+    return;
+
+  // Handle Project Tool Selection (Linked Geometry)
+  if (m_activePartTool == ActivePartTool::Project && m_currentSketch) {
+    TopoDS_Shape selectedShape;
+    if (type == "Edge") {
+      auto edges = m_viewport->getSelectedEdges();
+      if (!edges.empty()) {
+        selectedShape = edges[0];
+      }
+    } else if (type == "Vertex") {
+      // selectedShape = m_viewport->getSelectedVertex(); // Assuming
+      // implemented
+    }
+
+    if (!selectedShape.IsNull()) {
+      auto entities = m_currentSketch->addProjectedEntity(selectedShape);
+      if (!entities.empty()) {
+        statusBar()->showMessage(
+            QString("Projected %1 entities").arg(entities.size()));
+        // Refresh view
+        if (m_sketchView) {
+          m_sketchView->setSketch(m_currentSketch); // Trigger redraw
+        }
+        // Update 3D view
+        TopoDS_Compound compound = m_currentSketch->buildCompound();
+        if (!compound.IsNull()) {
+          m_viewport->displaySketchWire(compound);
+        }
+      }
+    }
+    return;
+  }
+
+  if (type != "Shape")
+    return;
+
+  TopoDS_Shape selectedShape = m_viewport->getSelectedShape();
+  if (selectedShape.IsNull())
+    return;
+
+  auto component = findComponentFromShape(selectedShape);
+  if (!component) {
+    statusBar()->showMessage("Selected object is not a component");
+    return;
+  }
+
+  if (m_assemblyTree) {
+    m_assemblyTree->selectComponent(component);
+  }
+
+  if (m_currentAssemblyAction == AssemblyAction::Move) {
+    bool ok;
+    double x = QInputDialog::getDouble(this, "Move X", "Delta X:", 0, -1000,
+                                       1000, 2, &ok);
+    if (ok) {
+      double y = QInputDialog::getDouble(this, "Move Y", "Delta Y:", 0, -1000,
+                                         1000, 2, &ok);
+      if (ok) {
+        double z = QInputDialog::getDouble(this, "Move Z", "Delta Z:", 0, -1000,
+                                           1000, 2, &ok);
+        if (ok) {
+          gp_Trsf trsf = component->getPlacement();
+          gp_Vec trans(x, y, z);
+          trsf.SetTranslationPart(trsf.TranslationPart().Added(trans.XYZ()));
+          component->setPlacement(trsf);
+
+          displayAllShapes(); // Refresh view
+          statusBar()->showMessage("Component moved");
+
+          // Reset action
+          m_currentAssemblyAction = AssemblyAction::None;
+          m_viewport->enableShapeSelection(false);
+        }
+      }
+    }
+  } else if (m_currentAssemblyAction == AssemblyAction::Constraint) {
+    m_selectedComponents.push_back(component);
+
+    if (m_selectedComponents.size() == 1) {
+      statusBar()->showMessage("Select the second component");
+    } else if (m_selectedComponents.size() == 2) {
+      // Use MateDialog
+      opencad::ui::MateDialog dialog(m_selectedComponents, this);
+      if (dialog.exec() == QDialog::Accepted) {
+        auto constraint = dialog.getConstraint();
+        if (constraint) {
+          m_document->assembly()->addConstraint(constraint);
+          statusBar()->showMessage("Constraint added");
+          m_assemblyTree->updateTree(); // Refresh tree
+        }
+      }
+
+      // Reset
+      m_currentAssemblyAction = AssemblyAction::None;
+      m_selectedComponents.clear();
+      m_viewport->enableShapeSelection(false);
+    }
+  }
+}
+
+void MainWindow::updateInterfaceMode() {
+  if (m_assemblyMode) {
+    if (m_featureToolbar)
+      m_featureToolbar->setVisible(false);
+    if (m_sketchToolbar)
+      m_sketchToolbar->setVisible(false);
+    if (m_constraintToolbar)
+      m_constraintToolbar->setVisible(false);
+    if (m_assemblyToolbar)
+      m_assemblyToolbar->setVisible(true);
+    if (m_featureTreeDock)
+      m_featureTreeDock->setWindowTitle("Assembly Tree");
+    if (m_treeStack)
+      m_treeStack->setCurrentIndex(1);
+  } else {
+    // Part Mode
+    if (m_featureToolbar)
+      m_featureToolbar->setVisible(true);
+    if (m_sketchToolbar)
+      m_sketchToolbar->setVisible(true);
+    if (m_constraintToolbar)
+      m_constraintToolbar->setVisible(true);
+    if (m_assemblyToolbar)
+      m_assemblyToolbar->setVisible(false);
+    if (m_featureTreeDock)
+      m_featureTreeDock->setWindowTitle("Feature Tree");
+    if (m_treeStack)
+      m_treeStack->setCurrentIndex(0);
+  }
+}
+
+void MainWindow::onAssemblyTreeSelection(
+    std::shared_ptr<assembly::Component> component) {
+  if (!m_viewport)
+    return;
+
+  if (component) {
+    // Highlight the component's shape
+    m_viewport->clearSelectedEdges();
+    // m_viewport->clearSelectedFaces(); // Not implemented yet
+    // Assuming viewport has a method to select a specific TopoDS_Shape
+    // If not, we might need to rely on AIS context logic.
+    // For now, we'll assume we can pass the shape.
+    // m_viewport->selectShape(component->getTransformedShape());
+
+    // Actually, Viewport3D typically uses AIS_InteractiveContext::SetSelected
+    // We might need to expose a method in Viewport3D to select by TopoDS_Shape
+    // For this MVP, we'll just log it to status bar if viewport support is
+    // missing
+    statusBar()->showMessage("Selected component: " +
+                             QString::fromStdString(component->getName()));
+  } else {
+    m_viewport->clearSelectedEdges(); // Clear selection
+  }
+}
+
+void MainWindow::onShapeSelected(const TopoDS_Shape &shape,
+                                 Handle(AIS_InteractiveObject) object) {
+  auto it = m_visualMap.find(object);
+  std::shared_ptr<assembly::Component> comp;
+
+  if (it != m_visualMap.end()) {
+    auto weakComp = it->second;
+    comp = weakComp.lock();
+    if (comp) {
+      if (m_assemblyTree) {
+        m_assemblyTree->selectComponent(comp);
+        statusBar()->showMessage("Selected: " +
+                                 QString::fromStdString(comp->getName()));
+      }
+    }
+  } else {
+    // Select background
+    if (m_assemblyTree) {
+      m_assemblyTree->selectComponent(nullptr);
+    }
+    return;
+  }
+
+  // Handle Mate Logic
+  if (m_currentAssemblyAction == AssemblyAction::Constraint && comp) {
+    if (m_mateStep == MateStep::SelectFirst) {
+      m_mateComponent1 = comp;
+      m_mateShape1 = shape;
+      m_mateStep = MateStep::SelectSecond;
+      statusBar()->showMessage("Selected first geometry on " +
+                               QString::fromStdString(comp->getName()) +
+                               ". Now select second geometry.");
+    } else if (m_mateStep == MateStep::SelectSecond) {
+      if (comp == m_mateComponent1) {
+        statusBar()->showMessage("Error: Cannot mate a component to itself. "
+                                 "Select a different component.");
+        return;
+      }
+
+      m_mateShape2 = shape;
+
+      // Show Mate Type Dialog
+      QStringList items;
+      items << "Coincident" << "Distance";
+      bool ok;
+      QString item = QInputDialog::getItem(this, "Select Constraint Type",
+                                           "Type:", items, 0, false, &ok);
+
+      if (ok && !item.isEmpty()) {
+        assembly::ConstraintType type = assembly::ConstraintType::Coincident;
+        double val = 0.0;
+
+        if (item == "Distance") {
+          type = assembly::ConstraintType::Distance;
+          val = QInputDialog::getDouble(
+              this, "Distance Value", "Offset (mm):", 0.0, -1000, 1000, 2, &ok);
+          if (!ok) {
+            return;
+          }
+        }
+
+        // Create constraint
+        auto constraint = std::make_shared<assembly::AssemblyConstraint>(
+            type, m_mateComponent1, comp);
+        constraint->setSubShapes(m_mateShape1, m_mateShape2);
+        constraint->setValue(val);
+
+        m_document->assembly()->addConstraint(constraint);
+
+        // Solve
+        assembly::ConstraintSolver solver;
+        bool solved = solver.solve(*m_document->assembly());
+        if (solved) {
+          statusBar()->showMessage("Constraint added and solved.");
+        } else {
+          statusBar()->showMessage(
+              "Constraint added but solver failed to fully converge: " +
+              QString::fromStdString(solver.getErrorMessage()));
+        }
+        updateAssemblyVisuals();
+
+        if (m_assemblyTree) {
+          m_assemblyTree->updateTree();
+        }
+      }
+
+      // Reset
+      m_mateStep = MateStep::SelectFirst;
+      m_mateShape1.Nullify();
+      m_mateShape2.Nullify();
+      m_mateComponent1.reset();
+      statusBar()->showMessage(
+          "Constraint added. Ready for next mate (Select first geometry).");
+    }
+  }
 }
 
 } // namespace ui

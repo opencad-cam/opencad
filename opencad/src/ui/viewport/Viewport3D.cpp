@@ -115,25 +115,26 @@ void Viewport3D::resizeGL(int w, int h) {
   }
 }
 
-void Viewport3D::displayShape(const core::Shape &shape) {
+Handle(AIS_Shape) Viewport3D::displayShape(const core::Shape &shape) {
   if (m_context.IsNull())
-    return;
+    return nullptr;
 
   Handle(AIS_Shape) aisShape = new AIS_Shape(shape.occShape());
   m_context->Display(aisShape, AIS_Shaded, 0, true);
   m_aisShapes.push_back(aisShape); // Store for selection
   fitAll();
+  return aisShape;
 }
 
-void Viewport3D::displayShape(const TopoDS_Shape &shape) {
+Handle(AIS_Shape) Viewport3D::displayShape(const TopoDS_Shape &shape) {
   if (m_context.IsNull())
-    return;
+    return nullptr;
 
   qDebug() << "Viewport3D::displayShape - Shape IsNull:" << shape.IsNull();
 
   if (shape.IsNull()) {
     qDebug() << "Viewport3D::displayShape - WARNING: Received null shape!";
-    return;
+    return nullptr;
   }
 
   // Compute mesh tessellation for proper display
@@ -154,6 +155,7 @@ void Viewport3D::displayShape(const TopoDS_Shape &shape) {
            << m_aisShapes.size();
   fitAll();
   qDebug() << "Viewport3D::displayShape - fitAll() completed";
+  return aisShape;
 }
 
 void Viewport3D::displaySketchWire(const TopoDS_Shape &wire) {
@@ -368,12 +370,32 @@ void Viewport3D::setSelectionMode(SelectionMode mode) {
   case SelectionMode::Vertex:
     selMode = AIS_Shape::SelectionMode(TopAbs_VERTEX);
     break;
+  case SelectionMode::Mate:
+    // Mate mode requires manual activation of multiple modes
+    // Handled in setSelectionMode logic or separately
+    break;
   }
 
   // Activate selection for each shape
   for (const auto &aisShape : m_aisShapes) {
-    m_context->Activate(aisShape, selMode);
+    if (mode == SelectionMode::Mate) {
+      m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_FACE));
+      m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_EDGE));
+      m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_VERTEX));
+    } else {
+      m_context->Activate(aisShape, selMode);
+    }
   }
+}
+
+void Viewport3D::enableMateSelection(bool enable) {
+  if (enable) {
+    setSelectionMode(SelectionMode::Mate);
+    setCursor(Qt::CrossCursor);
+  } else {
+    enableShapeSelection(false);
+  }
+  update();
 }
 
 void Viewport3D::enableFaceSelection(bool enable) {
@@ -403,6 +425,30 @@ void Viewport3D::enableEdgeSelection(bool enable) {
   } else {
     setSelectionMode(SelectionMode::Shape);
     setCursor(Qt::ArrowCursor);
+  }
+  update();
+}
+
+void Viewport3D::enableShapeSelection(bool enable) {
+  if (enable) {
+    setSelectionMode(SelectionMode::Shape);
+    setCursor(Qt::CrossCursor);
+  } else {
+    setSelectionMode(SelectionMode::Shape);
+    setCursor(Qt::ArrowCursor);
+  }
+  update();
+}
+
+void Viewport3D::enableComponentDragMode(bool enable) {
+  m_componentDragMode = enable;
+  if (enable) {
+    setSelectionMode(SelectionMode::Shape);
+    setCursor(Qt::OpenHandCursor);
+  } else {
+    setCursor(Qt::ArrowCursor);
+    m_isDragging = false;
+    m_draggedObject.Nullify();
   }
   update();
 }
@@ -457,8 +503,29 @@ void Viewport3D::handlePick(int x, int y) {
             emit geometrySelected("Vertex");
           }
           break;
+          break;
+        case SelectionMode::Mate:
+          // In Mate mode, we accept Face, Edge or Vertex and emit shapeSelected
+          if (selected.ShapeType() == TopAbs_FACE ||
+              selected.ShapeType() == TopAbs_EDGE ||
+              selected.ShapeType() == TopAbs_VERTEX) {
+
+            emit shapeSelected(
+                selected,
+                Handle(AIS_InteractiveObject)::DownCast(owner->Selectable()));
+
+            // Also optional debug
+            if (selected.ShapeType() == TopAbs_FACE)
+              emit geometrySelected("Face");
+            else if (selected.ShapeType() == TopAbs_EDGE)
+              emit geometrySelected("Edge");
+          }
+          break;
         case SelectionMode::Shape:
+          m_selectedShape = selected;
           emit geometrySelected("Shape");
+          emit shapeSelected(selected, Handle(AIS_InteractiveObject)::DownCast(
+                                           owner->Selectable()));
           break;
         default:
           break;
@@ -548,6 +615,35 @@ bool Viewport3D::getSelectedFacePlane(gp_Pln &plane) const {
 void Viewport3D::mousePressEvent(QMouseEvent *event) {
   m_lastMousePos = event->pos();
 
+  // Handle component drag mode
+  if (m_componentDragMode && event->button() == Qt::LeftButton) {
+    m_context->MoveTo(event->pos().x(), event->pos().y(), m_view, true);
+    m_context->SelectDetected();
+
+    if (m_context->NbSelected() > 0) {
+      m_context->InitSelected();
+      if (m_context->MoreSelected()) {
+        Handle(StdSelect_BRepOwner) owner =
+            Handle(StdSelect_BRepOwner)::DownCast(m_context->SelectedOwner());
+        if (!owner.IsNull()) {
+          m_draggedObject =
+              Handle(AIS_InteractiveObject)::DownCast(owner->Selectable());
+          m_isDragging = true;
+          m_dragStartMousePos = event->pos();
+
+          // Get 3D point under mouse
+          Standard_Real xp, yp, zp;
+          m_view->Convert(event->pos().x(), event->pos().y(), xp, yp, zp);
+          m_dragStartPoint = gp_Pnt(xp, yp, zp);
+
+          setCursor(Qt::ClosedHandCursor);
+          emit componentDragStarted(m_draggedObject);
+          return;
+        }
+      }
+    }
+  }
+
   // Handle left click for selection (in any selection mode)
   if (event->button() == Qt::LeftButton &&
       m_selectionMode != SelectionMode::None) {
@@ -565,6 +661,21 @@ void Viewport3D::mousePressEvent(QMouseEvent *event) {
 }
 
 void Viewport3D::mouseReleaseEvent(QMouseEvent *event) {
+  if (m_isDragging && event->button() == Qt::LeftButton) {
+    // Calculate final drop point
+    Standard_Real xv, yv, zv;
+    m_view->Convert(event->pos().x(), event->pos().y(), xv, yv, zv);
+    gp_Pnt dropPoint(xv, yv, zv);
+
+    emit componentDragEnded(m_draggedObject, dropPoint);
+
+    m_isDragging = false;
+    m_draggedObject.Nullify();
+    if (m_componentDragMode) {
+      setCursor(Qt::OpenHandCursor);
+    }
+  }
+
   m_rotating = false;
   m_panning = false;
 }
@@ -575,6 +686,21 @@ void Viewport3D::mouseMoveEvent(QMouseEvent *event) {
 
   QPoint delta = event->pos() - m_lastMousePos;
   m_lastMousePos = event->pos();
+
+  // Handle component dragging
+  if (m_isDragging && !m_draggedObject.IsNull()) {
+    // Convert screen delta to 3D world coordinates
+    Standard_Real x1, y1, z1, x2, y2, z2;
+    m_view->Convert(m_dragStartMousePos.x(), m_dragStartMousePos.y(), x1, y1,
+                    z1);
+    m_view->Convert(event->pos().x(), event->pos().y(), x2, y2, z2);
+
+    gp_Vec moveVec(x2 - x1, y2 - y1, z2 - z1);
+    emit componentDragged(m_draggedObject, moveVec);
+
+    update();
+    return;
+  }
 
   // Update highlight when in selection mode
   if (m_faceSelectionEnabled && !m_context.IsNull()) {

@@ -5,6 +5,7 @@
 
 #include "UndoRedoManager.h"
 #include <QDebug>
+#include <QString>
 
 namespace opencad {
 namespace core {
@@ -12,20 +13,14 @@ namespace core {
 UndoRedoManager::UndoRedoManager(size_t maxHistory)
     : m_maxHistory(maxHistory) {}
 
-void UndoRedoManager::checkpoint(const std::vector<TopoDS_Shape> &currentShapes,
-                                 const std::string &description) {
+void UndoRedoManager::checkpoint(std::shared_ptr<Snapshot> snapshot) {
   // If we're not at the end of history, remove all future states
   while (m_currentIndex < static_cast<int>(m_history.size()) - 1) {
     m_history.pop_back();
   }
 
-  // Create new snapshot
-  ShapeSnapshot snapshot;
-  snapshot.shapes = currentShapes; // Copy all shapes
-  snapshot.description = description;
-
   // Add to history
-  m_history.push_back(std::move(snapshot));
+  m_history.push_back(snapshot);
   m_currentIndex = static_cast<int>(m_history.size()) - 1;
 
   // Limit history size
@@ -34,67 +29,63 @@ void UndoRedoManager::checkpoint(const std::vector<TopoDS_Shape> &currentShapes,
     m_currentIndex--;
   }
 
-  qDebug() << "Checkpoint:" << QString::fromStdString(description)
-           << "| Shapes:" << currentShapes.size()
+  qDebug() << "Checkpoint:" << QString::fromStdString(snapshot->description)
            << "| History:" << m_history.size() << "| Index:" << m_currentIndex
            << "| canUndo:" << canUndo();
 }
 
-bool UndoRedoManager::undo(std::vector<TopoDS_Shape> &outShapes,
-                           std::string &outDescription) {
+std::shared_ptr<Snapshot> UndoRedoManager::undo() {
   if (!canUndo()) {
     qDebug() << "Cannot undo: index=" << m_currentIndex
              << "size=" << m_history.size();
-    return false;
+    return nullptr;
   }
 
   // Move back one step
   m_currentIndex--;
 
-  // Return the previous state
-  outShapes = m_history[m_currentIndex].shapes;
-  outDescription = m_history[m_currentIndex + 1].description; // What was undone
+  // Return the state at current index
+  auto snapshot = m_history[m_currentIndex];
 
-  qDebug() << "Undo:" << QString::fromStdString(outDescription)
-           << "| Now at index:" << m_currentIndex
-           << "| Shapes:" << outShapes.size();
+  qDebug() << "Undo:"
+           << QString::fromStdString(
+                  m_history[m_currentIndex + 1]
+                      ->description) // Description of action undone
+           << "| Now at index:" << m_currentIndex;
 
-  return true;
+  return snapshot;
 }
 
-bool UndoRedoManager::redo(std::vector<TopoDS_Shape> &outShapes,
-                           std::string &outDescription) {
+std::shared_ptr<Snapshot> UndoRedoManager::redo() {
   if (!canRedo()) {
     qDebug() << "Cannot redo: index=" << m_currentIndex
              << "size=" << m_history.size();
-    return false;
+    return nullptr;
   }
 
   // Move forward one step
   m_currentIndex++;
 
-  // Return the next state
-  outShapes = m_history[m_currentIndex].shapes;
-  outDescription = m_history[m_currentIndex].description; // What was redone
+  // Return the state at new index
+  auto snapshot = m_history[m_currentIndex];
 
-  qDebug() << "Redo:" << QString::fromStdString(outDescription)
-           << "| Now at index:" << m_currentIndex
-           << "| Shapes:" << outShapes.size();
+  qDebug() << "Redo:" << QString::fromStdString(snapshot->description)
+           << "| Now at index:" << m_currentIndex;
 
-  return true;
+  return snapshot;
 }
 
 std::string UndoRedoManager::undoDescription() const {
   if (canUndo() && m_currentIndex >= 0 &&
       m_currentIndex < static_cast<int>(m_history.size())) {
-    return m_history[m_currentIndex].description;
+    return m_history[m_currentIndex]->description;
   }
   return "";
 }
 
 std::string UndoRedoManager::redoDescription() const {
   if (canRedo()) {
-    return m_history[m_currentIndex + 1].description;
+    return m_history[m_currentIndex + 1]->description;
   }
   return "";
 }

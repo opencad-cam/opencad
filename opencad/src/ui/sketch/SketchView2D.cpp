@@ -76,6 +76,7 @@ void SketchView2D::setSketch(std::shared_ptr<sketch::Sketch> sketch) {
   m_sketchHistory.clear();
   m_sketchHistoryIndex = -1;
   if (m_sketch) {
+    m_sketch->updateLinkedGeometries();
     saveSketchCheckpoint("Initial");
   }
 
@@ -564,9 +565,8 @@ void SketchView2D::drawClosedProfileFaces(QPainter &painter) {
             gp_Pnt point3D;
             curve->D0(param, point3D);
 
-            // Convert 3D point to 2D sketch coordinates
-            // Assuming sketch is on XY plane
-            gp_Pnt2d point2D(point3D.X(), point3D.Y());
+            // Convert 3D point to 2D sketch coordinates using sketch plane
+            gp_Pnt2d point2D = m_sketch->plane().to2D(point3D);
             QPointF screenPt = worldToScreen(point2D);
             polygon << screenPt;
           }

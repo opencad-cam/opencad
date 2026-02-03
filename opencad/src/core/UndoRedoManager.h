@@ -7,43 +7,43 @@
 
 #include <TopoDS_Shape.hxx>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
+
 
 namespace opencad {
 namespace core {
 
 /**
- * @struct ShapeSnapshot
- * @brief A snapshot of all shapes at a point in time
+ * @struct Snapshot
+ * @brief Base class for document snapshots
  */
-struct ShapeSnapshot {
-  std::vector<TopoDS_Shape> shapes;
+struct Snapshot {
   std::string description;
+  virtual ~Snapshot() = default;
+};
+
+struct ShapeSnapshot : Snapshot {
+  std::vector<TopoDS_Shape> shapes;
 };
 
 /**
  * @class UndoRedoManager
- * @brief Manages undo/redo operations for shape modifications
- *
- * Usage:
- * 1. Call checkpoint() AFTER each operation to save current state
- * 2. Call undo() to restore previous state
- * 3. Call redo() to restore next state
+ * @brief Manages undo/redo operations for document state
  */
 class UndoRedoManager {
 public:
   explicit UndoRedoManager(size_t maxHistory = 50);
 
-  /// Save current state as a checkpoint (call AFTER making changes)
-  void checkpoint(const std::vector<TopoDS_Shape> &currentShapes,
-                  const std::string &description);
+  /// Save current state as a checkpoint
+  void checkpoint(std::shared_ptr<Snapshot> snapshot);
 
-  /// Undo to previous state, returns the shapes to restore
-  bool undo(std::vector<TopoDS_Shape> &outShapes, std::string &outDescription);
+  /// Undo to previous state, returns the snapshot to restore
+  std::shared_ptr<Snapshot> undo();
 
-  /// Redo to next state, returns the shapes to restore
-  bool redo(std::vector<TopoDS_Shape> &outShapes, std::string &outDescription);
+  /// Redo to next state, returns the snapshot to restore
+  std::shared_ptr<Snapshot> redo();
 
   /// Check if undo is available
   bool canUndo() const { return m_currentIndex > 0; }
@@ -69,7 +69,7 @@ public:
   int currentIndex() const { return m_currentIndex; }
 
 private:
-  std::deque<ShapeSnapshot> m_history;
+  std::deque<std::shared_ptr<Snapshot>> m_history;
   int m_currentIndex = -1; // Points to current state in history
   size_t m_maxHistory;
 };

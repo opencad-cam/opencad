@@ -24,6 +24,10 @@ set(UI_SOURCES
     dialogs/LoftDialog.cpp
     dialogs/SplitDialog.cpp
     dialogs/DomeDialog.cpp
+    dialogs/MateDialog.cpp
+    dialogs/NewDocumentDialog.cpp
+    dialogs/ComponentPropertiesDialog.cpp
+    AssemblyTreeWidget.cpp
 )
 
 set(UI_HEADERS
@@ -32,6 +36,7 @@ set(UI_HEADERS
     ParameterEditor.h
     ToolSettingsPanel.h
     ProfileSelectionPanel.h
+    AssemblyTreeWidget.h
     viewport/Viewport3D.h
     viewport/ViewportController.h
     sketch/SketchView2D.h
@@ -46,6 +51,9 @@ set(UI_HEADERS
     dialogs/LoftDialog.h
     dialogs/SplitDialog.h
     dialogs/DomeDialog.h
+    dialogs/MateDialog.h
+    dialogs/NewDocumentDialog.h
+    dialogs/ComponentPropertiesDialog.h
 )
 
 add_library(opencad_ui STATIC ${UI_SOURCES} ${UI_HEADERS})
@@ -59,6 +67,7 @@ target_link_libraries(opencad_ui PUBLIC
     opencad_io
     opencad_sketch
     opencad_part
+    opencad_assembly
     ${QT_LIBS}
     OpenGL::GL
     TKV3d

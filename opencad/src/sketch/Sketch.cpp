@@ -9,22 +9,30 @@
 #include "constraints/HorizontalConstraint.h"
 #include "constraints/VerticalConstraint.h"
 
+#include "constraints/FixConstraint.h"
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeEdge2d.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
+#include <BRep_Tool.hxx>
+#include <ElSLib.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <Geom2dAdaptor_Curve.hxx>
 #include <Geom2d_Curve.hxx>
+#include <GeomProjLib.hxx>
 #include <Geom_Circle.hxx>
+#include <Geom_Line.hxx>
 #include <Geom_Plane.hxx>
 #include <Geom_TrimmedCurve.hxx>
 #include <QDebug>
+#include <QtGlobal> // Fix for qDebug
 #include <ShapeAnalysis_FreeBounds.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
+#include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Vertex.hxx>
@@ -33,6 +41,7 @@
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Elips.hxx>
+#include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 #include <gp_Vec2d.hxx>
@@ -1307,6 +1316,201 @@ bool Sketch::redo() {
   }
 
   return true;
+}
+
+// === Linked Geometry ===
+
+std::vector<SketchEntity::Ptr>
+Sketch::addProjectedEntity(const TopoDS_Shape &shape) {
+  std::vector<SketchEntity::Ptr> createdEntities;
+
+  // Safety check
+  if (shape.IsNull())
+    return createdEntities;
+
+  // Project based on type
+  if (shape.ShapeType() == TopAbs_VERTEX) {
+    TopoDS_Vertex v = TopoDS::Vertex(shape);
+    gp_Pnt p3d = BRep_Tool::Pnt(v);
+
+    // Project point to plane
+    gp_Pln pln = m_plane.plane();
+
+    Standard_Real u, v_param;
+    ElSLib::PlaneParameters(pln.Position(), p3d, u, v_param);
+
+    auto point = addPoint(u, v_param);
+    point->setConstruction(true); // Mark as reference
+
+    // Fix it so it doesn't move
+    addConstraint(std::make_shared<FixConstraint>(point));
+
+    createdEntities.push_back(point);
+  } else if (shape.ShapeType() == TopAbs_EDGE) {
+    TopoDS_Edge edge = TopoDS::Edge(shape);
+
+    // Use GeomProjLib to project curve to plane
+    double f, l;
+    Handle(Geom_Curve) curve3d = BRep_Tool::Curve(edge, f, l);
+    if (!curve3d.IsNull()) {
+      Handle(Geom_Plane) geomPlane = new Geom_Plane(m_plane.plane());
+      Handle(Geom_Curve) projectedCurve = GeomProjLib::ProjectOnPlane(
+          curve3d, geomPlane, m_plane.normal(), Standard_True);
+
+      if (!projectedCurve.IsNull()) {
+        if (projectedCurve->IsKind(STANDARD_TYPE(Geom_Line))) {
+          Handle(Geom_Line) gLine = Handle(Geom_Line)::DownCast(projectedCurve);
+          // Calculate start/end on projected curve corresponding to f/l
+          // Using ElSLib projection or D0
+          gp_Pnt p1, p2;
+          projectedCurve->D0(f, p1);
+          projectedCurve->D0(l, p2);
+
+          gp_Pnt2d p2d1 = m_plane.to2D(p1);
+          gp_Pnt2d p2d2 = m_plane.to2D(p2);
+
+          auto line = addLine(p2d1, p2d2);
+          line->setConstruction(true);
+          addConstraint(std::make_shared<FixConstraint>(line));
+          createdEntities.push_back(line);
+        } else if (projectedCurve->IsKind(STANDARD_TYPE(Geom_Circle))) {
+          Handle(Geom_Circle) gCirc =
+              Handle(Geom_Circle)::DownCast(projectedCurve);
+          gp_Pnt center = gCirc->Location();
+          gp_Pnt2d c2d = m_plane.to2D(center);
+          double r = gCirc->Radius();
+
+          auto circle = addCircle(c2d, r);
+          circle->setConstruction(true);
+          addConstraint(std::make_shared<FixConstraint>(circle));
+          createdEntities.push_back(circle);
+        }
+      }
+    }
+  }
+
+  // Store the projection link
+  if (!createdEntities.empty()) {
+    m_projections.push_back({shape, createdEntities});
+  }
+
+  return createdEntities;
+}
+
+std::vector<SketchEntity::Ptr>
+Sketch::addProjectedFace(const TopoDS_Face &face) {
+  std::vector<SketchEntity::Ptr> createdEntities;
+
+  if (face.IsNull())
+    return createdEntities;
+
+  // Get the outer wire of the face and project its edges
+  TopoDS_Wire outerWire = BRepTools::OuterWire(face);
+  if (!outerWire.IsNull()) {
+    auto wireEntities = addProjectedWire(outerWire);
+    createdEntities.insert(createdEntities.end(), wireEntities.begin(),
+                           wireEntities.end());
+  }
+
+  // Also get inner wires (holes) if any
+  TopExp_Explorer wireExp(face, TopAbs_WIRE);
+  for (; wireExp.More(); wireExp.Next()) {
+    TopoDS_Wire wire = TopoDS::Wire(wireExp.Current());
+    if (!wire.IsSame(outerWire)) {
+      auto wireEntities = addProjectedWire(wire);
+      createdEntities.insert(createdEntities.end(), wireEntities.begin(),
+                             wireEntities.end());
+    }
+  }
+
+  return createdEntities;
+}
+
+std::vector<SketchEntity::Ptr>
+Sketch::addProjectedWire(const TopoDS_Wire &wire) {
+  std::vector<SketchEntity::Ptr> createdEntities;
+
+  if (wire.IsNull())
+    return createdEntities;
+
+  // Iterate through all edges in the wire
+  TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
+  for (; edgeExp.More(); edgeExp.Next()) {
+    TopoDS_Edge edge = TopoDS::Edge(edgeExp.Current());
+
+    // Use existing addProjectedEntity for each edge
+    auto edgeEntities = addProjectedEntity(edge);
+    createdEntities.insert(createdEntities.end(), edgeEntities.begin(),
+                           edgeEntities.end());
+  }
+
+  return createdEntities;
+}
+
+void Sketch::updateLinkedGeometries() {
+  for (auto &proj : m_projections) {
+    TopoDS_Shape shape = proj.sourceShape;
+    if (shape.IsNull())
+      continue;
+
+    // Reproject and update existing entities
+    if (shape.ShapeType() == TopAbs_VERTEX) {
+      TopoDS_Vertex v = TopoDS::Vertex(shape);
+      gp_Pnt p3d = BRep_Tool::Pnt(v);
+
+      gp_Pln pln = m_plane.plane();
+      Standard_Real u, v_param;
+      ElSLib::PlaneParameters(pln.Position(), p3d, u, v_param);
+
+      // Update point entity
+      for (auto &entity : proj.targetEntities) {
+        if (auto point = std::dynamic_pointer_cast<SketchPoint>(entity)) {
+          point->setPosition(u, v_param);
+        }
+      }
+    } else if (shape.ShapeType() == TopAbs_EDGE) {
+      TopoDS_Edge edge = TopoDS::Edge(shape);
+
+      double f, l;
+      Handle(Geom_Curve) curve3d = BRep_Tool::Curve(edge, f, l);
+      if (!curve3d.IsNull()) {
+        Handle(Geom_Plane) geomPlane = new Geom_Plane(m_plane.plane());
+        Handle(Geom_Curve) projectedCurve = GeomProjLib::ProjectOnPlane(
+            curve3d, geomPlane, m_plane.normal(), Standard_True);
+
+        if (!projectedCurve.IsNull()) {
+          if (projectedCurve->IsKind(STANDARD_TYPE(Geom_Line))) {
+            gp_Pnt p1, p2;
+            projectedCurve->D0(f, p1);
+            projectedCurve->D0(l, p2);
+            gp_Pnt2d p2d1 = m_plane.to2D(p1);
+            gp_Pnt2d p2d2 = m_plane.to2D(p2);
+
+            for (auto &entity : proj.targetEntities) {
+              if (auto line = std::dynamic_pointer_cast<SketchLine>(entity)) {
+                line->setStartPoint(p2d1);
+                line->setEndPoint(p2d2);
+              }
+            }
+          } else if (projectedCurve->IsKind(STANDARD_TYPE(Geom_Circle))) {
+            Handle(Geom_Circle) gCirc =
+                Handle(Geom_Circle)::DownCast(projectedCurve);
+            gp_Pnt center = gCirc->Location();
+            gp_Pnt2d c2d = m_plane.to2D(center);
+            double r = gCirc->Radius();
+
+            for (auto &entity : proj.targetEntities) {
+              if (auto circle =
+                      std::dynamic_pointer_cast<SketchCircle>(entity)) {
+                circle->setCenter(c2d);
+                circle->setRadius(r);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 } // namespace sketch

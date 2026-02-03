@@ -81,6 +81,28 @@ public:
   SketchPolygon::Ptr addPolygon(const gp_Pnt2d &center, const gp_Pnt2d &vertex,
                                 int sides);
 
+  // === Linked Geometry ===
+  /**
+   * @brief Project 3D geometry onto sketch plane
+   * @param shape Shape to project (Edge or Vertex)
+   * @return List of created entities
+   */
+  std::vector<SketchEntity::Ptr> addProjectedEntity(const TopoDS_Shape &shape);
+
+  /**
+   * @brief Project all edges of a 3D face onto sketch plane
+   * @param face Face to project
+   * @return List of created entities (lines, arcs, circles)
+   */
+  std::vector<SketchEntity::Ptr> addProjectedFace(const TopoDS_Face &face);
+
+  /**
+   * @brief Project a 3D wire (collection of edges) onto sketch plane
+   * @param wire Wire to project
+   * @return List of created entities
+   */
+  std::vector<SketchEntity::Ptr> addProjectedWire(const TopoDS_Wire &wire);
+
   // === Advanced Sketch Features (FAZ 5) ===
 
   /// Add regular polygon (center, radius, number of sides)
@@ -226,6 +248,21 @@ private:
   std::vector<Snapshot> m_undoHistory;
   int m_undoIndex = -1;
   static constexpr size_t MaxUndoHistory = 50;
+
+  // === Link Geometry Support ===
+  struct ProjectedGeometry {
+    TopoDS_Shape sourceShape; // The source geometry (Edge, Face, Vertex)
+    std::vector<SketchEntity::Ptr>
+        targetEntities; // The sketch entities created from it
+  };
+  std::vector<ProjectedGeometry> m_projections;
+
+public:
+  /**
+   * @brief Update all linked/projected geometries from their source shapes
+   * Call this when assembly components move or source geometry changes.
+   */
+  void updateLinkedGeometries();
 };
 
 } // namespace sketch

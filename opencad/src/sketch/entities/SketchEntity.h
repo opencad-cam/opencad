@@ -10,10 +10,8 @@
 #include <string>
 #include <vector>
 
-
 #include <Geom2d_Curve.hxx>
 #include <gp_Pnt2d.hxx>
-
 
 namespace opencad {
 namespace sketch {
@@ -96,6 +94,11 @@ protected:
   bool m_isConstruction;
   bool m_isSelected;
   std::vector<std::weak_ptr<Constraint>> m_constraints;
+  std::string m_sourceReference; // Added for Linked Geometry
+
+public:
+  void setSourceReference(const std::string &ref) { m_sourceReference = ref; }
+  std::string sourceReference() const { return m_sourceReference; }
 
   static uint64_t s_nextId;
 };
