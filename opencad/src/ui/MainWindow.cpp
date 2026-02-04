@@ -13,9 +13,13 @@
 #include "core/geometry/Primitives.h"
 
 // IO
+#include "io/brep/BRepReader.h"
+#include "io/iges/IgesReader.h"
+#include "io/mesh/StlReader.h"
 #include "io/mesh/StlWriter.h"
 #include "io/step/StepReader.h"
 #include "io/step/StepWriter.h"
+
 
 // Sketch
 #include "sketch/Sketch.h"
@@ -1033,43 +1037,120 @@ void MainWindow::updateWindowTitle() {
 // onNewFile moved to line 311
 
 void MainWindow::onOpenFile() {
-  QString filename = QFileDialog::getOpenFileName(
-      this, "Open File", QString(),
-      "STEP Files (*.step *.stp);;All Files (*.*)");
+  QString filter =
+      "Supported Files (*.step *.stp *.stl *.igs *.iges *.brep *.rle *.occ);;"
+      "STEP Files (*.step *.stp);;"
+      "STL Files (*.stl);;"
+      "IGES Files (*.igs *.iges);;"
+      "BREP Files (*.brep *.rle *.occ);;"
+      "SolidWorks Files (*.sldprt *.sldasm);;"
+      "Parasolid Files (*.x_t *.x_b);;"
+      "All Files (*.*)";
+
+  QString filename =
+      QFileDialog::getOpenFileName(this, "Open File", QString(), filter);
 
   if (!filename.isEmpty()) {
+    QFileInfo fileInfo(filename);
+    QString suffix = fileInfo.suffix().toLower();
+
+    // Clear existing shapes before opening new ones
+    // TODO: Maybe ask if user wants to append or replace?
     clearShapes();
 
-    io::StepReader reader;
-    std::string path = filename.toStdString();
+    if (suffix == "stl") {
+      TopoDS_Shape shape = io::StlReader::readFile(filename);
+      if (!shape.IsNull()) {
+        addShape(shape);
+        m_currentFile = filename;
+        m_modified = false;
+        updateWindowTitle();
 
-    if (reader.read(path)) {
-      auto shapes = reader.getAllShapes();
-      if (shapes.empty()) {
-        // Try single shape
-        auto shape = reader.getShape();
-        if (shape.isValid()) {
-          addShape(shape.occShape());
+        if (m_viewport) {
+          m_viewport->fitAll();
         }
+        statusBar()->showMessage("Opened (STL): " + filename);
       } else {
+        QMessageBox::warning(this, "Error",
+                             "Failed to open STL file: " + filename);
+      }
+    } else if (suffix == "igs" || suffix == "iges") {
+      io::IgesReader reader;
+      if (reader.read(filename.toStdString())) {
+        auto shapes = reader.getAllShapes();
         for (const auto &shape : shapes) {
           addShape(shape.occShape());
         }
+        m_currentFile = filename;
+        m_modified = false;
+        updateWindowTitle();
+        if (m_viewport)
+          m_viewport->fitAll();
+        statusBar()->showMessage("Opened (IGES): " + filename);
+      } else {
+        QMessageBox::warning(this, "Error",
+                             "Failed to open IGES file: " + filename + "\n" +
+                                 QString::fromStdString(reader.errorMessage()));
       }
-
-      m_currentFile = filename;
-      m_modified = false;
-      updateWindowTitle();
-
-      if (m_viewport) {
-        m_viewport->fitAll();
+    } else if (suffix == "brep" || suffix == "rle" || suffix == "occ") {
+      core::Shape shape = io::BRepReader::readFile(filename.toStdString());
+      if (shape.isValid()) {
+        addShape(shape.occShape());
+        m_currentFile = filename;
+        m_modified = false;
+        updateWindowTitle();
+        if (m_viewport)
+          m_viewport->fitAll();
+        statusBar()->showMessage("Opened (BREP): " + filename);
+      } else {
+        QMessageBox::warning(this, "Error",
+                             "Failed to open BREP file: " + filename);
       }
-
-      statusBar()->showMessage("Opened: " + filename);
+    } else if (suffix == "sldprt" || suffix == "sldasm" || suffix == "x_t" ||
+               suffix == "x_b") {
+      QMessageBox::information(
+          this, "Proprietary Format",
+          "OpenCAD uses open-source libraries (OpenCASCADE) which cannot "
+          "legally open proprietary formats "
+          "like SolidWorks or Parasolid directly without costly licenses.\n\n"
+          "Solution: Please convert your file to STEP (.stp) or STL (.stl) "
+          "format using:\n"
+          "- SolidWorks (Save As...)\n"
+          "- CAD Exchanger\n"
+          "- FreeCAD\n\n"
+          "Then open the converted file in OpenCAD.");
     } else {
-      QMessageBox::warning(this, "Error",
-                           "Failed to open file: " + filename + "\n" +
-                               QString::fromStdString(reader.errorMessage()));
+      // Default to STEP for now
+      io::StepReader reader;
+      std::string path = filename.toStdString();
+
+      if (reader.read(path)) {
+        auto shapes = reader.getAllShapes();
+        if (shapes.empty()) {
+          auto shape = reader.getShape();
+          if (shape.isValid()) {
+            addShape(shape.occShape());
+          }
+        } else {
+          for (const auto &shape : shapes) {
+            addShape(shape.occShape());
+          }
+        }
+
+        m_currentFile = filename;
+        m_modified = false;
+        updateWindowTitle();
+
+        if (m_viewport) {
+          m_viewport->fitAll();
+        }
+
+        statusBar()->showMessage("Opened: " + filename);
+      } else {
+        QMessageBox::warning(this, "Error",
+                             "Failed to open file: " + filename + "\n" +
+                                 QString::fromStdString(reader.errorMessage()));
+      }
     }
   }
 }
