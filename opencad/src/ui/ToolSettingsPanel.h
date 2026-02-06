@@ -59,7 +59,9 @@ public:
   void showSplitSettings();
   void showSketchPlaneSettings();
   void showScaleSettings();
+
   void showHoleSettings();
+  void showGearSettings();
 
   // Get current values
   double extrudeDepth() const;
@@ -83,6 +85,12 @@ public:
   // Reference Plane settings
   int refPlaneType() const;
   double refPlaneOffset() const;
+  // Gear settings
+  double gearModule() const;
+  int gearNumTeeth() const;
+  double gearPressureAngle() const;
+  double gearThickness() const;
+  // Revolve settings
   // Revolve settings
   double revolveAngle() const;
   int revolveAxis() const;
@@ -233,6 +241,13 @@ private:
   QComboBox *m_splitPlaneCombo;
   QDoubleSpinBox *m_splitOffsetSpin;
   QComboBox *m_splitKeepPartCombo;
+
+  // Gear settings
+  QGroupBox *m_gearGroup;
+  QDoubleSpinBox *m_gearModuleSpin;
+  QSpinBox *m_gearTeethSpin;
+  QDoubleSpinBox *m_gearPressureAngleSpin;
+  QDoubleSpinBox *m_gearThicknessSpin;
 
   // New Sketch Plane settings
   QGroupBox *m_sketchPlaneGroup;

@@ -359,7 +359,39 @@ void ToolSettingsPanel::setupUI() {
   m_splitKeepPartCombo->addItems({"Keep Both", "Keep Above", "Keep Below"});
   splitLayout->addRow("Keep:", m_splitKeepPartCombo);
   mainLayout->addWidget(m_splitGroup);
+  mainLayout->addWidget(m_splitGroup);
   m_splitGroup->hide();
+
+  // Gear Settings
+  m_gearGroup = new QGroupBox("⚙️ Gear", this);
+  m_gearGroup->setStyleSheet("QGroupBox { font-weight: bold; }");
+  auto *gearLayout = new QFormLayout(m_gearGroup);
+
+  m_gearModuleSpin = new QDoubleSpinBox(this);
+  m_gearModuleSpin->setRange(0.1, 100.0);
+  m_gearModuleSpin->setValue(1.0);
+  m_gearModuleSpin->setSingleStep(0.1);
+  gearLayout->addRow("Module:", m_gearModuleSpin);
+
+  m_gearTeethSpin = new QSpinBox(this);
+  m_gearTeethSpin->setRange(3, 500);
+  m_gearTeethSpin->setValue(20);
+  gearLayout->addRow("Teeth:", m_gearTeethSpin);
+
+  m_gearPressureAngleSpin = new QDoubleSpinBox(this);
+  m_gearPressureAngleSpin->setRange(1.0, 45.0);
+  m_gearPressureAngleSpin->setValue(20.0);
+  m_gearPressureAngleSpin->setSuffix("°");
+  gearLayout->addRow("Pressure Angle:", m_gearPressureAngleSpin);
+
+  m_gearThicknessSpin = new QDoubleSpinBox(this);
+  m_gearThicknessSpin->setRange(0.1, 1000.0);
+  m_gearThicknessSpin->setValue(5.0);
+  m_gearThicknessSpin->setSuffix(" mm");
+  gearLayout->addRow("Thickness:", m_gearThicknessSpin);
+
+  mainLayout->addWidget(m_gearGroup);
+  m_gearGroup->hide();
 
   // Apply button
   m_applyButton = new QPushButton("Apply (Enter)", this);
@@ -417,8 +449,20 @@ void ToolSettingsPanel::setupUI() {
           QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
           &ToolSettingsPanel::onSettingsChanged);
 
-  // New settings signals
   connect(m_revolveAngleSpin,
+          QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+          &ToolSettingsPanel::onSettingsChanged);
+
+  // Gear signals
+  connect(m_gearModuleSpin,
+          QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+          &ToolSettingsPanel::onSettingsChanged);
+  connect(m_gearTeethSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          &ToolSettingsPanel::onSettingsChanged);
+  connect(m_gearPressureAngleSpin,
+          QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+          &ToolSettingsPanel::onSettingsChanged);
+  connect(m_gearThicknessSpin,
           QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
           &ToolSettingsPanel::onSettingsChanged);
 }
@@ -532,6 +576,7 @@ void ToolSettingsPanel::hideAllSettings() {
   m_booleanGroup->hide();
   m_refPlaneGroup->hide();
   m_splitGroup->hide();
+  m_gearGroup->hide();
   m_sketchPlaneGroup->hide();
   m_constraintGroup->hide();
   m_applyButton->hide();
@@ -713,6 +758,18 @@ double ToolSettingsPanel::splitOffset() const {
 
 int ToolSettingsPanel::splitKeepPart() const {
   return m_splitKeepPartCombo->currentIndex();
+}
+
+// Gear getters
+double ToolSettingsPanel::gearModule() const {
+  return m_gearModuleSpin->value();
+}
+int ToolSettingsPanel::gearNumTeeth() const { return m_gearTeethSpin->value(); }
+double ToolSettingsPanel::gearPressureAngle() const {
+  return m_gearPressureAngleSpin->value();
+}
+double ToolSettingsPanel::gearThickness() const {
+  return m_gearThicknessSpin->value();
 }
 
 // Getters
@@ -981,6 +1038,14 @@ void ToolSettingsPanel::showHoleSettings() {
   }
 
   m_holeGroup->show();
+  m_applyButton->show();
+}
+
+void ToolSettingsPanel::showGearSettings() {
+  hideAllSettings();
+  m_toolLabel->setText("⚙️ Gear");
+  m_descriptionLabel->setText("Create a spur gear with specified parameters.");
+  m_gearGroup->show();
   m_applyButton->show();
 }
 

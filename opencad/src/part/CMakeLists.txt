@@ -19,7 +19,9 @@ set(PART_SOURCES
     ScaleFeature.cpp
     HoleFeature.cpp
     SplitFeature.cpp
+    SplitFeature.cpp
     DomeFeature.cpp
+    GearFeature.cpp
 )
 
 set(PART_HEADERS
@@ -41,7 +43,9 @@ set(PART_HEADERS
     ScaleFeature.h
     HoleFeature.h
     SplitFeature.h
+    SplitFeature.h
     DomeFeature.h
+    GearFeature.h
 )
 
 add_library(opencad_part STATIC ${PART_SOURCES} ${PART_HEADERS})

@@ -20,7 +20,6 @@
 #include "io/step/StepReader.h"
 #include "io/step/StepWriter.h"
 
-
 // Sketch
 #include "sketch/Sketch.h"
 #include "sketch/SketchMirror.h"
@@ -101,6 +100,7 @@
 // Part features
 #include "part/ChamferFeature.h"
 #include "part/FilletFeature.h"
+#include "part/GearFeature.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -627,7 +627,9 @@ void MainWindow::setupMenus() {
   createMenu->addAction("Box", this, &MainWindow::onCreateBox);
   createMenu->addAction("Cylinder", this, &MainWindow::onCreateCylinder);
   createMenu->addAction("Sphere", this, &MainWindow::onCreateSphere);
+
   createMenu->addAction("Cone", this, &MainWindow::onCreateCone);
+  createMenu->addAction("Gear", this, &MainWindow::onGear);
 
   // Boolean Menu
   auto *boolMenu = menuBar()->addMenu("&Boolean");
@@ -716,7 +718,9 @@ void MainWindow::setupToolbars() {
   primToolbar->addAction("📦 Box", this, &MainWindow::onCreateBox);
   primToolbar->addAction("🛢️ Cylinder", this, &MainWindow::onCreateCylinder);
   primToolbar->addAction("🌐 Sphere", this, &MainWindow::onCreateSphere);
+
   primToolbar->addAction("🔺 Cone", this, &MainWindow::onCreateCone);
+  primToolbar->addAction("⚙️ Gear", this, &MainWindow::onGear);
 
   // Boolean toolbar
   auto *boolToolbar = addToolBar("Boolean");
@@ -3362,6 +3366,22 @@ void MainWindow::onDome() {
       "Dome: Set height in panel, then click Apply to select face", 0);
 }
 
+void MainWindow::onGear() {
+  // Show tool settings
+  if (m_toolSettingsDock) {
+    m_toolSettingsDock->setFloating(false);
+    m_toolSettingsDock->show();
+    m_toolSettingsDock->raise();
+  }
+
+  if (m_toolSettingsPanel) {
+    m_toolSettingsPanel->showGearSettings();
+  }
+
+  m_activePartTool = ActivePartTool::Gear;
+  statusBar()->showMessage("Adjust gear parameters and click Apply");
+}
+
 // ==================== SKETCH ADVANCED TOOLS ====================
 
 void MainWindow::onSketchMirror() {
@@ -4498,19 +4518,53 @@ void MainWindow::onToolApply() {
       // TODO: Convert to Feature-based system
       //       // m_shapes.pop_back();
       for (const auto &shape : results) {
-        // TODO: Convert to Feature
-        // TODO: Convert to Feature-based system
-        //       // m_shapes.push_back(shape);
+        m_document->addTemporaryShape(shape);
       }
-
       displayAllShapes();
-      m_featureList->addItem(QString("? Split (%1 parts)").arg(results.size()));
-      statusBar()->showMessage(
-          QString("Split into %1 parts").arg(results.size()), 3000);
-      m_activePartTool = ActivePartTool::None;
+
+      statusBar()->showMessage("Split completed", 3000);
+      m_modified = true;
+      updateWindowTitle();
     } catch (...) {
-      QMessageBox::warning(this, "Split", "Split operation failed.");
+      QMessageBox::warning(this, "Split Failed", "Operation failed.");
     }
+
+    m_activePartTool = ActivePartTool::None;
+  } break;
+
+  case ActivePartTool::Gear: {
+    if (!m_toolSettingsPanel)
+      return;
+
+    part::GearParams params;
+    params.module = m_toolSettingsPanel->gearModule();
+    params.numTeeth = m_toolSettingsPanel->gearNumTeeth();
+    params.pressureAngle = m_toolSettingsPanel->gearPressureAngle();
+    params.thickness = m_toolSettingsPanel->gearThickness();
+
+    part::GearFeature gearGen;
+    TopoDS_Shape gearShape = gearGen.execute(params);
+
+    if (!gearShape.IsNull()) {
+      addShape(gearShape);
+
+      QString info =
+          QString("Gear (m=%1, z=%2)").arg(params.module).arg(params.numTeeth);
+      m_featureList->addItem("⚙️ " + info);
+      statusBar()->showMessage(info + " created", 3000);
+
+      m_modified = true;
+      updateWindowTitle();
+    } else {
+      QMessageBox::warning(this, "Gear Error",
+                           QString::fromStdString(gearGen.errorMessage()));
+    }
+
+    // Keep tool active for creating more gears?
+    // Or close it? Normally primitives close after value set?
+    // Let's keep it active but maybe user wants to exit.
+    // Standard behavior: One shot -> None.
+    m_activePartTool = ActivePartTool::None;
   } break;
 
   case ActivePartTool::Mirror: {

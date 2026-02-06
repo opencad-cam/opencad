@@ -149,7 +149,9 @@ private slots:
   void onThicken();
   void onOffsetSurface();
   void onSplit();
+
   void onDome();
+  void onGear(); // Added
 
   // Sketch advanced tools
   void onSketchSlot();
@@ -300,7 +302,9 @@ private:
     ReferencePlane,
     Split,
     NewSketch,
-    Project // Added
+
+    Project, // Added
+    Gear     // Added
   };
   ActivePartTool m_activePartTool = ActivePartTool::None;
 
