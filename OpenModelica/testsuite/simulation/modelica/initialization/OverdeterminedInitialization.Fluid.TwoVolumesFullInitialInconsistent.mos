@@ -1,0 +1,39 @@
+// name: OverdeterminedInitialization.Fluid.TwoVolumesFullInitialInconsistent
+// keywords: initialization, over-determined
+// status: correct
+// cflags: -d=newInst
+
+loadModel(Modelica, {"4.0.0"}); getErrorString();
+loadFile("OverdeterminedInitialization.mo"); getErrorString();
+
+setCommandLineOptions("-d=initialization"); getErrorString();
+simulate(OverdeterminedInitialization.Fluid.TwoVolumesFullInitialInconsistent); getErrorString();
+
+// Result:
+// true
+// ""
+// true
+// ""
+// true
+// ""
+// record SimulationResult
+//     resultFile = "",
+//     simulationOptions = "startTime = 0.0, stopTime = 1.0, numberOfIntervals = 500, tolerance = 1e-6, method = 'dassl', fileNamePrefix = 'OverdeterminedInitialization.Fluid.TwoVolumesFullInitialInconsistent', options = '', outputFormat = 'mat', variableFilter = '.*', cflags = '', simflags = ''",
+//     messages = "Simulation execution failed for model: OverdeterminedInitialization.Fluid.TwoVolumesFullInitialInconsistent
+// LOG_INIT          | error   | The initialization problem is inconsistent due to the following equation: 0 != -100000 = V1.p_start - V1.medium.p
+// LOG_STDOUT        | warning | Error in initialization. Storing results and exiting.
+// |                 | |       | Use -lv=LOG_INIT -w for more information.
+// "
+// end SimulationResult;
+// "Warning: The model contains alias variables with redundant start and/or conflicting nominal values. It is recommended to resolve the conflicts, because otherwise the system could be hard to solve. To print the conflicting alias sets and the chosen candidates please use -d=aliasConflicts.
+// Warning: Some equations could not be differentiated for following variables having attribute stateSelect=StateSelect.prefer. They will be treated as if they had stateSelect=StateSelect.default
+// ========================================
+// 1: V1.medium.T
+// 2: V2.medium.T
+// Please use -d=bltdump for more information.
+// Warning: It was not possible to determine if the initialization problem is consistent, because of not evaluable parameters/start values during compile time: V1.medium.p = V1.p_start (V2.p_start = V1.p_start)
+// Warning: The initial conditions are over specified. The following 1 initial equations are redundant, so they are removed from the initialization system:
+//          V1.medium.p = V1.p_start.
+// Warning: The model contains alias variables with redundant start and/or conflicting nominal values. It is recommended to resolve the conflicts, because otherwise the system could be hard to solve. To print the conflicting alias sets and the chosen candidates please use -d=aliasConflicts.
+// "
+// endResult

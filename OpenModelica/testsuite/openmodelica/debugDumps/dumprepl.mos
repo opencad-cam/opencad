@@ -1,0 +1,33 @@
+// name: dumprepl.mos
+// keywords: omc debug dump
+// status: correct
+// 
+// omc debug dump: +d=dumprepl
+// 
+
+// cflags: -d=-newInst
+// TODO: change this model to test the dump +d=dumprepl
+loadString("
+model test_dumprepl
+end test_dumprepl;
+"); getErrorString();
+
+setDebugFlags("dumprepl"); getErrorString();
+buildModel(test_dumprepl); getErrorString();
+
+// Result:
+// true
+// ""
+// true
+// ""
+//
+// Unreplaceable Crefs: (0)
+// ========================================
+//
+//
+// Unreplaceable Crefs: (0)
+// ========================================
+//
+// {"test_dumprepl","test_dumprepl_init.xml"}
+// ""
+// endResult

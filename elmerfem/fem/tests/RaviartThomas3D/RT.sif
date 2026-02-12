@@ -1,0 +1,69 @@
+Check Keywords "Warn"
+
+Header
+  Mesh DB "." "cube"
+End
+
+Simulation
+  Max Output Level = 5
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = Steady
+  Output Intervals(1) = 1
+  Steady State Max Iterations = 1
+!  Post File = "rt.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Body Force 1
+  Source Field = Variable Time
+     Real Procedure "Source" "SourceFun"
+End
+
+Material 1
+  Material Parameter = Real 1.0
+End
+
+Equation 1
+  Active Solvers(2) = 1 2
+End
+
+Solver 1
+  Equation = "Mixed Poisson"
+  Variable = "MixedSol"
+  Variable DOFs = 1
+  Procedure = "ModelMixedPoisson" "MixedPoisson"
+  !-------------------------------------------------------
+  ! Here the bubble dof is used for constructing
+  ! the piecewise constant approximation of the
+  ! variable of the Poisson equation in the standard form.
+  !-------------------------------------------------------
+  Second Kind Basis = Logical False
+  Optimize Bandwidth = False
+  Bubbles in Global System = Logical True
+  Linear System Solver = Iterative
+  Linear System Iterative Method = GCR
+  Linear System Preconditioning = ILU0
+  Linear System Row Equilibration = Logical True
+  Linear System Max Iterations = 100
+  Linear System Convergence Tolerance = 1e-6
+End
+
+Solver 2
+  Equation = "Compute Error"
+  Procedure = "ComputeError" "IntegrateError"
+  Target Equation = String "Mixed Poisson"
+End
+
+!---------------------------------------------------------------
+! Note: Do-nothing BC corresponds to the standard homogeneous 
+! Dirichlet constraint.
+!--------------------------------------------------------------
+
+Solver 1 :: Reference Norm = Real 2.19026910E-01
+Solver 1 :: Reference Norm Tolerance = Real 1.0E-6
+

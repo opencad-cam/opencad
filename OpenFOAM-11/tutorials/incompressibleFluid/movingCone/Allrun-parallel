@@ -1,0 +1,21 @@
+#!/bin/sh
+cd ${0%/*} || exit 1    # Run from this directory
+
+# Source tutorial run functions
+. $WM_PROJECT_DIR/bin/tools/RunFunctions
+
+runApplication blockMesh
+runApplication decomposePar -cellProc
+
+for mapTime in 0.0015 0.003
+do
+    runApplication -s $mapTime blockMesh -region meshToMesh_$mapTime
+    ln -s meshToMesh_$mapTime/decomposeParDict system/decomposeParDict
+    runApplication -s $mapTime decomposePar -region meshToMesh_$mapTime
+    rm -f system/decomposeParDict
+done
+
+runParallel $(getApplication)
+runApplication reconstructPar -cellProc
+
+#------------------------------------------------------------------------------

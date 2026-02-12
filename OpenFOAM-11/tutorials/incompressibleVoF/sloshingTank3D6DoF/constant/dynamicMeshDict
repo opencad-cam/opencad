@@ -1,0 +1,37 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  11
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      dynamicMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+mover
+{
+    type            motionSolver;
+
+    libs            ("libfvMeshMovers.so" "libfvMotionSolvers.so");
+
+    motionSolver    solidBody;
+
+    select          all;
+
+    solidBodyMotionFunction sixDoFMotion;
+
+    CofG            (0 0 0);
+
+    translationRotation table;
+    // interpolationScheme spline;
+    file            "$FOAM_CASE/constant/6DoF.dat";
+}
+
+
+// ************************************************************************* //

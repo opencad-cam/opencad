@@ -1,0 +1,132 @@
+// name: dumpSparsePatternLin.mos
+// keywords: omc debug dump
+// status: correct
+// cflags: -d=-newInst
+// 
+// omc debug dump: +d=dumpSparsePattern
+// Dump sparse pattern for a linear problem
+
+loadString("
+  model problem3
+    Real x[2], b[2] = {59.17, 46.78};
+    Real A[2,2] = [[0.003,59.14+time];[5.291, -6.130]];
+  equation
+    A * x = b;
+  end problem3;
+"); getErrorString();
+
+setCommandLineOptions("--maxSizeLinearTearing=0 +d=LSanalyticJacobian,dumpSparsePattern"); getErrorString();
+buildModel(problem3); getErrorString();
+
+// Result:
+// true
+// ""
+// true
+// ""
+//
+//  --- Nonlinear Pattern ---
+// ========================================
+// Number of non zero elements: 0
+// Independents [or inputs] (2)
+// {x[2], x[1]}
+// Dependents [or outputs] (2)
+// {$res_LSJac0_2.$pDERLSJac0.dummyVarLSJac0, $res_LSJac0_1.$pDERLSJac0.dummyVarLSJac0}
+// x[2] affects the following (0) outputs
+//   {}
+// x[1] affects the following (0) outputs
+//   {}
+//
+// Transposed pattern
+// $res_LSJac0_2.$pDERLSJac0.dummyVarLSJac0 affects the following (0) outputs
+//   {}
+// $res_LSJac0_1.$pDERLSJac0.dummyVarLSJac0 affects the following (0) outputs
+//   {}
+//
+//  --- Nonlinear Coloring ---
+// ========================================
+// Number of colors: 2
+// The following (1) independents belong to one color
+// 0: {x[2]}
+// The following (1) independents belong to one color
+// 1: {x[1]}
+//
+//  --- Sparsity Pattern ---
+// ========================================
+// Number of non zero elements: 4
+// Independents [or inputs] (2)
+// {x[2], x[1]}
+// Dependents [or outputs] (2)
+// {$res_LSJac0_1, $res_LSJac0_2}
+// x[2] affects the following (2) outputs
+//   {$res_LSJac0_2, $res_LSJac0_1}
+// x[1] affects the following (2) outputs
+//   {$res_LSJac0_2, $res_LSJac0_1}
+//
+// Transposed pattern
+// $res_LSJac0_1 affects the following (2) outputs
+//   {x[2], x[1]}
+// $res_LSJac0_2 affects the following (2) outputs
+//   {x[2], x[1]}
+//
+//  --- Sparsity Coloring ---
+// ========================================
+// Number of colors: 2
+// The following (1) independents belong to one color
+// 0: {x[2]}
+// The following (1) independents belong to one color
+// 1: {x[1]}
+//
+//  --- Nonlinear Pattern ---
+// ========================================
+// Number of non zero elements: 0
+// Independents [or inputs] (2)
+// {x[1], x[2]}
+// Dependents [or outputs] (2)
+// {$res_LSJac1_2.$pDERLSJac1.dummyVarLSJac1, $res_LSJac1_1.$pDERLSJac1.dummyVarLSJac1}
+// x[1] affects the following (0) outputs
+//   {}
+// x[2] affects the following (0) outputs
+//   {}
+//
+// Transposed pattern
+// $res_LSJac1_2.$pDERLSJac1.dummyVarLSJac1 affects the following (0) outputs
+//   {}
+// $res_LSJac1_1.$pDERLSJac1.dummyVarLSJac1 affects the following (0) outputs
+//   {}
+//
+//  --- Nonlinear Coloring ---
+// ========================================
+// Number of colors: 2
+// The following (1) independents belong to one color
+// 0: {x[1]}
+// The following (1) independents belong to one color
+// 1: {x[2]}
+//
+//  --- Sparsity Pattern ---
+// ========================================
+// Number of non zero elements: 4
+// Independents [or inputs] (2)
+// {x[1], x[2]}
+// Dependents [or outputs] (2)
+// {$res_LSJac1_1, $res_LSJac1_2}
+// x[1] affects the following (2) outputs
+//   {$res_LSJac1_2, $res_LSJac1_1}
+// x[2] affects the following (2) outputs
+//   {$res_LSJac1_2, $res_LSJac1_1}
+//
+// Transposed pattern
+// $res_LSJac1_1 affects the following (2) outputs
+//   {x[1], x[2]}
+// $res_LSJac1_2 affects the following (2) outputs
+//   {x[1], x[2]}
+//
+//  --- Sparsity Coloring ---
+// ========================================
+// Number of colors: 2
+// The following (1) independents belong to one color
+// 0: {x[1]}
+// The following (1) independents belong to one color
+// 1: {x[2]}
+// {"problem3", "problem3_init.xml"}
+// ""
+// endResult

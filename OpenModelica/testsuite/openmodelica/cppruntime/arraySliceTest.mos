@@ -1,0 +1,81 @@
+// name: arraySliceTest
+// keywords: slice array
+// status: correct
+// teardown_command: rm -f *ArraySlice.Test*
+
+setCommandLineOptions("+simCodeTarget=Cpp");
+
+loadString("
+package ArraySlice
+model Test
+  Real[:,:] m = [1; 2; 3; 4; 5];
+  Real[:] w = reverse(m);
+  Real x = catEmpty(w);
+  Real y = reduction(w);
+  Real[:,:] z = sliceTranspose(2, [1, 2, 3; 4, 5, 6; 7, 8, 9]);
+  annotation(experiment(StopTime = 0));
+end Test;
+function reverse
+  input Real[:,1] m;
+  output Real[size(m, 1) - 1] w;
+protected
+  Real[:,:] m2 = m[:,:];   // test all indices if size(dim) is 1
+  Real[:] v = m2[:,1];     // test reduction if size(dim) is 1
+algorithm
+  w := v[size(w, 1):-1:1]; // test slice with negative step
+end reverse;
+function catEmpty
+  input Real[:] v;
+  output Real y;
+protected
+  parameter Integer n = size(v, 1);
+algorithm
+  y := sum(v + cat(1, v[1:n], v[2:n-size(v, 1)])); // empty slice
+end catEmpty;
+function reduction
+  input Real[:] v;
+  output Real y;
+protected
+  parameter Integer n = size(v, 1);
+  Integer[:] idx = {1};
+algorithm
+  y := product(sum(v[i*idx] for i in 1:n)); // index set with one element
+end reduction;
+function sliceTranspose
+  input Integer n;
+  input Real[n+1,n+1] M;
+  output Real[n,1] z;
+algorithm
+  z := transpose(M[n+1:n+1,1:n]); // test access to slice of slice and size 1
+end sliceTranspose;
+end ArraySlice;
+");
+getErrorString();
+
+simulate(ArraySlice.Test);
+getErrorString();
+
+val(w[1], 0);
+val(w[4], 0);
+val(x, 0);
+val(y, 0);
+val(z[1,1], 0);
+val(z[2,1], 0);
+
+// Result:
+// true
+// true
+// ""
+// record SimulationResult
+//     resultFile = "ArraySlice.Test_res.mat",
+//     simulationOptions = "startTime = 0.0, stopTime = 0.0, numberOfIntervals = 500, tolerance = 1e-06, method = 'dassl', fileNamePrefix = 'ArraySlice.Test', options = '', outputFormat = 'mat', variableFilter = '.*', cflags = '', simflags = ''",
+//     messages = ""
+// end SimulationResult;
+// ""
+// 4.0
+// 1.0
+// 20.0
+// 10.0
+// 7.0
+// 8.0
+// endResult

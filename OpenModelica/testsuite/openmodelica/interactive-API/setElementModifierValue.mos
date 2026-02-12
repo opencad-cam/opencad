@@ -1,0 +1,118 @@
+// name: setElementModifierValue
+// keywords:
+// status: correct
+// cflags: -d=-newInst
+//
+// Tests the setElementModifierValue API function.
+//
+
+loadString("
+  model M
+    ClasswithReplaceable classwithReplaceable;
+    Class c;
+  end M;
+");
+
+setElementModifierValue(M, classwithReplaceable.otherClass, $Code((redeclare ClassB testClass "A")));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable.otherClass, $Code((redeclare ClassB testClass "B")));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable.otherClass, $Code((testClass=12)));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable.otherClass, $Code((redeclare ClassB testClass "C")));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable.otherClass.testClass, $Code(=Real));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable, $Code((A = 1, B = 2)));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable, $Code((final A, B = 2)));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable, $Code((A(fixed = true))));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, classwithReplaceable, $Code((A(fixed))));
+getErrorString();
+list(M);
+
+setElementModifierValue(M, c, $Code((x(start, each fixed = true))));
+getErrorString();
+list(M);
+
+// Result:
+// true
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass \"A\"));
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass \"B\"));
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(testClass = 12));
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass \"C\"));
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass = Real \"C\"));
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass = Real \"C\"), A = 1, B = 2);
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass = Real \"C\"), final A, B = 2);
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass = Real \"C\"), A(fixed = true), B = 2);
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass = Real \"C\"), B = 2);
+//   Class c;
+// end M;"
+// true
+// ""
+// "model M
+//   ClasswithReplaceable classwithReplaceable(otherClass(redeclare ClassB testClass = Real \"C\"), B = 2);
+//   Class c(x(each fixed = true));
+// end M;"
+// endResult

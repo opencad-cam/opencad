@@ -1,0 +1,73 @@
+// name: GetModelInstanceInnerOuter1
+// keywords:
+// status: correct
+// cflags: -d=newInst
+//
+//
+
+loadString("
+  model A
+    outer Real x;
+  end A;
+
+  model B
+    A a;
+    inner Real x;
+  end B;
+");
+
+getModelInstance(B, prettyPrint=true);
+
+// Result:
+// true
+// "{
+//   \"name\": \"B\",
+//   \"restriction\": \"model\",
+//   \"elements\": [
+//     {
+//       \"$kind\": \"component\",
+//       \"name\": \"a\",
+//       \"type\": {
+//         \"name\": \"A\",
+//         \"restriction\": \"model\",
+//         \"elements\": [
+//           {
+//             \"$kind\": \"component\",
+//             \"name\": \"x\",
+//             \"type\": {
+//               \"$kind\": \"class\",
+//               \"name\": \"Real\",
+//               \"restriction\": \"type\"
+//             },
+//             \"prefixes\": {
+//               \"outer\": true
+//             }
+//           }
+//         ],
+//         \"source\": {
+//           \"filename\": \"<interactive>\",
+//           \"lineStart\": 2,
+//           \"columnStart\": 3,
+//           \"lineEnd\": 4,
+//           \"columnEnd\": 8
+//         }
+//       }
+//     },
+//     {
+//       \"$kind\": \"component\",
+//       \"name\": \"x\",
+//       \"type\": \"Real\",
+//       \"prefixes\": {
+//         \"inner\": true
+//       }
+//     }
+//   ],
+//   \"source\": {
+//     \"filename\": \"<interactive>\",
+//     \"lineStart\": 6,
+//     \"columnStart\": 3,
+//     \"lineEnd\": 9,
+//     \"columnEnd\": 8
+//   }
+// }"
+// endResult

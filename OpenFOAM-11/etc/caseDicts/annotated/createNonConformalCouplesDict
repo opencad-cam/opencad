@@ -1,0 +1,72 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  11
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      createNonConformalCouplesDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Whether or not to add boundary conditions for the added patch to the fields
+fields  no;
+
+// The list of non-conformal couples to be created. Each entry in this section
+// creates a single non-conformal coupling.
+nonConformalCouples
+{
+    /*
+    // Unique name used to generate the name of the coupled patches
+    <name>
+    {
+        // Name of the two patches between which to create the coupling
+        patches     (<patch1> <patch2>);
+
+        // Type of the transformation; "none", "rotational", or "translational"
+        transform   <transformType>;
+
+        // Additional transformation settings (if any)
+        ...
+    }
+    */
+
+    // Example: Create a non-conformal couple with no transformation
+    nonConformalCouple_none
+    {
+        patches         (nonCouple1 nonCouple2);
+        transform       none;
+    }
+
+    // Example: Create a non-conformal couple with a 30 degree rotational
+    // transformation
+    nonConformalCouple_30deg
+    {
+        patches         (nonCoupleBehind nonCoupleAhead);
+        transform       rotational;
+        rotationAxis    (-1 0 0);
+        rotationCentre  (0 0 0);
+        rotationAngle   30;
+    }
+
+    // Example: Create a non-conformal couple with a 2 metre translational
+    // transformation
+    nonConformalCouple_2m
+    {
+        patches         (nonCoupleBack nonCoupleFront);
+        transform       translational;
+        separation      (0 2 0);
+    }
+}
+
+// Note that in rare cases it may be appropriate to create multiple couplings
+// between the same two patches. That can be achieved with multiple entries
+// with the same patches specified. See the
+// modules/incompressibleFluid/impeller tutorial for an example of this.
+
+// ************************************************************************* //

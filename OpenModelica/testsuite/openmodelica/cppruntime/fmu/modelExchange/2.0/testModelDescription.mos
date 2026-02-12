@@ -1,0 +1,165 @@
+// name:  testModelDescription
+// keywords: FMI 2.0 export clocks
+// status: correct
+// teardown_command: rm -rf binaries sources modelDescription.xml modelDescription.tmp.xml *SIDTest* output.log
+// cflags: -d=-newInst
+//
+
+setCommandLineOptions("+simCodeTarget=Cpp"); getErrorString();
+setCommandLineOptions("--exportClocksInModeldescription=true"); getErrorString();
+
+loadString("
+model SIDTest
+  parameter Real dt = 0.1 annotation(Evaluate = true);
+  parameter Real p = 1;
+  parameter Real y_start = 0;
+  Real xd(start = y_start);
+  input Real u(start = -2);
+  output Real y;
+equation
+  when shiftSample(subSample(Clock(dt), 2), 3) then
+    xd = previous(xd) + p * u * interval(u);
+    y = previous(xd);
+  end when;
+end SIDTest;
+");
+getErrorString();
+
+buildModelFMU(SIDTest, version="2.0");
+getErrorString();
+
+// unzip to console, quiet, extra quiet
+system("unzip -cqq SIDTest.fmu modelDescription.xml | grep -v guid | grep -v generationDateAndTime | grep -v generationTool > modelDescription.tmp.xml");
+readFile("modelDescription.tmp.xml");
+
+// Result:
+// true
+// ""
+// true
+// ""
+// true
+// ""
+// "SIDTest.fmu"
+// ""
+// 0
+// "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+// <fmiModelDescription
+//   fmiVersion=\"2.0\"
+//   modelName=\"SIDTest\"
+//   description=\"\"
+//   version=\"\"
+//   variableNamingConvention=\"structured\"
+//   numberOfEventIndicators=\"0\">
+//   <ModelExchange
+//     modelIdentifier=\"SIDTest\"
+//     needsExecutionTool=\"false\"
+//     completedIntegratorStepNotNeeded=\"false\"
+//     canBeInstantiatedOnlyOncePerProcess=\"false\"
+//     canNotUseMemoryManagementFunctions=\"false\"
+//     canGetAndSetFMUstate=\"false\"
+//     canSerializeFMUstate=\"false\"
+//     providesDirectionalDerivative=\"false\">
+//   </ModelExchange>
+//   <TypeDefinitions>
+//     <Clocks>
+//       <Clock><Inferred
+//               interval=\"0.2\"
+//               shiftCounter=\"3\"
+//               /></Clock>
+//     </Clocks>
+//   </TypeDefinitions>
+//   <LogCategories>
+//     <Category name=\"logEvents\" />
+//     <Category name=\"logSingularLinearSystems\" />
+//     <Category name=\"logNonlinearSystems\" />
+//     <Category name=\"logDynamicStateSelection\" />
+//     <Category name=\"logStatusWarning\" />
+//     <Category name=\"logStatusDiscard\" />
+//     <Category name=\"logStatusError\" />
+//     <Category name=\"logStatusFatal\" />
+//     <Category name=\"logStatusPending\" />
+//     <Category name=\"logAll\" />
+//     <Category name=\"logFmi2Call\" />
+//   </LogCategories>
+//   <DefaultExperiment startTime=\"0.0\" stopTime=\"1.0\" tolerance=\"1e-06\" stepSize=\"0.002\"/>
+//   <ModelVariables>
+//   <!-- Index of variable = \"1\" -->
+//   <ScalarVariable
+//     name=\"previous(xd)\"
+//     valueReference=\"0\"
+//     variability=\"discrete\"
+//     clockIndex=\"1\"
+//     >
+//     <Real/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"2\" -->
+//   <ScalarVariable
+//     name=\"u\"
+//     valueReference=\"2\"
+//     causality=\"input\"
+//     >
+//     <Real start=\"-2.0\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"3\" -->
+//   <ScalarVariable
+//     name=\"xd\"
+//     valueReference=\"3\"
+//     variability=\"discrete\"
+//     clockIndex=\"1\"
+//     previous=\"1\"
+//     >
+//     <Real/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"4\" -->
+//   <ScalarVariable
+//     name=\"y\"
+//     valueReference=\"4\"
+//     variability=\"discrete\"
+//     causality=\"output\"
+//     clockIndex=\"1\"
+//     >
+//     <Real/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"5\" -->
+//   <ScalarVariable
+//     name=\"dt\"
+//     valueReference=\"5\"
+//     variability=\"fixed\"
+//     causality=\"calculatedParameter\"
+//     >
+//     <Real/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"6\" -->
+//   <ScalarVariable
+//     name=\"p\"
+//     valueReference=\"6\"
+//     variability=\"fixed\"
+//     causality=\"parameter\"
+//     >
+//     <Real start=\"1.0\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"7\" -->
+//   <ScalarVariable
+//     name=\"y_start\"
+//     valueReference=\"7\"
+//     variability=\"fixed\"
+//     causality=\"parameter\"
+//     >
+//     <Real start=\"0.0\"/>
+//   </ScalarVariable>
+//   </ModelVariables>
+//   <ModelStructure>
+//     <Outputs>
+//       <Unknown index=\"4\" dependencies=\"1\" dependenciesKind=\"dependent\" />
+//     </Outputs>
+//     <DiscreteStates>
+//       <Unknown index=\"3\" dependencies=\"1 2\" dependenciesKind=\"dependent dependent\" />
+//     </DiscreteStates>
+//     <InitialUnknowns>
+//       <Unknown index=\"4\" dependencies=\"\" dependenciesKind=\"\" />
+//       <Unknown index=\"5\" dependencies=\"\" dependenciesKind=\"\" />
+//     </InitialUnknowns>
+//   </ModelStructure>
+// </fmiModelDescription>
+// "
+// endResult

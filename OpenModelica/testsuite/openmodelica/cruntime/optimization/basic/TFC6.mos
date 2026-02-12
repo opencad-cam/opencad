@@ -1,0 +1,97 @@
+// name: testFinalCon_6
+// status: correct
+// cflags: -d=-newInst
+
+setCommandLineOptions("+gDynopt");
+getErrorString();
+
+loadString("
+model testFinalCon6
+  Real x1;
+  Real x2;
+  Real y1(start=-1);
+  Real y2(start=1);
+  Real y3(start = -1);
+  input Real u;
+  input Real u2;
+
+  Real final_con1(min = -15, max = -10) annotation(isFinalConstraint = true);
+  Real final_con2(min = 10, max = 15) annotation(isFinalConstraint = true);
+  Real final_con3(min = 0, max = 0) annotation(isFinalConstraint = true);
+  Real final_con4(min = 0, max = 0) annotation(isFinalConstraint = true);
+  Real cost annotation(isLagrange = true);
+  parameter Real p=1;
+equation
+  der(x1) = x2*u - x1;
+  der(x2) = x1 + y1;
+  final_con1 = x1 - 2; //0 <= x1 - 2 <= 0 for t = tf
+  final_con2 = x2 - 3;
+  final_con3 = p*der(y1);
+  final_con4 = p*der(y2);
+  y1 = 3*der(y1) + der(y2) - exp(1 + u);
+  y2+u2 = der(y1) - 5*der(y2) - exp(1 + time);
+  y3^2 = 1 + time;
+  cost = u^2 + der(y1)^2 + der(y2)^2;
+end testFinalCon6;
+
+");
+getErrorString();
+
+setCommandLineOptions("+maxSizeSolveLinearSystem=10 --preOptModules+=introduceDerAlias");
+getErrorString();
+optimize(testFinalCon6, numberOfIntervals=50, tolerance = 1e-08, stopTime = 5, simflags="-lv LOG_LS -optimizerNP 3");
+getErrorString();
+res := OpenModelica.Scripting.compareSimulationResults("testFinalCon6_res.mat","ReferenceFiles/testFinalCon6_ref.mat","testFinalCon_diff.csv",0.01,0.0001);
+getErrorString();
+
+
+// Result:
+// true
+// ""
+// true
+// ""
+// true
+// ""
+// record SimulationResult
+//     resultFile = "testFinalCon6_res.mat",
+//     simulationOptions = "startTime = 0.0, stopTime = 5.0, numberOfIntervals = 50, tolerance = 1e-08, method = 'optimization', fileNamePrefix = 'testFinalCon6', options = '', outputFormat = 'mat', variableFilter = '.*', cflags = '', simflags = '-lv LOG_LS -optimizerNP 3'",
+//     messages = "LOG_LS            | info    | initialize linear system solvers
+// |                 | |       | | 1 linear systems
+// LOG_LS            | info    | Start solving Linear System 7 (size 1) at time 0 with Lapack Solver
+// LOG_ASSERT        | warning | The following assertion has been violated at time 0.000000
+// |                 | |       | (($finalCon$final_con4 >= 0.0 and $finalCon$final_con4 <= 0.0)) --> \"Variable violating min/max constraint: 0.0 <= $finalCon$final_con4 <= 0.0, has value: -0.589785\"
+// LOG_ASSERT        | warning | The following assertion has been violated at time 0.000000
+// |                 | |       | (($finalCon$final_con3 >= 0.0 and $finalCon$final_con3 <= 0.0)) --> \"Variable violating min/max constraint: 0.0 <= $finalCon$final_con3 <= 0.0, has value: 0.769356\"
+// LOG_ASSERT        | warning | The following assertion has been violated at time 0.000000
+// |                 | |       | (($finalCon$final_con2 >= 10.0 and $finalCon$final_con2 <= 15.0)) --> \"Variable violating min/max constraint: 10.0 <= $finalCon$final_con2 <= 15.0, has value: -3\"
+// LOG_ASSERT        | warning | The following assertion has been violated at time 0.000000
+// |                 | |       | (($finalCon$final_con1 >= -15.0 and $finalCon$final_con1 <= -10.0)) --> \"Variable violating min/max constraint: -15.0 <= $finalCon$final_con1 <= -10.0, has value: -2\"
+// LOG_SUCCESS       | info    | The initialization finished successfully without homotopy method.
+//
+// Optimizer Variables
+// ========================================================
+// State[0]:x1(start = 0, nominal = 1, min = -Inf, max = +Inf, init = 0)
+// State[1]:x2(start = 0, nominal = 1, min = -Inf, max = +Inf, init = 0)
+// State[2]:y1(start = -1, nominal = 2, min = -Inf, max = +Inf, init = -1)
+// State[3]:y2(start = 1, nominal = 2, min = -Inf, max = +Inf, init = 1)
+// Input[4]:u(start = 0, nominal = 1, min = -Inf, max = +Inf)
+// Input[5]:u2(start = 0, nominal = 1, min = -Inf, max = +Inf)
+// --------------------------------------------------------
+// number of nonlinear constraints: 0
+// ========================================================
+//
+// ******************************************************************************
+// This program contains Ipopt, a library for large-scale nonlinear optimization.
+//  Ipopt is released as open source code under the Eclipse Public License (EPL).
+//          For more information visit https://github.com/coin-or/Ipopt
+// ******************************************************************************
+//
+// LOG_SUCCESS       | info    | The simulation finished successfully.
+// "
+// end SimulationResult;
+// "Warning: The initial conditions are not fully specified. For more information set -d=initialization. In OMEdit Tools->Options->Simulation->Show additional information from the initialization process, in OMNotebook call setCommandLineOptions(\"-d=initialization\").
+// "
+// {"Files Equal!"}
+// "Warning: 'compareSimulationResults' is deprecated. It is recommended to use 'diffSimulationResults' instead.
+// "
+// endResult

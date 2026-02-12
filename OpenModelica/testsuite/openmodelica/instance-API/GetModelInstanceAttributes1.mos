@@ -1,0 +1,79 @@
+// name: GetModelInstanceAttributes1
+// keywords:
+// status: correct
+// cflags: -d=newInst
+//
+//
+
+loadString("
+  model M
+    type Angle = Real(final quantity = \"Angle\");
+    parameter Real pi = 3;
+    Angle deg(start = pi) = 2;
+  end M;
+");
+
+getModelInstance(M, prettyPrint = true);
+
+// Result:
+// true
+// "{
+//   \"name\": \"M\",
+//   \"restriction\": \"model\",
+//   \"elements\": [
+//     {
+//       \"$kind\": \"component\",
+//       \"name\": \"pi\",
+//       \"type\": \"Real\",
+//       \"modifiers\": \"3\",
+//       \"value\": {
+//         \"binding\": 3
+//       },
+//       \"prefixes\": {
+//         \"variability\": \"parameter\"
+//       }
+//     },
+//     {
+//       \"$kind\": \"component\",
+//       \"name\": \"deg\",
+//       \"type\": {
+//         \"name\": \"M.Angle\",
+//         \"restriction\": \"type\",
+//         \"elements\": [
+//           {
+//             \"$kind\": \"extends\",
+//             \"modifiers\": {
+//               \"quantity\": {
+//                 \"final\": true,
+//                 \"$value\": \"\\\"Angle\\\"\"
+//               }
+//             },
+//             \"baseClass\": \"Real\"
+//           }
+//         ],
+//         \"source\": {
+//           \"filename\": \"<interactive>\",
+//           \"lineStart\": 3,
+//           \"columnStart\": 5,
+//           \"lineEnd\": 3,
+//           \"columnEnd\": 48
+//         }
+//       },
+//       \"modifiers\": {
+//         \"start\": \"pi\",
+//         \"$value\": \"2\"
+//       },
+//       \"value\": {
+//         \"binding\": 2
+//       }
+//     }
+//   ],
+//   \"source\": {
+//     \"filename\": \"<interactive>\",
+//     \"lineStart\": 2,
+//     \"columnStart\": 3,
+//     \"lineEnd\": 6,
+//     \"columnEnd\": 8
+//   }
+// }"
+// endResult

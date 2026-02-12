@@ -1,0 +1,18 @@
+// name:     PartialFn3
+// keywords: PartialFn
+// status:   incorrect
+// cflags: -d=-newInst
+//
+// Partial Function Testing
+//
+loadFile("PartialFn3.mo");
+a:=PartialFn3.ApplyIntOp(PartialFn3.AddInt,4);
+
+// Result:
+// true
+// Error processing file: PartialFn3.mos
+// # Error encountered! Exiting...
+// # Please check the error message and the flags.
+//
+// Execution failed!
+// endResult

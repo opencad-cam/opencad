@@ -1,0 +1,8 @@
+bibtexparser
+gitpython
+natsort
+breathe
+sphinx
+sphinxcontrib-bibtex
+sphinxcontrib-programoutput
+ompython

@@ -1,0 +1,84 @@
+! A beam case with some geometric appeal: A coil spring
+!
+! To make the mesh:
+! ElmerGrid 1 2 spring.grd
+! octave beam2spring.m
+!
+! P.R. 31.1.2021
+
+Check Keywords "Warn"
+
+Header
+  Mesh DB "." "spring"
+End
+
+Simulation
+  Max Output Level = 5
+  Coordinate System = Cartesian 3D
+  Simulation Type = Steady
+  Output Intervals = 1
+  Steady State Max Iterations = 1
+  Post File = "spring.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+End
+
+Material 1
+ Youngs Modulus = Real 200e+9
+ Shear Modulus = Real 79e+9
+
+ ! Specify I_k:
+ Second Moment of Area = Real 4.9087e-10
+ ! Specify A:
+ Cross Section Area = Real 7.8540e-05
+ ! Specify J_T:
+ Torsional Constant = Real 9.8175e-10
+ ! The density is used only in transient cases:
+ Density = 7800.0
+End
+
+
+Equation 1 :: Active Solvers(1) = 1
+
+Solver 1
+  Equation = "Timoshenko Beam Equations"
+  Procedure = "BeamSolver3D" "TimoshenkoSolver"
+
+  Nonlinear System Max Iterations = 1
+!  Linear System Solver = "Direct"
+!  Linear System Direct Method = umfpack
+  Displace Mesh = True
+  Linear system solver = iterative
+  Linear system iterative method = GCR
+  Linear system GCR restart = 100
+  Linear system preconditioning = ILUT
+  Linear System ILUT Tolerance = 5.0e-7
+  Linear System Max Iterations = 5000
+  Linear System Convergence Tolerance = 1e-13
+  Linear System Row Equilibration = True
+  Linear System Normwise Backward Error = True
+End
+
+
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  U 1 = Real 0.0
+  U 2 = Real 0.0
+  U 3 = Real 0.0
+  Theta 1 = Real 0.0
+  Theta 2 = Real 0.0
+  Theta 3 = Real 0.0
+End
+
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  U 1 = Real 0.0
+  U 2 = Real 0.0
+  U 3 = Real 1.0
+End
+
+
+Solver 1 :: Reference Norm = 2.17493792E-01

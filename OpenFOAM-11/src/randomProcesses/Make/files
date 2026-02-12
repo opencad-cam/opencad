@@ -1,0 +1,14 @@
+Kmesh/Kmesh.C
+
+fft/fft.C
+fft/fftRenumber.C
+fft/writeEk.C
+fft/kShellIntegration.C
+
+processes/UOprocess/UOprocess.C
+
+turbulence/turbGen.C
+
+noise/noiseFFT.C
+
+LIB = $(FOAM_LIBBIN)/librandomProcesses

@@ -1,0 +1,12 @@
+// name: WrongInitialSolutionSelected
+// status: correct
+// teardown_command: rm -f WrongInitialSolutionSelected* output.log
+// cflags: -d=-newInst
+
+loadModel(Modelica, {"3.2.3"});
+loadFile("DebugPackage.mo"); getErrorString();
+
+simulate(SolverFailure.WrongInitialSolutionSelected); getErrorString();
+
+// Result:
+// endResult

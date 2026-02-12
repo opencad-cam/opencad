@@ -1,0 +1,238 @@
+// name: GetModelInstanceMod1
+// keywords:
+// status: correct
+// cflags: -d=newInst
+//
+//
+
+loadString("
+  model A
+    Real x;
+    Real y;
+  end A;
+
+  model B
+    A a1;
+    A a2;
+  end B;
+
+  model C
+    B b1;
+    B b2;
+  end C;
+
+  model M
+    C c(b1(a1(x = 1.0, y = 2.0), a2(x = 3.0, y = 4.0)),
+        b2(a1(x = 5.0)));
+  end M;
+");
+
+getModelInstance(M, prettyPrint = true);
+
+// Result:
+// true
+// "{
+//   \"name\": \"M\",
+//   \"restriction\": \"model\",
+//   \"elements\": [
+//     {
+//       \"$kind\": \"component\",
+//       \"name\": \"c\",
+//       \"type\": {
+//         \"name\": \"C\",
+//         \"restriction\": \"model\",
+//         \"elements\": [
+//           {
+//             \"$kind\": \"component\",
+//             \"name\": \"b1\",
+//             \"type\": {
+//               \"name\": \"B\",
+//               \"restriction\": \"model\",
+//               \"elements\": [
+//                 {
+//                   \"$kind\": \"component\",
+//                   \"name\": \"a1\",
+//                   \"type\": {
+//                     \"name\": \"A\",
+//                     \"restriction\": \"model\",
+//                     \"elements\": [
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"x\",
+//                         \"type\": \"Real\",
+//                         \"value\": {
+//                           \"binding\": 1
+//                         }
+//                       },
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"y\",
+//                         \"type\": \"Real\",
+//                         \"value\": {
+//                           \"binding\": 2
+//                         }
+//                       }
+//                     ],
+//                     \"source\": {
+//                       \"filename\": \"<interactive>\",
+//                       \"lineStart\": 2,
+//                       \"columnStart\": 3,
+//                       \"lineEnd\": 5,
+//                       \"columnEnd\": 8
+//                     }
+//                   }
+//                 },
+//                 {
+//                   \"$kind\": \"component\",
+//                   \"name\": \"a2\",
+//                   \"type\": {
+//                     \"name\": \"A\",
+//                     \"restriction\": \"model\",
+//                     \"elements\": [
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"x\",
+//                         \"type\": \"Real\",
+//                         \"value\": {
+//                           \"binding\": 3
+//                         }
+//                       },
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"y\",
+//                         \"type\": \"Real\",
+//                         \"value\": {
+//                           \"binding\": 4
+//                         }
+//                       }
+//                     ],
+//                     \"source\": {
+//                       \"filename\": \"<interactive>\",
+//                       \"lineStart\": 2,
+//                       \"columnStart\": 3,
+//                       \"lineEnd\": 5,
+//                       \"columnEnd\": 8
+//                     }
+//                   }
+//                 }
+//               ],
+//               \"source\": {
+//                 \"filename\": \"<interactive>\",
+//                 \"lineStart\": 7,
+//                 \"columnStart\": 3,
+//                 \"lineEnd\": 10,
+//                 \"columnEnd\": 8
+//               }
+//             }
+//           },
+//           {
+//             \"$kind\": \"component\",
+//             \"name\": \"b2\",
+//             \"type\": {
+//               \"name\": \"B\",
+//               \"restriction\": \"model\",
+//               \"elements\": [
+//                 {
+//                   \"$kind\": \"component\",
+//                   \"name\": \"a1\",
+//                   \"type\": {
+//                     \"name\": \"A\",
+//                     \"restriction\": \"model\",
+//                     \"elements\": [
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"x\",
+//                         \"type\": \"Real\",
+//                         \"value\": {
+//                           \"binding\": 5
+//                         }
+//                       },
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"y\",
+//                         \"type\": \"Real\"
+//                       }
+//                     ],
+//                     \"source\": {
+//                       \"filename\": \"<interactive>\",
+//                       \"lineStart\": 2,
+//                       \"columnStart\": 3,
+//                       \"lineEnd\": 5,
+//                       \"columnEnd\": 8
+//                     }
+//                   }
+//                 },
+//                 {
+//                   \"$kind\": \"component\",
+//                   \"name\": \"a2\",
+//                   \"type\": {
+//                     \"name\": \"A\",
+//                     \"restriction\": \"model\",
+//                     \"elements\": [
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"x\",
+//                         \"type\": \"Real\"
+//                       },
+//                       {
+//                         \"$kind\": \"component\",
+//                         \"name\": \"y\",
+//                         \"type\": \"Real\"
+//                       }
+//                     ],
+//                     \"source\": {
+//                       \"filename\": \"<interactive>\",
+//                       \"lineStart\": 2,
+//                       \"columnStart\": 3,
+//                       \"lineEnd\": 5,
+//                       \"columnEnd\": 8
+//                     }
+//                   }
+//                 }
+//               ],
+//               \"source\": {
+//                 \"filename\": \"<interactive>\",
+//                 \"lineStart\": 7,
+//                 \"columnStart\": 3,
+//                 \"lineEnd\": 10,
+//                 \"columnEnd\": 8
+//               }
+//             }
+//           }
+//         ],
+//         \"source\": {
+//           \"filename\": \"<interactive>\",
+//           \"lineStart\": 12,
+//           \"columnStart\": 3,
+//           \"lineEnd\": 15,
+//           \"columnEnd\": 8
+//         }
+//       },
+//       \"modifiers\": {
+//         \"b1\": {
+//           \"a1\": {
+//             \"x\": \"1.0\",
+//             \"y\": \"2.0\"
+//           },
+//           \"a2\": {
+//             \"x\": \"3.0\",
+//             \"y\": \"4.0\"
+//           }
+//         },
+//         \"b2\": {
+//           \"a1\": {
+//             \"x\": \"5.0\"
+//           }
+//         }
+//       }
+//     }
+//   ],
+//   \"source\": {
+//     \"filename\": \"<interactive>\",
+//     \"lineStart\": 17,
+//     \"columnStart\": 3,
+//     \"lineEnd\": 20,
+//     \"columnEnd\": 8
+//   }
+// }"
+// endResult

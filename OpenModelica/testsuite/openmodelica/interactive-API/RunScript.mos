@@ -1,0 +1,16 @@
+// name:     RunScript
+// keywords: runScript
+// status:   correct
+// depends:  strings.mo
+// cflags: -d=-newInst
+//
+runScript("strings.mos");
+// Result:
+// "\"foo\"
+// \"bar\"
+// \"foobar\"
+// true
+// \"foobar\"
+// 0
+// "
+// endResult

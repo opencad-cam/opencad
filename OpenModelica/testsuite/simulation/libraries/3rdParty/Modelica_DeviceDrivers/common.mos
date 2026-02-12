@@ -1,0 +1,8 @@
+//
+// These commands are common to all Modelica_DeviceDrivers examples
+//
+
+packageName := $TypeName(Modelica_DeviceDrivers);
+packageVersion := "";
+setCommandLineOptions("-d=-gen,initialization --std=3.3");
+referenceFileDir := "Modelica_DeviceDrivers"; // Default directory of reference files

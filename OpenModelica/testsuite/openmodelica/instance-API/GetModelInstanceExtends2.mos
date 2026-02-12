@@ -1,0 +1,90 @@
+// name: GetModelInstanceExtends1
+// keywords:
+// status: correct
+// cflags: -d=newInst
+//
+//
+
+loadString("
+  model A
+    Real x;
+  end A;
+
+  model M
+    Real y;
+    extends A(x = 1) annotation(IconMap(extent = {{-100, -100}, {100, 100}}));
+    Real z;
+  end M;
+");
+getErrorString();
+
+getModelInstance(M, prettyPrint=true);
+
+// Result:
+// true
+// ""
+// "{
+//   \"name\": \"M\",
+//   \"restriction\": \"model\",
+//   \"elements\": [
+//     {
+//       \"$kind\": \"component\",
+//       \"name\": \"y\",
+//       \"type\": \"Real\"
+//     },
+//     {
+//       \"$kind\": \"extends\",
+//       \"modifiers\": {
+//         \"x\": \"1\"
+//       },
+//       \"annotation\": {
+//         \"IconMap\": {
+//           \"extent\": [
+//             [
+//               -100,
+//               -100
+//             ],
+//             [
+//               100,
+//               100
+//             ]
+//           ]
+//         }
+//       },
+//       \"baseClass\": {
+//         \"name\": \"A\",
+//         \"restriction\": \"model\",
+//         \"elements\": [
+//           {
+//             \"$kind\": \"component\",
+//             \"name\": \"x\",
+//             \"type\": \"Real\",
+//             \"value\": {
+//               \"binding\": 1
+//             }
+//           }
+//         ],
+//         \"source\": {
+//           \"filename\": \"<interactive>\",
+//           \"lineStart\": 8,
+//           \"columnStart\": 5,
+//           \"lineEnd\": 8,
+//           \"columnEnd\": 78
+//         }
+//       }
+//     },
+//     {
+//       \"$kind\": \"component\",
+//       \"name\": \"z\",
+//       \"type\": \"Real\"
+//     }
+//   ],
+//   \"source\": {
+//     \"filename\": \"<interactive>\",
+//     \"lineStart\": 6,
+//     \"columnStart\": 3,
+//     \"lineEnd\": 10,
+//     \"columnEnd\": 8
+//   }
+// }"
+// endResult

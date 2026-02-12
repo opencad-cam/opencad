@@ -1,0 +1,46 @@
+// name: getIconAnnotation.mos
+// keywords: DynamicSelect textString visible
+// status: correct
+// cflags: -d=-newInst
+//
+
+loadString("
+package IconWithValues
+  model Component
+    parameter Real x;
+    Real y = sin(x);
+    Boolean neg = y < 0;
+    Boolean pos = not neg;
+    annotation(Icon(graphics = {
+      Rectangle(origin = {0, 0}, extent = {{-95, 95}, {95, -95}},
+                visible = DynamicSelect(false, neg)),
+      Text(origin = {-55, 35}, extent = {{-35, 15}, {50, -30}},
+        textString = \"x = \"),
+      Text(origin = {-55, 35}, extent = {{50, 15}, {150, -30}},
+        textString = DynamicSelect(\"x\", String(x))),
+      Text(origin = {-55, -30}, extent = {{-35, 15}, {150, -30}},
+        textString = DynamicSelect(\"%y\",  String(y, significantDigits = 3)),
+        visible = DynamicSelect(true, pos)),
+      Text(origin = {-55, -30}, extent = {{-35, 15}, {150, -30}},
+        textString = DynamicSelect(\"%y\",  String(y, significantDigits = 3)),
+        visible = DynamicSelect(false, neg), lineColor = {255, 0, 0})},
+      coordinateSystem(initialScale = 0.1)));
+  end Component;
+  model Test
+    Component component1(x = 5)
+      annotation(Placement(visible = true,
+        transformation(origin = {0, 0}, extent = {{-45, -45}, {45, 45}})));
+  end Test;
+end IconWithValues;
+"); getErrorString();
+list(GetIconAnnotation); getErrorString();
+getIconAnnotation(IconWithValues.Component); getErrorString();
+
+// Result:
+// true
+// ""
+// ""
+// ""
+// {-,-,-,-,-,0.1,-,,{Rectangle(DynamicSelect(false, neg), {0.0, 0.0}, 0.0, {0, 0, 0}, {0, 0, 0}, LinePattern.Solid, FillPattern.None, 0.25, BorderPattern.None, {{-95.0, 95.0}, {95.0, -95.0}}, 0.0), Text(true, {-55.0, 35.0}, 0.0, {0, 0, 0}, {0, 0, 0}, LinePattern.Solid, FillPattern.None, 0.25, {{-35.0, 15.0}, {50.0, -30.0}}, "x = ", 0.0, {-1, -1, -1}, "", {}, TextAlignment.Center), Text(true, {-55.0, 35.0}, 0.0, {0, 0, 0}, {0, 0, 0}, LinePattern.Solid, FillPattern.None, 0.25, {{50.0, 15.0}, {150.0, -30.0}}, DynamicSelect("x", String(x, 6, 0, true)), 0.0, {-1, -1, -1}, "", {}, TextAlignment.Center), Text(DynamicSelect(true, pos), {-55.0, -30.0}, 0.0, {0, 0, 0}, {0, 0, 0}, LinePattern.Solid, FillPattern.None, 0.25, {{-35.0, 15.0}, {150.0, -30.0}}, DynamicSelect("%y", String(y, 3, 0, true)), 0.0, {-1, -1, -1}, "", {}, TextAlignment.Center), Text(DynamicSelect(false, neg), {-55.0, -30.0}, 0.0, {255, 0, 0}, {0, 0, 0}, LinePattern.Solid, FillPattern.None, 0.25, {{-35.0, 15.0}, {150.0, -30.0}}, DynamicSelect("%y", String(y, 3, 0, true)), 0.0, {-1, -1, -1}, "", {}, TextAlignment.Center)}}
+// ""
+// endResult

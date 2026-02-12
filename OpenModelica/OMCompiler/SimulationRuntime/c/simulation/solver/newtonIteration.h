@@ -1,0 +1,102 @@
+/*
+ * This file is part of OpenModelica.
+ *
+ * Copyright (c) 1998-CurrentYear, Open Source Modelica Consortium (OSMC),
+ * c/o Linköpings universitet, Department of Computer and Information Science,
+ * SE-58183 Linköping, Sweden.
+ *
+ * All rights reserved.
+ *
+ * THIS PROGRAM IS PROVIDED UNDER THE TERMS OF THE BSD NEW LICENSE OR THE
+ * GPL VERSION 3 LICENSE OR THE OSMC PUBLIC LICENSE (OSMC-PL) VERSION 1.2.
+ * ANY USE, REPRODUCTION OR DISTRIBUTION OF THIS PROGRAM CONSTITUTES
+ * RECIPIENT'S ACCEPTANCE OF THE OSMC PUBLIC LICENSE OR THE GPL VERSION 3,
+ * ACCORDING TO RECIPIENTS CHOICE.
+ *
+ * The OpenModelica software and the OSMC (Open Source Modelica Consortium)
+ * Public License (OSMC-PL) are obtained from OSMC, either from the above
+ * address, from the URLs: http://www.openmodelica.org or
+ * http://www.ida.liu.se/projects/OpenModelica, and in the OpenModelica
+ * distribution. GNU version 3 is obtained from:
+ * http://www.gnu.org/copyleft/gpl.html. The New BSD License is obtained from:
+ * http://www.opensource.org/licenses/BSD-3-Clause.
+ *
+ * This program is distributed WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, EXCEPT AS
+ * EXPRESSLY SET FORTH IN THE BY RECIPIENT SELECTED SUBSIDIARY LICENSE
+ * CONDITIONS OF OSMC-PL.
+ *
+ */
+
+/*! \file nonlinearSolverNewton.h
+ */
+
+#ifndef _NEWTONITERATION_H_
+#define _NEWTONITERATION_H_
+
+#include "nonlinearSolverNewton.h"
+#include "nonlinearSystem.h"
+#include "simulation_data.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Struct containing information about equation system to be solved with Newton-Raphson method.
+ */
+typedef struct DATA_NEWTON
+{
+  int initialized;      /** 1 = initialized, else = 0 */
+  double* resScaling;   /** Residual scaling vector */
+  double* fvecScaled;   /** scaled f vector */
+
+  int newtonStrategy;
+
+  int n;                /** size of equation system */
+  double* x;
+  double* fvec;
+  double xtol;
+  double ftol;
+  int nfev;
+  int maxfev;
+  int info;
+  double epsfcn;
+  double* fjac;           /** Jacobian matrix in row-major format */
+  double* rwork;
+  int* iwork;
+  int calculate_jacobian;
+  int factorization;
+  int numberOfIterations;           /** over the whole simulation time */
+  int numberOfFunctionEvaluations;  /** over the whole simulation time */
+
+  /* damped newton */
+  double* x_new;
+  double* x_increment;
+  double* f_old;
+  double* fvec_minimum;
+  double* delta_f;
+  double* delta_x_vec;
+
+  rtclock_t timeClock;
+
+  /* Debug information */
+  double time;                /** Simulation time */
+  modelica_boolean initial;   /** True if in initialization */
+
+  NLS_USERDATA* userData;
+} DATA_NEWTON;
+
+/* Typedef */
+typedef int (genericResidualFunc)(int n, double* x, double* fvec, void* userData, int fj);
+
+
+DATA_NEWTON* allocateNewtonData(int size, NLS_USERDATA* userData);
+void freeNewtonData(DATA_NEWTON* newtonData);
+int _omc_newton(genericResidualFunc f, DATA_NEWTON* solverData, void* userData);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

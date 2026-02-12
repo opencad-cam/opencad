@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.5)
+project (ModelicaPDESolver)
+ADD_SUBDIRECTORY(runtime)
+ADD_SUBDIRECTORY(models)
+ADD_SUBDIRECTORY(shared_numerics)

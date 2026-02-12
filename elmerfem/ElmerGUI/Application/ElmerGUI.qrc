@@ -1,0 +1,20 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+   <file>images/bgimage.png</file>
+   <file>images/splash.png</file>
+   <file>images/logo.png</file>
+   <file>icons/Mesh3D.ico</file>
+   <file>icons/Mesh3D.png</file>
+   <file>icons/Paraview.png</file>
+   <file>icons/Post-red.png</file>
+   <file>icons/Post.png</file>
+   <file>icons/Solver-red.png</file>
+   <file>icons/Solver.png</file>
+   <file>icons/divide-edge.png</file>
+   <file>icons/divide.png</file>
+   <file>icons/set-body-property.png</file>
+   <file>icons/set-boundary-property.png</file>
+   <file>icons/unify-edge.png</file>
+   <file>icons/unify.png</file>
+</qresource>
+</RCC>

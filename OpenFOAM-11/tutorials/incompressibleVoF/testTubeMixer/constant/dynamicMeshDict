@@ -1,0 +1,55 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  11
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      dynamicMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+mover
+{
+    type            motionSolver;
+
+    libs            ("libfvMeshMovers.so" "libfvMotionSolvers.so");
+
+    motionSolver    solidBody;
+
+    solidBodyMotionFunction multiMotion;
+
+    select          all;
+
+    // Table rotating in z axis
+    rotatingTable
+    {
+        solidBodyMotionFunction rotatingMotion;
+        rotatingMotionCoeffs
+        {
+            origin          (0 0.1 0);
+            axis            (0 0 1);
+            rpm             60;
+        }
+    }
+
+    // Tube rocking on rotating table
+    rotatingBox
+    {
+        solidBodyMotionFunction oscillatingRotatingMotion;
+        oscillatingRotatingMotionCoeffs
+        {
+            origin          (0 0 0);
+            amplitude       (45 0 0);   // 45 degrees max tilt
+            omega           40;         // rad/s
+        }
+    }
+}
+
+
+// ************************************************************************* //

@@ -1,0 +1,284 @@
+// name:  testBug2764
+// keywords: FMI 2.0 export
+// status: correct
+// teardown_command: rm -rf binaries sources modelDescription.xml modelDescription.tmp.xml test_Bug2764* output.log
+// cflags: -d=-newInst
+//
+
+loadString("
+model test_Bug2764
+  constant Real c = 23;
+  parameter Real p = c;
+  input Real u(start = -2);
+  output Real y1, y2;
+  Integer i;
+  Boolean b;
+equation
+  der(y1) = p*u;
+  der(y2) = y1;
+  b = der(y1) > 0;
+  when b then
+    i = pre(i) + 1;
+  end when;
+end test_Bug2764;
+");
+getErrorString();
+
+buildModelFMU(test_Bug2764, version="2.0");
+getErrorString();
+
+// unzip to console, quiet, extra quiet
+system("unzip -cqq test_Bug2764.fmu modelDescription.xml | grep -v guid | grep -v generationDateAndTime | grep -v generationTool > modelDescription.tmp.xml");
+readFile("modelDescription.tmp.xml");
+
+// Result:
+// true
+// ""
+// "test_Bug2764.fmu"
+// "Warning: The initial conditions are not fully specified. For more information set -d=initialization. In OMEdit Tools->Options->Simulation->Show additional information from the initialization process, in OMNotebook call setCommandLineOptions(\"-d=initialization\").
+// "
+// 0
+// "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+// <fmiModelDescription
+//   fmiVersion=\"2.0\"
+//   modelName=\"test_Bug2764\"
+//   description=\"\"
+//   version=\"\"
+//   variableNamingConvention=\"structured\"
+//   numberOfEventIndicators=\"1\">
+//   <ModelExchange
+//     modelIdentifier=\"test_Bug2764\"
+//     needsExecutionTool=\"false\"
+//     completedIntegratorStepNotNeeded=\"false\"
+//     canBeInstantiatedOnlyOncePerProcess=\"false\"
+//     canNotUseMemoryManagementFunctions=\"false\"
+//     canGetAndSetFMUstate=\"false\"
+//     canSerializeFMUstate=\"false\"
+//     providesDirectionalDerivative=\"false\">
+//     <SourceFiles>
+//       <File name=\"test_Bug2764.c\" />
+//       <File name=\"test_Bug2764_functions.c\" />
+//       <File name=\"test_Bug2764_records.c\" />
+//       <File name=\"test_Bug2764_01exo.c\" />
+//       <File name=\"test_Bug2764_02nls.c\" />
+//       <File name=\"test_Bug2764_03lsy.c\" />
+//       <File name=\"test_Bug2764_04set.c\" />
+//       <File name=\"test_Bug2764_05evt.c\" />
+//       <File name=\"test_Bug2764_06inz.c\" />
+//       <File name=\"test_Bug2764_07dly.c\" />
+//       <File name=\"test_Bug2764_08bnd.c\" />
+//       <File name=\"test_Bug2764_09alg.c\" />
+//       <File name=\"test_Bug2764_10asr.c\" />
+//       <File name=\"test_Bug2764_11mix.c\" />
+//       <File name=\"test_Bug2764_12jac.c\" />
+//       <File name=\"test_Bug2764_13opt.c\" />
+//       <File name=\"test_Bug2764_14lnz.c\" />
+//       <File name=\"test_Bug2764_15syn.c\" />
+//       <File name=\"test_Bug2764_16dae.c\" />
+//       <File name=\"test_Bug2764_17inl.c\" />
+//       <File name=\"test_Bug2764_18spd.c\" />
+//       <File name=\"test_Bug2764_init_fmu.c\" />
+//       <File name=\"test_Bug2764_FMU.c\" />
+//       <File name=\"fmi-export/fmu2_model_interface.c\" />
+//       <File name=\"fmi-export/fmu_read_flags.c\" />
+//       <File name=\"./gc/memory_pool.c\" />
+//       <File name=\"./gc/omc_gc.c\" />
+//       <File name=\"./util/base_array.c\" />
+//       <File name=\"./util/boolean_array.c\" />
+//       <File name=\"./util/context.c\" />
+//       <File name=\"./util/division.c\" />
+//       <File name=\"./util/doubleEndedList.c\" />
+//       <File name=\"./util/generic_array.c\" />
+//       <File name=\"./util/index_spec.c\" />
+//       <File name=\"./util/integer_array.c\" />
+//       <File name=\"./util/list.c\" />
+//       <File name=\"./util/modelica_string_lit.c\" />
+//       <File name=\"./util/modelica_string.c\" />
+//       <File name=\"./util/ModelicaUtilities.c\" />
+//       <File name=\"./util/omc_error.c\" />
+//       <File name=\"./util/omc_file.c\" />
+//       <File name=\"./util/omc_init.c\" />
+//       <File name=\"./util/omc_mmap.c\" />
+//       <File name=\"./util/omc_msvc.c\" />
+//       <File name=\"./util/omc_numbers.c\" />
+//       <File name=\"./util/parallel_helper.c\" />
+//       <File name=\"./util/rational.c\" />
+//       <File name=\"./util/real_array.c\" />
+//       <File name=\"./util/ringbuffer.c\" />
+//       <File name=\"./util/simulation_options.c\" />
+//       <File name=\"./util/string_array.c\" />
+//       <File name=\"./util/utility.c\" />
+//       <File name=\"./util/varinfo.c\" />
+//       <File name=\"./math-support/pivot.c\" />
+//       <File name=\"./simulation/arrayIndex.c\" />
+//       <File name=\"./simulation/jacobian_util.c\" />
+//       <File name=\"./simulation/omc_simulation_util.c\" />
+//       <File name=\"./simulation/options.c\" />
+//       <File name=\"./simulation/simulation_info_json.c\" />
+//       <File name=\"./simulation/simulation_omc_assert.c\" />
+//       <File name=\"./simulation/solver/delay.c\" />
+//       <File name=\"./simulation/solver/fmi_events.c\" />
+//       <File name=\"./simulation/solver/model_help.c\" />
+//       <File name=\"./simulation/solver/omc_math.c\" />
+//       <File name=\"./simulation/solver/spatialDistribution.c\" />
+//       <File name=\"./simulation/solver/stateset.c\" />
+//       <File name=\"./simulation/solver/synchronous.c\" />
+//       <File name=\"./simulation/solver/initialization/initialization.c\" />
+//       <File name=\"./meta/meta_modelica_catch.c\" />
+//       <File name=\"./external_solvers/dgesv.c\" />
+//       <File name=\"./external_solvers/dgetrf.c\" />
+//       <File name=\"./external_solvers/dgetri.c\" />
+//       <File name=\"./external_solvers/dtrtri.c\" />
+//       <File name=\"./external_solvers/dtrti2.c\" />
+//       <File name=\"./external_solvers/dlamch.c\" />
+//       <File name=\"./external_solvers/ilaenv.c\" />
+//       <File name=\"./external_solvers/xerbla.c\" />
+//       <File name=\"./external_solvers/dgetf2.c\" />
+//       <File name=\"./external_solvers/dgetrs.c\" />
+//       <File name=\"./external_solvers/dlaswp.c\" />
+//       <File name=\"./external_solvers/ieeeck.c\" />
+//       <File name=\"./external_solvers/iparmq.c\" />
+//       <File name=\"./external_solvers/dgemm.c\" />
+//       <File name=\"./external_solvers/dger.c\" />
+//       <File name=\"./external_solvers/dgemv.c\" />
+//       <File name=\"./external_solvers/dscal.c\" />
+//       <File name=\"./external_solvers/dswap.c\" />
+//       <File name=\"./external_solvers/dtrsm.c\" />
+//       <File name=\"./external_solvers/dtrmm.c\" />
+//       <File name=\"./external_solvers/dtrmv.c\" />
+//       <File name=\"./external_solvers/idamax.c\" />
+//       <File name=\"./external_solvers/lsame.c\" />
+//       <File name=\"./external_solvers/i_nint.c\" />
+//       <File name=\"./external_solvers/pow_di.c\" />
+//       <File name=\"./external_solvers/s_cmp.c\" />
+//       <File name=\"./external_solvers/s_copy.c\" />
+//       <File name=\"./external_solvers/s_cat.c\" />
+//       <File name=\"./external_solvers/F77_aloc.c\" />
+//       <File name=\"./external_solvers/exit_.c\" />
+//       <File name=\"./external_solvers/enorm_.c\" />
+//       <File name=\"./external_solvers/hybrj_.c\" />
+//       <File name=\"./external_solvers/dpmpar_.c\" />
+//       <File name=\"./external_solvers/qrfac_.c\" />
+//       <File name=\"./external_solvers/qform_.c\" />
+//       <File name=\"./external_solvers/dogleg_.c\" />
+//       <File name=\"./external_solvers/r1updt_.c\" />
+//       <File name=\"./external_solvers/r1mpyq_.c\" />
+//       <File name=\"ModelicaExternalC/ModelicaStandardTables.c\" />
+//       <File name=\"ModelicaExternalC/ModelicaMatIO.c\" />
+//       <File name=\"ModelicaExternalC/ModelicaIO.c\" />
+//       <File name=\"ModelicaExternalC/ModelicaStandardTablesDummyUsertab.c\" />
+//       <File name=\"ModelicaExternalC/snprintf.c\" />
+//     </SourceFiles>
+//   </ModelExchange>
+//   <LogCategories>
+//     <Category name=\"logEvents\" />
+//     <Category name=\"logSingularLinearSystems\" />
+//     <Category name=\"logNonlinearSystems\" />
+//     <Category name=\"logDynamicStateSelection\" />
+//     <Category name=\"logStatusWarning\" />
+//     <Category name=\"logStatusDiscard\" />
+//     <Category name=\"logStatusError\" />
+//     <Category name=\"logStatusFatal\" />
+//     <Category name=\"logStatusPending\" />
+//     <Category name=\"logAll\" />
+//     <Category name=\"logFmi2Call\" />
+//   </LogCategories>
+//   <DefaultExperiment startTime=\"0.0\" stopTime=\"1.0\" tolerance=\"1e-06\" stepSize=\"0.002\"/>
+//   <ModelVariables>
+//   <!-- Index of variable = \"1\" -->
+//   <ScalarVariable
+//     name=\"_D_outputAlias_y1\"
+//     valueReference=\"0\"
+//     initial=\"exact\">
+//     <Real start=\"0.0\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"2\" -->
+//   <ScalarVariable
+//     name=\"_D_outputAlias_y2\"
+//     valueReference=\"1\"
+//     initial=\"exact\">
+//     <Real start=\"0.0\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"3\" -->
+//   <ScalarVariable
+//     name=\"der(_D_outputAlias_y1)\"
+//     valueReference=\"2\"
+//     >
+//     <Real derivative=\"1\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"4\" -->
+//   <ScalarVariable
+//     name=\"der(_D_outputAlias_y2)\"
+//     valueReference=\"3\"
+//     >
+//     <Real derivative=\"2\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"5\" -->
+//   <ScalarVariable
+//     name=\"u\"
+//     valueReference=\"4\"
+//     causality=\"input\"
+//     >
+//     <Real start=\"-2.0\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"6\" -->
+//   <ScalarVariable
+//     name=\"y1\"
+//     valueReference=\"5\"
+//     causality=\"output\"
+//     >
+//     <Real/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"7\" -->
+//   <ScalarVariable
+//     name=\"y2\"
+//     valueReference=\"6\"
+//     causality=\"output\"
+//     >
+//     <Real/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"8\" -->
+//   <ScalarVariable
+//     name=\"p\"
+//     valueReference=\"7\"
+//     variability=\"fixed\"
+//     causality=\"parameter\"
+//     >
+//     <Real start=\"23.0\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"9\" -->
+//   <ScalarVariable
+//     name=\"i\"
+//     valueReference=\"0\"
+//     variability=\"discrete\"
+//     initial=\"exact\">
+//     <Integer start=\"0\"/>
+//   </ScalarVariable>
+//   <!-- Index of variable = \"10\" -->
+//   <ScalarVariable
+//     name=\"b\"
+//     valueReference=\"1\"
+//     variability=\"discrete\"
+//     >
+//     <Boolean/>
+//   </ScalarVariable>
+//   </ModelVariables>
+//   <ModelStructure>
+//     <Outputs>
+//       <Unknown index=\"6\" dependencies=\"1\" dependenciesKind=\"dependent\" />
+//       <Unknown index=\"7\" dependencies=\"2\" dependenciesKind=\"dependent\" />
+//     </Outputs>
+//     <Derivatives>
+//       <Unknown index=\"3\" dependencies=\"5\" dependenciesKind=\"dependent\" />
+//       <Unknown index=\"4\" dependencies=\"1\" dependenciesKind=\"dependent\" />
+//     </Derivatives>
+//     <InitialUnknowns>
+//       <Unknown index=\"3\" dependencies=\"5 8\" dependenciesKind=\"dependent dependent\" />
+//       <Unknown index=\"4\" dependencies=\"1\" dependenciesKind=\"dependent\" />
+//       <Unknown index=\"6\" dependencies=\"1\" dependenciesKind=\"dependent\" />
+//       <Unknown index=\"7\" dependencies=\"2\" dependenciesKind=\"dependent\" />
+//     </InitialUnknowns>
+//   </ModelStructure>
+// </fmiModelDescription>
+// "
+// endResult

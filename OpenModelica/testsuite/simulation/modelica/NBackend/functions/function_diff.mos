@@ -1,0 +1,94 @@
+// name: function_diff
+// keywords: NewBackend
+// status: correct
+
+loadString("
+model function_diff
+  Real x;
+  Real y;
+  Real z;
+equation
+  y = sin(x);
+  der(x) = f(y);
+  der(z) = f(x);
+end function_diff;
+
+function f
+  input Real a;
+  output Real b;
+algorithm
+  if a >= 0 then
+    b := a^2;
+  else
+    b := f(-a);
+  end if;
+  annotation(Inline=false);
+end f;
+"); getErrorString();
+
+setCommandLineOptions("--newBackend --generateDynamicJacobian=symbolic -d=debugDifferentiation"); getErrorString();
+simulate(function_diff); getErrorString();
+
+// Result:
+// true
+// ""
+// true
+// ""
+// ### debugDifferentiation | NBJacobian.jacobianSymbolic ###
+// [BEFORE] [SCAL] (1) y = sin(x) ($RES_AUX_5)
+// [AFTER ] [SCAL] (1) $pDER_ODE_JAC.y = cos(x) * $SEED_ODE_JAC.x ($RES_AUX_5)
+//
+// ### debugDifferentiation | NBJacobian.jacobianSymbolic ###
+// [BEFORE] [SCAL] (1) $FUN_2 = f(y) ($RES_AUX_4)
+//
+// [BEFORE] function 'f'
+//   input Real 'a';
+//   output Real 'b';
+// algorithm
+//   if 'a' >= 0.0 then
+//     'b' := 'a' ^ 2.0;
+//   elseif true then
+//     'b' := 'f'(-'a');
+//   end if;
+//   annotation(derivative(order = 1) = '$fDER0.f', Inline = false);
+// end 'f'
+//
+// [AFTER ] function '$fDER0.f'
+//   input Real 'a';
+//   input Real '$fDER_a';
+//   output Real '$fDER_b';
+//   Real 'b';
+// algorithm
+//   if 'a' >= 0.0 then
+//     '$fDER_b' := 2.0 * 'a' * '$fDER_a';
+//     'b' := 'a' ^ 2.0;
+//   elseif true then
+//     '$fDER_b' := '$fDER0.f'(-'a', -'$fDER_a');
+//     'b' := 'f'(-'a');
+//   end if;
+//   annotation(Inline = false);
+// end '$fDER0.f'
+//
+// [AFTER ] [SCAL] (1) $pDER_ODE_JAC.$FUN_2 = $fDER0.f(y, $pDER_ODE_JAC.y) ($RES_AUX_4)
+//
+// ### debugDifferentiation | NBJacobian.jacobianSymbolic ###
+// [BEFORE] [SCAL] (1) $DER.x = $FUN_2 ($RES_SIM_1)
+// [AFTER ] [SCAL] (1) $pDER_ODE_JAC.$DER.x = $pDER_ODE_JAC.$FUN_2 ($RES_SIM_1)
+//
+// ### debugDifferentiation | NBJacobian.jacobianSymbolic ###
+// [BEFORE] [SCAL] (1) $FUN_3 = f(x) ($RES_AUX_3)
+// [AFTER ] [SCAL] (1) $pDER_ODE_JAC.$FUN_3 = $fDER0.f(x, $SEED_ODE_JAC.x) ($RES_AUX_3)
+//
+// ### debugDifferentiation | NBJacobian.jacobianSymbolic ###
+// [BEFORE] [SCAL] (1) $DER.z = $FUN_3 ($RES_SIM_0)
+// [AFTER ] [SCAL] (1) $pDER_ODE_JAC.$DER.z = $pDER_ODE_JAC.$FUN_3 ($RES_SIM_0)
+//
+// record SimulationResult
+//     resultFile = "function_diff_res.mat",
+//     simulationOptions = "startTime = 0.0, stopTime = 1.0, numberOfIntervals = 500, tolerance = 1e-6, method = 'dassl', fileNamePrefix = 'function_diff', options = '', outputFormat = 'mat', variableFilter = '.*', cflags = '', simflags = ''",
+//     messages = "LOG_SUCCESS       | info    | The initialization finished successfully without homotopy method.
+// LOG_SUCCESS       | info    | The simulation finished successfully.
+// "
+// end SimulationResult;
+// ""
+// endResult

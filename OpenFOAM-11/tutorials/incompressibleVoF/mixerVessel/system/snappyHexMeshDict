@@ -1,0 +1,276 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  11
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    object      snappyHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#includeEtc "caseDicts/mesh/generation/snappyHexMeshDict.cfg"
+
+castellatedMesh true;
+snap            true;
+addLayers       false;
+
+geometry
+{
+    vessel
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-vessel.stl";
+        regions
+        {
+            vessel
+            {
+                name vessel;
+            }
+        }
+    }
+    oilInlet
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-oilInlet.stl";
+        regions
+        {
+            oilInlet
+            {
+                name oilInlet;
+            }
+        }
+    }
+    outlet
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-outlet.stl";
+        regions
+        {
+            outlet
+            {
+                name outlet;
+            }
+        }
+    }
+    shaftRotating
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-shaftRotating.stl";
+        regions
+        {
+            shaftRotating
+            {
+                name shaftRotating;
+            }
+        }
+    }
+    shaft
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-shaft.stl";
+        regions
+        {
+            shaft
+            {
+                name shaft;
+            }
+        }
+    }
+    sparger
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-sparger.stl";
+        regions
+        {
+            sparger
+            {
+                name sparger;
+            }
+        }
+    }
+    stirrer
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-stirrer.stl";
+        regions
+        {
+            stirrer
+            {
+                name stirrer;
+            }
+        }
+    }
+    baffles
+    {
+        type triSurfaceMesh;
+        file "mixerVessel-baffles.stl";
+        regions
+        {
+            baffles
+            {
+                name baffles;
+            }
+        }
+    }
+    rotating
+    {
+        type triSurfaceMesh;
+        file "rotating.stl";
+    }
+};
+
+castellatedMeshControls
+{
+    features
+    (
+        {
+           file "mixerVessel-shaftRotating.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "mixerVessel-shaft.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "mixerVessel-sparger.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "mixerVessel-stirrer.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "mixerVessel-baffles.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "rotating.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "mixerVessel-oilInlet.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "mixerVessel-vessel.eMesh";
+           levels ((0 0));
+        }
+        {
+           file "mixerVessel-outlet.eMesh";
+           levels ((0 0));
+        }
+    );
+
+    refinementSurfaces
+    {
+        vessel
+        {
+            level (0 1);
+            patchInfo
+            {
+                type wall;
+                inGroups (meshedWalls);
+            }
+        }
+        oilInlet
+        {
+            level (0 0);
+            patchInfo
+            {
+                type patch;
+            }
+        }
+        outlet
+        {
+            level (0 0);
+            patchInfo
+            {
+                type patch;
+            }
+        }
+        shaftRotating
+        {
+            level (0 0);
+            patchInfo
+            {
+                $../../vessel/patchInfo
+            }
+        }
+        shaft
+        {
+            level (0 0);
+            patchInfo
+            {
+                $../../vessel/patchInfo
+            }
+        }
+        sparger
+        {
+            level (0 0);
+            patchInfo
+            {
+                $../../vessel/patchInfo
+            }
+        }
+        stirrer
+        {
+            level (0 0);
+            patchInfo
+            {
+                $../../vessel/patchInfo
+            }
+        }
+        baffles
+        {
+            level (0 0);
+            patchInfo
+            {
+                $../../vessel/patchInfo
+            }
+        }
+        rotating
+        {
+            level (0 0);
+            cellZone rotating;
+            faceZone rotating;
+            mode insidePoint;
+            insidePoint (0 0.1 0.5);
+        }
+    }
+
+    insidePoint (0 0.1 1.0);
+
+    // Whether any faceZones (as specified in the refinementSurfaces)
+    // are only on the boundary of corresponding cellZones or also allow
+    // free-standing zone faces. Not used if there are no faceZones.
+    allowFreeStandingZoneFaces false;
+}
+
+snapControls
+{
+    implicitFeatureSnap false;
+    explicitFeatureSnap true;
+}
+
+addLayersControls
+{
+    layers
+    {}
+
+    relativeSizes true;
+    expansionRatio 1.2;
+    finalLayerThickness 0.5;
+    minThickness 1e-3;
+}
+
+writeFlags
+();
+
+mergeTolerance 1e-6;
+
+// ************************************************************************* //

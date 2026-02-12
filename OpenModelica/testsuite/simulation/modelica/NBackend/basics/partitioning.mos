@@ -1,0 +1,93 @@
+// name: partitioning
+// keywords: NewBackend
+// status: correct
+
+
+loadString("
+model partitioning
+  Real x,y,z,k;
+  parameter Real a = 1.0;
+equation
+  k = cos(time);
+  z = a^2 * k;
+  y = x^2 + a;
+  der(x) = sin(time);
+end partitioning;
+
+"); getErrorString();
+
+setCommandLineOptions("--newBackend -d=dumpSynchronous"); getErrorString();
+
+simulate(partitioning); getErrorString();
+
+val(x, 1);
+
+// Result:
+// true
+// ""
+// true
+// ""
+// ##############################################
+//
+//     [dumpSynchronous] Partitioning result:
+//
+// ##############################################
+//
+// ================================
+//   (1) Continuous ODE Partition
+// ================================
+//
+// Unknown Variables (2/2)
+// *************************
+// (1)       [ALGB] (1) Real z
+// (2)       [ALGB] (1) Real k
+//
+//
+//  Equations (2/2)
+// ******************
+// (1)       [SCAL] (1) z = a ^ 2.0 * k ($RES_SIM_2)
+// (2)       [SCAL] (1) k = cos(time) ($RES_AUX_5)
+//
+//
+// ###################
+//
+//     No Jacobian
+//
+// ###################
+//
+//
+// ================================
+//   (2) Continuous ODE Partition
+// ================================
+//
+// Unknown Variables (3/3)
+// *************************
+// (1)       [DER-] (1) Real $DER.x
+// (2)       [ALGB] (1) Real y
+// (3)       [ALGB] (1) Real $FUN_2
+//
+//
+//  Equations (3/3)
+// ******************
+// (1)       [SCAL] (1) y = x ^ 2.0 + a ($RES_SIM_1)
+// (2)       [SCAL] (1) $DER.x = $FUN_2 ($RES_SIM_0)
+// (3)       [SCAL] (1) $FUN_2 = sin(time) ($RES_AUX_4)
+//
+//
+// ###################
+//
+//     No Jacobian
+//
+// ###################
+//
+//
+// record SimulationResult
+//     resultFile = "partitioning_res.mat",
+//     simulationOptions = "startTime = 0.0, stopTime = 1.0, numberOfIntervals = 500, tolerance = 1e-6, method = 'dassl', fileNamePrefix = 'partitioning', options = '', outputFormat = 'mat', variableFilter = '.*', cflags = '', simflags = ''",
+//     messages = "LOG_SUCCESS       | info    | The initialization finished successfully without homotopy method.
+// LOG_SUCCESS       | info    | The simulation finished successfully.
+// "
+// end SimulationResult;
+// ""
+// 0.45969220091667
+// endResult

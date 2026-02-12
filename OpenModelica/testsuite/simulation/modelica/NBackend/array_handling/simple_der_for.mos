@@ -1,0 +1,39 @@
+// name: simple_der_for
+// keywords: NewBackend
+// status: correct
+
+loadString("
+model simple_der_for
+  parameter Integer p = 10;
+  Real[p+1] x;
+equation
+  for i in 1:p loop
+    der(x[i]) = der(x[i+1]) + x[i] + sin(i*time);
+  end for;
+  der(x[3]) = cos(time);
+end simple_der_for;
+
+"); getErrorString();
+
+setCommandLineOptions("--newBackend");
+
+simulate(simple_der_for); getErrorString();
+
+val(x[1],1);
+val(x[10],1);
+
+// Result:
+// true
+// ""
+// true
+// record SimulationResult
+//     resultFile = "simple_der_for_res.mat",
+//     simulationOptions = "startTime = 0.0, stopTime = 1.0, numberOfIntervals = 500, tolerance = 1e-6, method = 'dassl', fileNamePrefix = 'simple_der_for', options = '', outputFormat = 'mat', variableFilter = '.*', cflags = '', simflags = ''",
+//     messages = "LOG_SUCCESS       | info    | The initialization finished successfully without homotopy method.
+// LOG_SUCCESS       | info    | The simulation finished successfully.
+// "
+// end SimulationResult;
+// ""
+// 4.665076808625762
+// 0.8270481657743375
+// endResult
