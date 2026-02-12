@@ -105,6 +105,11 @@ public:
   Handle(AIS_InteractiveContext) context() const { return m_context; }
 
   /**
+   * @brief Get the V3d view
+   */
+  Handle(V3d_View) view() const { return m_view; }
+
+  /**
    * @brief Set selection mode
    */
   void setSelectionMode(SelectionMode mode);

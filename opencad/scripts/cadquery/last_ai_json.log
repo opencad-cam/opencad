@@ -1,0 +1,13 @@
+{
+  "status": "error",
+  "language": "tr",
+  "intent": "ambiguous",
+  "entities": [],
+  "parameters": {},
+  "operations": [],
+  "constraints": [],
+  "assumptions": [
+    "Assuming 'flÃ¼t yap' is a request to create something, but the context is unclear."
+  ],
+  "confidence": 0.5
+}

@@ -1,0 +1,322 @@
+{
+	"AUTOGEN_COMMAND_LINE_LENGTH_MAX" : 32000,
+	"BUILD_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/part/opencad_part_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/part",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad/src/part",
+	"CMAKE_EXECUTABLE" : "C:/Qt/Tools/CMake_64/bin/cmake.exe",
+	"CMAKE_LIST_FILES" : [ "C:/Projects/opencadandsimulation/opencad/src/part/CMakeLists.txt" ],
+	"CMAKE_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad",
+	"CROSS_CONFIG" : false,
+	"DEP_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/part/opencad_part_autogen/deps",
+	"DEP_FILE_RULE_NAME" : "opencad_part_autogen/timestamp",
+	"HEADERS" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ChamferFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_ChamferFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/CutFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_CutFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/DomeFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_DomeFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/DraftFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_DraftFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ExtrudeFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_ExtrudeFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/FilletFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_FilletFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/GearFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_GearFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/HoleFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_HoleFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/LoftFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_LoftFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/MirrorFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_MirrorFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/OffsetSurfaceFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_OffsetSurfaceFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/PatternFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_PatternFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/RevolveFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_RevolveFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/RibFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_RibFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ScaleFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_ScaleFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ShellFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_ShellFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/SplitFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_SplitFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/SweepFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_SweepFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ThickenFeature.h",
+			"MU",
+			"EWIEGA46WW/moc_ThickenFeature.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/WireBuilder.h",
+			"MU",
+			"EWIEGA46WW/moc_WireBuilder.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/part/opencad_part_autogen/include",
+	"MOC_COMPILATION_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/part/opencad_part_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"HAVE_FREETYPE",
+		"HAVE_OPENGL_EXT",
+		"MINGW_HAS_SECURE_API=1",
+		"OCC_CONVERT_SIGNALS",
+		"QT_CORE_LIB",
+		"QT_NO_DEBUG",
+		"UNICODE",
+		"WIN32",
+		"WIN64",
+		"_ENABLE_EXTENDED_ALIGNED_STORAGE",
+		"_UNICODE",
+		"_USE_MATH_DEFINES",
+		"_WIN32_WINNT=0x0601",
+		"_WIN64"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src/sketch",
+		"C:/Projects/opencadandsimulation/opencad/src/core",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include",
+		"C:/Qt/6.10.1/mingw_64/include/QtCore",
+		"C:/Qt/6.10.1/mingw_64/include",
+		"C:/Qt/6.10.1/mingw_64/mkspecs/win32-g++",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include/eigen3",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/x86_64-w64-mingw32",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/backward",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include-fixed",
+		"C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT",
+		"Q_GADGET_EXPORT",
+		"Q_ENUM_NS"
+	],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"C:/Qt/Tools/mingw1310_64/bin/g++.exe",
+		"-std=c++17",
+		"-dM",
+		"-E",
+		"-c",
+		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/part/opencad_part_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 14,
+	"PARSE_CACHE_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/opencad_part_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/moc.exe",
+	"QT_UIC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/uic.exe",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 10,
+	"SETTINGS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/opencad_part_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ChamferFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/CutFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/DomeFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/DraftFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ExtrudeFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/FilletFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/GearFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/HoleFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/LoftFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/MirrorFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/OffsetSurfaceFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/PatternFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/RevolveFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/RibFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ScaleFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ShellFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/SplitFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/SweepFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/ThickenFeature.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/part/WireBuilder.cpp",
+			"MU",
+			null
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

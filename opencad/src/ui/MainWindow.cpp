@@ -8,6 +8,13 @@
 #include "viewport/Viewport3D.h"
 #include <QStackedWidget>
 
+#include <QApplication>
+#include <QMessageBox>
+#include <QStandardPaths>
+#include <QString>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
+
 // Core geometry
 #include "core/geometry/BooleanOps.h"
 #include "core/geometry/Primitives.h"
@@ -17,8 +24,12 @@
 #include "io/iges/IgesReader.h"
 #include "io/mesh/StlReader.h"
 #include "io/mesh/StlWriter.h"
+#include "io/parasolid/ParasolidReader.h"
+#include "io/solidworks/SolidWorksConverter.h"
+#include "io/solidworks/SolidWorksReader.h"
 #include "io/step/StepReader.h"
 #include "io/step/StepWriter.h"
+#include <filesystem>
 
 // Sketch
 #include "sketch/Sketch.h"
@@ -55,6 +66,7 @@
 #include <Bnd_Box.hxx>
 
 // Panels
+#include "AIChatPanel.h" // Added
 #include "ParameterEditor.h"
 #include "ProfileSelectionPanel.h"
 #include "PropertiesPanel.h"
@@ -132,6 +144,107 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   // Create central viewport
   m_viewport = std::make_unique<Viewport3D>(this);
   setCentralWidget(m_viewport.get());
+
+  // Initialize AI Clients
+  m_cqClient = std::make_unique<opencad::ai::CadQueryClient>(this);
+
+  // Initialize AIChatPanel
+  m_aiChatPanel = new AIChatPanel(this);
+
+  // Create Dock for Chat Panel
+  QDockWidget *chatDock = new QDockWidget("AI Agent", this);
+  chatDock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
+  chatDock->setWidget(m_aiChatPanel);
+  addDockWidget(Qt::RightDockWidgetArea, chatDock);
+
+  // Initialize LLM Client
+  m_llmClient = std::make_unique<opencad::ai::LLMClient>(this);
+
+  // Connect AIChatPanel -> MainWindow/LLM
+  connect(m_aiChatPanel, &AIChatPanel::promptSubmitted, this,
+          &MainWindow::onAiRun);
+
+  // Connect LLM Client -> AIChatPanel
+  connect(m_llmClient.get(), &opencad::ai::LLMClient::codeGenerated, this,
+          [this](const QString &code) {
+            QApplication::restoreOverrideCursor();
+
+            // Display success in chat
+            if (m_aiChatPanel) {
+              m_aiChatPanel->addMessage(
+                  "System", "Code generated. Building model...", false);
+              m_aiChatPanel->setStatus("Building...");
+            }
+
+            statusBar()->showMessage("AI generated code. Executing...");
+            qDebug() << "LLM Generated Code:" << code;
+
+            // Execute the generated code via CadQueryClient
+            if (m_cqClient) {
+              QString tempDir = QStandardPaths::writableLocation(
+                  QStandardPaths::TempLocation);
+              QString outputPath = tempDir + "/cq_result.step";
+              m_cqClient->runScript(code, outputPath);
+            }
+          });
+
+  connect(m_llmClient.get(), &opencad::ai::LLMClient::errorOccurred, this,
+          [this](const QString &error) {
+            QApplication::restoreOverrideCursor();
+            if (m_aiChatPanel) {
+              m_aiChatPanel->addMessage("System", "Error: " + error, false);
+              m_aiChatPanel->setStatus("Error");
+            }
+            statusBar()->showMessage("AI Error: " + error);
+          });
+
+  // Connect CQ Client -> AIChatPanel
+  connect(
+      m_cqClient.get(), &opencad::ai::CadQueryClient::executionFinished, this,
+      [this](bool success, const QString &msg, const QString &stepPath) {
+        QApplication::restoreOverrideCursor();
+        if (success) {
+          if (m_aiChatPanel) {
+            m_aiChatPanel->addMessage("System", "Model built successfully.",
+                                      false);
+            m_aiChatPanel->setStatus("Ready");
+          }
+          statusBar()->showMessage("CadQuery execution successful");
+          // Import the STEP file
+          opencad::io::StepReader reader;
+          if (reader.read(stepPath.toStdString())) {
+            addShape(reader.getShape().occShape());
+            displayAllShapes();
+            onViewFit();
+          } else {
+            if (m_aiChatPanel)
+              m_aiChatPanel->addMessage("System", "Failed to import STEP file.",
+                                        false);
+          }
+        } else {
+          if (m_aiChatPanel) {
+            m_aiChatPanel->addMessage("System", "Build Error: " + msg, false);
+            m_aiChatPanel->setStatus("Build Failed");
+          }
+          QMessageBox::warning(this, "CadQuery Error", msg);
+        }
+      });
+
+  // Initialize CQ Editor
+  m_cqEditor = new CadQueryEditorDialog(this);
+  connect(m_cqEditor, &CadQueryEditorDialog::runRequested, this,
+          [this](const QString &script) {
+            if (m_cqClient) {
+              QString tempDir = QStandardPaths::writableLocation(
+                  QStandardPaths::TempLocation);
+              QString outputPath = tempDir + "/cq_result.step";
+              m_cqEditor->appendLog("Running script...");
+              m_cqClient->runScript(script, outputPath);
+              // The output/errors will be handled by the client's signals,
+              // we might want to pipe them back to the editor console too?
+              // For now, simpler is better.
+            }
+          });
 
   // Connect face selection signal
   connect(m_viewport.get(), &Viewport3D::faceSelected, this,
@@ -211,7 +324,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
       statusBar()->showMessage("Adjust settings and click Apply");
     }
   });
-}
+} // namespace ui
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
   if (event->type() == QEvent::KeyPress) {
@@ -618,6 +731,8 @@ void MainWindow::setupMenus() {
   featuresMenu->addAction("Split", this, &MainWindow::onSplit);
   featuresMenu->addAction("Dome", this, &MainWindow::onDome);
   featuresMenu->addSeparator();
+  // featuresMenu->addAction("✨ AI Segment", this, &MainWindow::onAiSegment);
+  featuresMenu->addSeparator();
   featuresMenu->addAction("Linear/Circular Pattern", this,
                           &MainWindow::onPattern);
   featuresMenu->addAction("Mirror", this, &MainWindow::onMirror);
@@ -638,9 +753,24 @@ void MainWindow::setupMenus() {
   boolMenu->addAction("Common (Intersection)", this,
                       &MainWindow::onBooleanCommon);
 
-  // Help Menu
-  auto *helpMenu = menuBar()->addMenu("&Help");
-  helpMenu->addAction("&About OpenCAD", this, &MainWindow::onAbout);
+  // Tools Menu
+  auto *toolsMenu = menuBar()->addMenu("&Tools");
+  toolsMenu->addAction("CadQuery Editor", this, [this]() {
+    if (m_cqEditor) {
+      m_cqEditor->show();
+      m_cqEditor->raise();
+      m_cqEditor->activateWindow();
+    }
+  });
+  toolsMenu->addAction("AI Agent Chat", this, [this]() {
+    if (m_aiChatPanel) {
+      auto *dock = qobject_cast<QDockWidget *>(m_aiChatPanel->parentWidget());
+      if (dock) {
+        dock->setVisible(true);
+        dock->raise();
+      }
+    }
+  });
 
   // Assembly Menu
   auto *assemblyMenu = menuBar()->addMenu("&Assembly");
@@ -783,9 +913,10 @@ void MainWindow::setupDockWidgets() {
           &MainWindow::displayAllShapes);
   connect(m_assemblyTree, &AssemblyTreeWidget::structChanged, this, [this]() {
     // Structure changed might assume display doesn't change,
-    // but if we deleted something, we need to redraw
     displayAllShapes();
   });
+
+  addDockWidget(Qt::LeftDockWidgetArea, m_featureTreeDock);
 
   addDockWidget(Qt::LeftDockWidgetArea, m_featureTreeDock);
 
@@ -1024,6 +1155,27 @@ void MainWindow::updateSketchToolsEnabled(bool enabled) {
 
 void MainWindow::setupStatusBar() {
   statusBar()->showMessage("Ready - OpenCAD v0.1.0");
+
+  m_progressBar = new QProgressBar(this);
+  m_progressBar->setRange(0, 100);
+  m_progressBar->setValue(0);
+  m_progressBar->setVisible(false);
+
+  // User requested "green" bar
+  m_progressBar->setStyleSheet(
+      "QProgressBar { "
+      "   border: 1px solid grey; "
+      "   border-radius: 3px; "
+      "   text-align: center; "
+      "} "
+      "QProgressBar::chunk { "
+      "   background-color: #4CAF50; " // Material Green
+      "   width: 10px; "
+      "}");
+
+  // Add to status bar (permanent widget so it stays on right or normal widget?)
+  // Usually right side is better.
+  statusBar()->addPermanentWidget(m_progressBar, 0);
 }
 
 void MainWindow::updateWindowTitle() {
@@ -1110,19 +1262,84 @@ void MainWindow::onOpenFile() {
         QMessageBox::warning(this, "Error",
                              "Failed to open BREP file: " + filename);
       }
-    } else if (suffix == "sldprt" || suffix == "sldasm" || suffix == "x_t" ||
-               suffix == "x_b") {
-      QMessageBox::information(
-          this, "Proprietary Format",
-          "OpenCAD uses open-source libraries (OpenCASCADE) which cannot "
-          "legally open proprietary formats "
-          "like SolidWorks or Parasolid directly without costly licenses.\n\n"
-          "Solution: Please convert your file to STEP (.stp) or STL (.stl) "
-          "format using:\n"
-          "- SolidWorks (Save As...)\n"
-          "- CAD Exchanger\n"
-          "- FreeCAD\n\n"
-          "Then open the converted file in OpenCAD.");
+    } else if (suffix == "x_t" || suffix == "x_b") {
+      m_progressBar->setVisible(true);
+      m_progressBar->setValue(0);
+      statusBar()->showMessage("Importing Parasolid file...");
+      QCoreApplication::processEvents();
+
+      io::ParasolidReader reader;
+      if (reader.read(filename.toStdString())) {
+        auto shapes = reader.getAllShapes();
+        for (const auto &shape : shapes) {
+          addShape(shape.occShape());
+        }
+        m_currentFile = filename;
+        m_modified = false;
+        updateWindowTitle();
+        if (m_viewport)
+          m_viewport->fitAll();
+        statusBar()->showMessage("Opened (Parasolid): " + filename);
+      } else {
+        QMessageBox::warning(this, "Import Failed",
+                             "Failed to parse Parasolid file.\n" +
+                                 QString::fromStdString(reader.errorMessage()));
+        statusBar()->showMessage("Import failed.");
+      }
+      m_progressBar->setVisible(false);
+
+    } else if (suffix == "sldprt" || suffix == "sldasm") {
+      // DIRECT BACKGROUND CONVERSION (User Requested)
+      m_progressBar->setVisible(true);
+      m_progressBar->setRange(0, 0);
+      statusBar()->showMessage(
+          "Starting background conversion (SolidWorks)...");
+      QCoreApplication::processEvents();
+
+      io::SolidWorksConverter converter;
+      std::string stepFile;
+
+      if (converter.convertToStep(filename.toStdString(), stepFile)) {
+        statusBar()->showMessage(
+            "Conversion successful. Importing STEP data...");
+        m_progressBar->setValue(75);
+        QCoreApplication::processEvents();
+
+        io::StepReader stepReader;
+        if (stepReader.read(stepFile)) {
+          auto shapes = stepReader.getAllShapes();
+          for (const auto &shape : shapes) {
+            addShape(shape.occShape());
+          }
+          if (m_viewport)
+            m_viewport->fitAll();
+          statusBar()->showMessage("Imported via SolidWorks Conversion: " +
+                                   filename);
+          m_currentFile = filename;
+          m_modified = false;
+          updateWindowTitle();
+
+          // Cleanup temp file
+          try {
+            std::filesystem::remove(stepFile);
+          } catch (...) {
+          }
+        } else {
+          QMessageBox::critical(
+              this, "Import Failed",
+              "Converted to STEP but failed to read result.\n" +
+                  QString::fromStdString(stepReader.errorMessage()));
+        }
+      } else {
+        // Conversion failed
+        QMessageBox::warning(
+            this, "Import Failed",
+            "Background Conversion failed.\n\nError: " +
+                QString::fromStdString(converter.errorMessage()));
+        statusBar()->showMessage("Import failed.");
+      }
+      m_progressBar->setVisible(false);
+      m_progressBar->setRange(0, 100); // Reset range
     } else {
       // Default to STEP for now
       io::StepReader reader;
@@ -5400,16 +5617,128 @@ void MainWindow::onShapeSelected(const TopoDS_Shape &shape,
         if (m_assemblyTree) {
           m_assemblyTree->updateTree();
         }
-      }
 
-      // Reset
-      m_mateStep = MateStep::SelectFirst;
-      m_mateShape1.Nullify();
-      m_mateShape2.Nullify();
-      m_mateComponent1.reset();
-      statusBar()->showMessage(
-          "Constraint added. Ready for next mate (Select first geometry).");
+        // Reset
+        m_mateStep = MateStep::SelectFirst;
+        m_mateShape1.Nullify();
+        m_mateShape2.Nullify();
+        m_mateComponent1.reset();
+        statusBar()->showMessage(
+            "Constraint added. Ready for next mate (Select first geometry).");
+      }
     }
+  }
+}
+
+void MainWindow::onAiRun(const QString &prompt) {
+  if (!m_cqClient) {
+    statusBar()->showMessage("Error: CadQuery Client not initialized.");
+    return;
+  }
+
+  qDebug() << "MainWindow: onAiRun called with prompt:" << prompt;
+
+  // 1. Check for specific AI Commands (Shortcuts)
+  if (prompt.contains("vida çiz", Qt::CaseInsensitive) ||
+      prompt.contains("draw screw", Qt::CaseInsensitive)) {
+    statusBar()->showMessage("Generating Screw (CadQuery)...");
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    // Predefined Screw Script
+    QString script = R"(
+import cadquery as cq
+# Simple Bolt/Screw creation
+head_radius = 5.0
+head_height = 3.0
+shaft_radius = 2.5
+shaft_height = 15.0
+
+# Create Head (Hexagon or Circle)
+# Let's do a Hex head for 'bolt' look, or Circle for 'screw'
+result = (
+    cq.Workplane("XY")
+    .polygon(6, head_radius * 2) # Hex head
+    .extrude(head_height)
+    .faces(">Z")
+    .workplane()
+    .circle(shaft_radius)
+    .extrude(shaft_height)
+)
+)";
+    QString tempDir =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QString outputPath = tempDir + "/cq_result.step";
+
+    m_cqClient->runScript(script, outputPath);
+    return;
+  }
+
+  // 2. Generic Box Command (Simplified)
+  QString trimmedPrompt = prompt.trimmed().toLower();
+  if (trimmedPrompt == "kutu" || trimmedPrompt == "box") {
+    statusBar()->showMessage("Generating Box (CadQuery)...");
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    QString script = R"(
+import cadquery as cq
+result = cq.Workplane("XY").box(50, 50, 50)
+)";
+    QString tempDir =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QString outputPath = tempDir + "/cq_result.step";
+    m_cqClient->runScript(script, outputPath);
+    return;
+  }
+
+  // 3. Generic Cylinder Command (Simplified)
+  if (trimmedPrompt == "silindir" || trimmedPrompt == "cylinder") {
+    statusBar()->showMessage("Generating Cylinder (CadQuery)...");
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    QString script = R"(
+import cadquery as cq
+result = cq.Workplane("XY").circle(10).extrude(50)
+)";
+    QString tempDir =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QString outputPath = tempDir + "/cq_result.step";
+    m_cqClient->runScript(script, outputPath);
+    return;
+  }
+
+  // 4. Default: Treat as CadQuery Script or Natural Language Prompt
+  // If it starts with cq or contains python-like syntax, try running it
+  // directly
+  bool isScript = prompt.startsWith("cq ") ||
+                  prompt.contains("import cadquery") ||
+                  prompt.contains("result =");
+  qDebug() << "MainWindow: Checking if script. isScript =" << isScript;
+
+  if (isScript) {
+    qDebug() << "MainWindow: Detected as CadQuery script. Executing directly.";
+    statusBar()->showMessage("Running CadQuery Script...");
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    QString tempDir =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QString outputPath = tempDir + "/cq_result.step";
+
+    m_cqClient->runScript(prompt, outputPath);
+    return;
+  }
+
+  // 5. Fallback: Send to LLM for Code Generation
+  qDebug() << "MainWindow: Falling back to LLM generation.";
+  statusBar()->showMessage(
+      "Asking AI to generate code... (this may take a few seconds)");
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+
+  if (m_llmClient) {
+    qDebug() << "MainWindow: Calling LLMClient::generateCode";
+    m_llmClient->generateCode(prompt);
+  } else {
+    QApplication::restoreOverrideCursor();
+    QMessageBox::critical(this, "Error", "LLM Chat Client not initialized.");
   }
 }
 

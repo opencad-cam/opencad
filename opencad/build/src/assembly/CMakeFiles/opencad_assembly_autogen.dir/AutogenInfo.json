@@ -1,0 +1,159 @@
+{
+	"AUTOGEN_COMMAND_LINE_LENGTH_MAX" : 32000,
+	"BUILD_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly/opencad_assembly_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad/src/assembly",
+	"CMAKE_EXECUTABLE" : "C:/Qt/Tools/CMake_64/bin/cmake.exe",
+	"CMAKE_LIST_FILES" : 
+	[
+		"C:/Projects/opencadandsimulation/opencad/src/assembly/CMakeLists.txt"
+	],
+	"CMAKE_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad",
+	"CROSS_CONFIG" : false,
+	"DEP_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly/opencad_assembly_autogen/deps",
+	"DEP_FILE_RULE_NAME" : "opencad_assembly_autogen/timestamp",
+	"HEADERS" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/Assembly.h",
+			"MU",
+			"EWIEGA46WW/moc_Assembly.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/AssemblyConstraint.h",
+			"MU",
+			"EWIEGA46WW/moc_AssemblyConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/AssemblyNode.h",
+			"MU",
+			"EWIEGA46WW/moc_AssemblyNode.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/Component.h",
+			"MU",
+			"EWIEGA46WW/moc_Component.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/ComponentGroup.h",
+			"MU",
+			"EWIEGA46WW/moc_ComponentGroup.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/ConstraintSolver.h",
+			"MU",
+			"EWIEGA46WW/moc_ConstraintSolver.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly/opencad_assembly_autogen/include",
+	"MOC_COMPILATION_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly/opencad_assembly_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"HAVE_FREETYPE",
+		"HAVE_OPENGL_EXT",
+		"MINGW_HAS_SECURE_API=1",
+		"OCC_CONVERT_SIGNALS",
+		"QT_CORE_LIB",
+		"QT_NO_DEBUG",
+		"UNICODE",
+		"WIN32",
+		"WIN64",
+		"_ENABLE_EXTENDED_ALIGNED_STORAGE",
+		"_UNICODE",
+		"_USE_MATH_DEFINES",
+		"_WIN32_WINNT=0x0601",
+		"_WIN64"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src/core",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include",
+		"C:/Qt/6.10.1/mingw_64/include/QtCore",
+		"C:/Qt/6.10.1/mingw_64/include",
+		"C:/Qt/6.10.1/mingw_64/mkspecs/win32-g++",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/x86_64-w64-mingw32",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/backward",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include-fixed",
+		"C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT",
+		"Q_GADGET_EXPORT",
+		"Q_ENUM_NS"
+	],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"C:/Qt/Tools/mingw1310_64/bin/g++.exe",
+		"-std=c++17",
+		"-dM",
+		"-E",
+		"-c",
+		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly/opencad_assembly_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 14,
+	"PARSE_CACHE_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/opencad_assembly_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/moc.exe",
+	"QT_UIC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/uic.exe",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 10,
+	"SETTINGS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/opencad_assembly_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/Assembly.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/AssemblyConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/Component.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/assembly/ConstraintSolver.cpp",
+			"MU",
+			null
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

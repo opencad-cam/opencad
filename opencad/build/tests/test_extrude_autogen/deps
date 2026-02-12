@@ -1,0 +1,4 @@
+test_extrude_autogen/timestamp: \
+	C:/Projects/opencadandsimulation/opencad/tests/CMakeLists.txt \
+	C:/Projects/opencadandsimulation/opencad/tests/test_extrude.cpp \
+	C:/Qt/Tools/CMake_64/bin/cmake.exe

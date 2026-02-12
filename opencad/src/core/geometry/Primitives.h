@@ -111,6 +111,17 @@ public:
      */
     static Shape makeWedge(double dx, double dy, double dz, double ltx);
 
+    /**
+     * @brief Create a simple screw/bolt representation (Head + Shaft)
+     * @param radius Shaft radius
+     * @param height Shaft height
+     * @param headRadius Head radius (default: 1.8 * radius)
+     * @param headHeight Head height (default: 0.2 * height)
+     * @return Shape containing the fused screw solid
+     */
+    static Shape makeScrew(double radius, double height, 
+                           double headRadius = 0.0, double headHeight = 0.0);
+
 private:
     Primitives() = delete; // Static factory only
 };

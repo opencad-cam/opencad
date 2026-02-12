@@ -15,7 +15,7 @@ set PATH=%CMAKE_PATH%;%NINJA_PATH%;%MINGW_PATH%;%PATH%
 set Qt6_DIR=%QT_PATH%\lib\cmake\Qt6
 
 :: Clean previous build
-if exist build rmdir /s /q build
+:: if exist build rmdir /s /q build
 
 :: Configure with CMake using Ninja
 echo.

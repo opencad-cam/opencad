@@ -1,0 +1,13 @@
+opencad_assembly_autogen/timestamp: \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/Assembly.cpp \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/Assembly.h \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/AssemblyConstraint.cpp \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/AssemblyConstraint.h \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/AssemblyNode.h \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/CMakeLists.txt \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/Component.cpp \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/Component.h \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/ComponentGroup.h \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/ConstraintSolver.cpp \
+	C:/Projects/opencadandsimulation/opencad/src/assembly/ConstraintSolver.h \
+	C:/Qt/Tools/CMake_64/bin/cmake.exe

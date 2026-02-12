@@ -1,0 +1,409 @@
+{
+	"AUTOGEN_COMMAND_LINE_LENGTH_MAX" : 32000,
+	"BUILD_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch/opencad_sketch_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad/src/sketch",
+	"CMAKE_EXECUTABLE" : "C:/Qt/Tools/CMake_64/bin/cmake.exe",
+	"CMAKE_LIST_FILES" : [ "C:/Projects/opencadandsimulation/opencad/src/sketch/CMakeLists.txt" ],
+	"CMAKE_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad",
+	"CROSS_CONFIG" : false,
+	"DEP_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch/opencad_sketch_autogen/deps",
+	"DEP_FILE_RULE_NAME" : "opencad_sketch_autogen/timestamp",
+	"HEADERS" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/Sketch.h",
+			"MU",
+			"EWIEGA46WW/moc_Sketch.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchMirror.h",
+			"MU",
+			"EWIEGA46WW/moc_SketchMirror.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchPattern.h",
+			"MU",
+			"EWIEGA46WW/moc_SketchPattern.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchPlane.h",
+			"MU",
+			"EWIEGA46WW/moc_SketchPlane.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchTrimExtend.h",
+			"MU",
+			"EWIEGA46WW/moc_SketchTrimExtend.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchUndoRedo.h",
+			"MU",
+			"EWIEGA46WW/moc_SketchUndoRedo.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/CoincidentConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_CoincidentConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/ConcentricConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_ConcentricConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/Constraint.h",
+			"MU",
+			"YH325RAXIK/moc_Constraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/DimensionConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_DimensionConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/EqualConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_EqualConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/FixConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_FixConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/HorizontalConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_HorizontalConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/ParallelConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_ParallelConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/PerpendicularConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_PerpendicularConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/TangentConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_TangentConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/VerticalConstraint.h",
+			"MU",
+			"YH325RAXIK/moc_VerticalConstraint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchArc.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchArc.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchCircle.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchCircle.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchEllipse.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchEllipse.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchEntity.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchEntity.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchLine.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchLine.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchPoint.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchPoint.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchPolygon.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchPolygon.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchRectangle.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchRectangle.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchSlot.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchSlot.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchSpline.h",
+			"MU",
+			"J5TXUQJNBW/moc_SketchSpline.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/solver/ConstraintSolver.h",
+			"MU",
+			"HTWALOXSVH/moc_ConstraintSolver.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch/opencad_sketch_autogen/include",
+	"MOC_COMPILATION_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch/opencad_sketch_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"HAVE_FREETYPE",
+		"HAVE_OPENGL_EXT",
+		"MINGW_HAS_SECURE_API=1",
+		"OCC_CONVERT_SIGNALS",
+		"QT_CORE_LIB",
+		"QT_NO_DEBUG",
+		"UNICODE",
+		"WIN32",
+		"WIN64",
+		"_ENABLE_EXTENDED_ALIGNED_STORAGE",
+		"_UNICODE",
+		"_USE_MATH_DEFINES",
+		"_WIN32_WINNT=0x0601",
+		"_WIN64"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src/sketch",
+		"C:/Projects/opencadandsimulation/opencad/src/core",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include",
+		"C:/Qt/6.10.1/mingw_64/include/QtCore",
+		"C:/Qt/6.10.1/mingw_64/include",
+		"C:/Qt/6.10.1/mingw_64/mkspecs/win32-g++",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include/eigen3",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/x86_64-w64-mingw32",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/backward",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include-fixed",
+		"C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT",
+		"Q_GADGET_EXPORT",
+		"Q_ENUM_NS"
+	],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"C:/Qt/Tools/mingw1310_64/bin/g++.exe",
+		"-std=c++17",
+		"-dM",
+		"-E",
+		"-c",
+		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch/opencad_sketch_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 14,
+	"PARSE_CACHE_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/opencad_sketch_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/moc.exe",
+	"QT_UIC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/uic.exe",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 10,
+	"SETTINGS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/opencad_sketch_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/Sketch.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchMirror.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchPattern.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchPlane.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchTrimExtend.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/SketchUndoRedo.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/CoincidentConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/ConcentricConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/Constraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/DimensionConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/EqualConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/FixConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/HorizontalConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/ParallelConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/PerpendicularConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/TangentConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/constraints/VerticalConstraint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchArc.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchCircle.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchEllipse.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchEntity.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchLine.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchPoint.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchPolygon.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchRectangle.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchSlot.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/entities/SketchSpline.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/sketch/solver/ConstraintSolver.cpp",
+			"MU",
+			null
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

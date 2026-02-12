@@ -1,0 +1,402 @@
+{
+	"AUTOGEN_COMMAND_LINE_LENGTH_MAX" : 32000,
+	"BUILD_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/ui/opencad_ui_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/ui",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad/src/ui",
+	"CMAKE_EXECUTABLE" : "C:/Qt/Tools/CMake_64/bin/cmake.exe",
+	"CMAKE_LIST_FILES" : [ "C:/Projects/opencadandsimulation/opencad/src/ui/CMakeLists.txt" ],
+	"CMAKE_SOURCE_DIR" : "C:/Projects/opencadandsimulation/opencad",
+	"CROSS_CONFIG" : false,
+	"DEP_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/ui/opencad_ui_autogen/deps",
+	"DEP_FILE_RULE_NAME" : "opencad_ui_autogen/timestamp",
+	"HEADERS" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/AIChatPanel.h",
+			"MU",
+			"EWIEGA46WW/moc_AIChatPanel.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/AIPanel.h",
+			"MU",
+			"EWIEGA46WW/moc_AIPanel.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/AssemblyTreeWidget.h",
+			"MU",
+			"EWIEGA46WW/moc_AssemblyTreeWidget.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.h",
+			"MU",
+			"EWIEGA46WW/moc_MainWindow.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/ParameterEditor.h",
+			"MU",
+			"EWIEGA46WW/moc_ParameterEditor.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/ProfileSelectionPanel.h",
+			"MU",
+			"EWIEGA46WW/moc_ProfileSelectionPanel.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/PropertiesPanel.h",
+			"MU",
+			"EWIEGA46WW/moc_PropertiesPanel.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/ToolSettingsPanel.h",
+			"MU",
+			"EWIEGA46WW/moc_ToolSettingsPanel.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/CadQueryEditorDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_CadQueryEditorDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ChamferDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_ChamferDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ComponentPropertiesDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_ComponentPropertiesDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/DomeDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_DomeDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ExtrudeDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_ExtrudeDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/FilletDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_FilletDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/LoftDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_LoftDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/MateDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_MateDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/MirrorDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_MirrorDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/NewDocumentDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_NewDocumentDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/PatternDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_PatternDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ShellDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_ShellDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/SketchPlaneDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_SketchPlaneDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/SplitDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_SplitDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/SweepDialog.h",
+			"MU",
+			"2NRMJ5X7RK/moc_SweepDialog.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.h",
+			"MU",
+			"TZJQXGHV4Y/moc_SketchView2D.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/viewport/Viewport3D.h",
+			"MU",
+			"6WEQZVSXKD/moc_Viewport3D.cpp",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/viewport/ViewportController.h",
+			"MU",
+			"6WEQZVSXKD/moc_ViewportController.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "C:/Projects/opencadandsimulation/opencad/build/src/ui/opencad_ui_autogen/include",
+	"MOC_COMPILATION_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/ui/opencad_ui_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"HAVE_FREETYPE",
+		"HAVE_OPENGL_EXT",
+		"MINGW_HAS_SECURE_API=1",
+		"OCC_CONVERT_SIGNALS",
+		"QT_CORE_LIB",
+		"QT_GUI_LIB",
+		"QT_NETWORK_LIB",
+		"QT_NO_DEBUG",
+		"QT_OPENGLWIDGETS_LIB",
+		"QT_OPENGL_LIB",
+		"QT_WIDGETS_LIB",
+		"UNICODE",
+		"WIN32",
+		"WIN64",
+		"_ENABLE_EXTENDED_ALIGNED_STORAGE",
+		"_UNICODE",
+		"_USE_MATH_DEFINES",
+		"_WIN32_WINNT=0x0601",
+		"_WIN64"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src/ui",
+		"C:/Projects/opencadandsimulation/opencad/src/core",
+		"C:/Projects/opencadandsimulation/opencad/src/io",
+		"C:/Projects/opencadandsimulation/opencad/src/sketch",
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src",
+		"C:/Projects/opencadandsimulation/opencad/src/ai",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include",
+		"C:/Qt/6.10.1/mingw_64/include/QtCore",
+		"C:/Qt/6.10.1/mingw_64/include",
+		"C:/Qt/6.10.1/mingw_64/mkspecs/win32-g++",
+		"C:/vcpkg/installed/x64-mingw-dynamic/include/eigen3",
+		"C:/Qt/6.10.1/mingw_64/include/QtWidgets",
+		"C:/Qt/6.10.1/mingw_64/include/QtGui",
+		"C:/Qt/6.10.1/mingw_64/include/QtOpenGL",
+		"C:/Qt/6.10.1/mingw_64/include/QtOpenGLWidgets",
+		"C:/Qt/6.10.1/mingw_64/include/QtNetwork",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/x86_64-w64-mingw32",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/c++/backward",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include",
+		"C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include-fixed",
+		"C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT",
+		"Q_GADGET_EXPORT",
+		"Q_ENUM_NS"
+	],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"C:/Qt/Tools/mingw1310_64/bin/g++.exe",
+		"-std=c++17",
+		"-dM",
+		"-E",
+		"-c",
+		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/ui/opencad_ui_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 14,
+	"PARSE_CACHE_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/opencad_ui_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/moc.exe",
+	"QT_UIC_EXECUTABLE" : "C:/Qt/6.10.1/mingw_64/bin/uic.exe",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 10,
+	"SETTINGS_FILE" : "C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/opencad_ui_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/AIChatPanel.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/AIPanel.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/AssemblyTreeWidget.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/ParameterEditor.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/ProfileSelectionPanel.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/PropertiesPanel.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/ToolSettingsPanel.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/CadQueryEditorDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ChamferDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ComponentPropertiesDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/DomeDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ExtrudeDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/FilletDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/LoftDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/MateDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/MirrorDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/NewDocumentDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/PatternDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/ShellDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/SketchPlaneDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/SplitDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/dialogs/SweepDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/sketch/SketchView2D.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/viewport/Viewport3D.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Projects/opencadandsimulation/opencad/src/ui/viewport/ViewportController.cpp",
+			"MU",
+			null
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

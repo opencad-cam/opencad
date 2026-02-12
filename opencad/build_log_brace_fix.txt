@@ -1,0 +1,34 @@
+=== OpenCAD Build Script (MinGW + Ninja) ===
+
+=== Configuring with CMake (Ninja) ===
+-- OpenCASCADE found: C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- Eigen3 found: C:/vcpkg/installed/x64-mingw-dynamic/include/eigen3
+-- 
+-- === OpenCAD Configuration ===
+-- Version:     0.1.0
+-- C++ Standard: 17
+-- Qt Version:  ON
+-- Build Tests: ON
+-- Python:      ON
+-- =============================
+-- Configuring done (2.0s)
+-- Generating done (0.7s)
+-- Build files have been written to: C:/Projects/opencadandsimulation/opencad/build
+
+=== Building ===
+ninja: Entering directory `build'
+[1/7] Automatic MOC and UIC for target opencad_ui
+[2/7] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/viewport/Viewport3D.cpp.obj
+[3/7] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/opencad_ui_autogen/mocs_compilation.cpp.obj
+[4/7] Building CXX object src/ui/CMakeFiles/opencad_ui.dir/MainWindow.cpp.obj
+FAILED: src/ui/CMakeFiles/opencad_ui.dir/MainWindow.cpp.obj 
+C:\Qt\Tools\mingw1310_64\bin\g++.exe -DHAVE_FREETYPE -DHAVE_OPENGL_EXT -DMINGW_HAS_SECURE_API=1 -DOCC_CONVERT_SIGNALS -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_USE_MATH_DEFINES -D_WIN32_WINNT=0x0601 -D_WIN64 -IC:/Projects/opencadandsimulation/opencad/build/src/ui/opencad_ui_autogen/include -IC:/Projects/opencadandsimulation/opencad/src -IC:/Projects/opencadandsimulation/opencad/src/ui -IC:/Projects/opencadandsimulation/opencad/src/core -IC:/Projects/opencadandsimulation/opencad/src/io -IC:/Projects/opencadandsimulation/opencad/src/sketch -IC:/Projects/opencadandsimulation/opencad/src/part/.. -IC:/Projects/opencadandsimulation/opencad/src/assembly/.. -IC:/Projects/opencadandsimulation/opencad/src/ai -isystem C:/vcpkg/installed/x64-mingw-dynamic/include/opencascade -isystem C:/vcpkg/installed/x64-mingw-dynamic/include -isystem C:/Qt/6.10.1/mingw_64/include/QtCore -isystem C:/Qt/6.10.1/mingw_64/include -isystem C:/Qt/6.10.1/mingw_64/mkspecs/win32-g++ -isystem C:/vcpkg/installed/x64-mingw-dynamic/include/eigen3 -isystem C:/Qt/6.10.1/mingw_64/include/QtWidgets -isystem C:/Qt/6.10.1/mingw_64/include/QtGui -isystem C:/Qt/6.10.1/mingw_64/include/QtOpenGL -isystem C:/Qt/6.10.1/mingw_64/include/QtOpenGLWidgets -O3 -DNDEBUG -std=c++17 -MD -MT src/ui/CMakeFiles/opencad_ui.dir/MainWindow.cpp.obj -MF src\ui\CMakeFiles\opencad_ui.dir\MainWindow.cpp.obj.d -o src/ui/CMakeFiles/opencad_ui.dir/MainWindow.cpp.obj -c C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp: In lambda function:
+C:/Projects/opencadandsimulation/opencad/src/ui/MainWindow.cpp:706:9: error: 'm_cqEditor' was not declared in this scope
+  706 |     if (m_cqEditor) {
+      |         ^~~~~~~~~~
+ninja: build stopped: subcommand failed.
+Build failed!
+Press any key to continue . . . 

@@ -1,0 +1,2162 @@
+Checkpoint: "Initial" | History: 1 | Index: 0 | canUndo: false
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+CadQueryClient: Starting Python process...
+  Command: python "C:/Projects/opencadandsimulation/opencad/build/bin/../../scripts/cadquery/run_cq.py --script C:/Projects/opencadandsimulation/opencad/build/bin/../../temp_cq_output/temp_script.py --output C:/Users/enesm/AppData/Local/Temp/cq_result.step"
+  [Python Stderr]: "Error executing script:\r\n"
+  [Python Stderr]: "Traceback (most recent call last):\r\n"
+  [Python Stderr]: "  File \"C:\\Projects\\opencadandsimulation\\opencad\\scripts\\cadquery\\run_cq.py\", line 53, in main\r\n    exec(script_content, ctx)\r\n    ~~~~^^^^^^^^^^^^^^^^^^^^^\r\n  File \"<string>\", line 23, in <module>\r\n  File \"C:\\Users\\enesm\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\cadquery\\cq.py\", line 584, in workplane\r\n    raise ValueError(\r\n        \"If multiple objects selected, they all must be planar faces.\"\r\n    )\r\nValueError: If multiple objects selected, they all must be planar faces.\r\n"
+CadQueryClient: Starting Python process...
+  Command: python "C:/Projects/opencadandsimulation/opencad/build/bin/../../scripts/cadquery/run_cq.py --script C:/Projects/opencadandsimulation/opencad/build/bin/../../temp_cq_output/temp_script.py --output C:/Users/enesm/AppData/Local/Temp/cq_result.step"
+CadQueryClient: Process finished with exit code -1073741819
+  [Python Stderr]: "Error executing script:\r\n"
+  [Python Stderr]: "Traceback (most recent call last):\r\n"
+  [Python Stderr]: "  File \"C:\\Projects\\opencadandsimulation\\opencad\\scripts\\cadquery\\run_cq.py\", line 53, in main\r\n    exec(script_content, ctx)\r\n    ~~~~^^^^^^^^^^^^^^^^^^^^^\r\n  File \"<string>\", line 23, in <module>\r\n  File \"C:\\Users\\enesm\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\cadquery\\cq.py\", line 584, in workplane\r\n    raise ValueError(\r\n        \"If multiple objects selected, they all must be planar faces.\"\r\n    )\r\nValueError: If multiple objects selected, they all must be planar faces.\r\n"
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+CadQueryClient: Process finished with exit code -1073741819
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+CadQueryClient: Starting Python process...
+  Command: python "C:/Projects/opencadandsimulation/opencad/build/bin/../../scripts/cadquery/run_cq.py --script C:/Projects/opencadandsimulation/opencad/build/bin/../../temp_cq_output/temp_script.py --output C:/Users/enesm/AppData/Local/Temp/cq_result.step"
+  [Python Stderr]: "Error executing script:\r\n"
+  [Python Stderr]: "Traceback (most recent call last):\r\n"
+  [Python Stderr]: "  File \"C:\\Projects\\opencadandsimulation\\opencad\\scripts\\cadquery\\run_cq.py\", line 53, in main\r\n    exec(script_content, ctx)\r\n    ~~~~^^^^^^^^^^^^^^^^^^^^^\r\n  File \"<string>\", line 17, in <module>\r\n  File \"C:\\Users\\enesm\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\cadquery\\cq.py\", line 584, in workplane\r\n    raise ValueError(\r\n        \"If multiple objects selected, they all must be planar faces.\"\r\n    )\r\nValueError: If multiple objects selected, they all must be planar faces.\r\n"
+CadQueryClient: Process finished with exit code -1073741819
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+CadQueryClient: Starting Python process...
+  Command: python "C:/Projects/opencadandsimulation/opencad/build/bin/../../scripts/cadquery/run_cq.py --script C:/Projects/opencadandsimulation/opencad/build/bin/../../temp_cq_output/temp_script.py --output C:/Users/enesm/AppData/Local/Temp/cq_result.step"
+  [Python Stdout]: "Successfully exported to C:/Users/enesm/AppData/Local/Temp/cq_result.step\r\n"
+CadQueryClient: Process finished with exit code -1073741819
+CadQueryClient: Process had non-zero exit code but file exists. Treating as success.
+Viewport3D::displayShape - Shape IsNull: false
+Viewport3D::displayShape - Computing mesh tessellation...
+Viewport3D::displayShape - Mesh tessellation completed
+Viewport3D::displayShape - Displaying shape in AIS context...
+TKOpenGl | Type: Error | ID: 0 | Severity: High | Message:
+  Error: glBufferData (GL_ARRAY_BUFFER,4032,0x24CE90F0CF0) Id: 4 failed with GL_INVALID_ENUM
+TKOpenGl | Type: Performance | ID: 0 | Severity: Low | Message:
+  VBO creation for Primitive Array has failed for 168 vertices. Out of memory?
+Viewport3D::displayShape - Shape displayed, total AIS shapes: 1
+Viewport3D::displayShape - fitAll() completed
+Checkpoint: "Add Shape" | History: 2 | Index: 1 | canUndo: true
+=== displayAllShapes called ===
+Viewport exists: true
+Total shapes to display: 1
+  Shape 0 IsNull: false
+Viewport3D::displayShape - Shape IsNull: false
+Viewport3D::displayShape - Computing mesh tessellation...
+Viewport3D::displayShape - Mesh tessellation completed
+Viewport3D::displayShape - Displaying shape in AIS context...
+Viewport3D::displayShape - Shape displayed, total AIS shapes: 1
+Viewport3D::displayShape - fitAll() completed
+  Shape 0 displayed
+Total sketches: 0
+=== displayAllShapes done ===
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+CadQueryClient: Starting Python process...
+  Command: python "C:/Projects/opencadandsimulation/opencad/build/bin/../../scripts/cadquery/run_cq.py --script C:/Projects/opencadandsimulation/opencad/build/bin/../../temp_cq_output/temp_script.py --output C:/Users/enesm/AppData/Local/Temp/cq_result.step"
+  [Python Stdout]: "Successfully exported to C:/Users/enesm/AppData/Local/Temp/cq_result.step\r\n"
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+CadQueryClient: Process finished with exit code -1073741819
+CadQueryClient: Process had non-zero exit code but file exists. Treating as success.
+Viewport3D::displayShape - Shape IsNull: false
+Viewport3D::displayShape - Computing mesh tessellation...
+Viewport3D::displayShape - Mesh tessellation completed
+Viewport3D::displayShape - Displaying shape in AIS context...
+TKOpenGl | Type: Error | ID: 0 | Severity: High | Message:
+  Error: glBufferData (GL_ARRAY_BUFFER,4032,0x24CE917E700) Id: 4 failed with GL_INVALID_ENUM
+TKOpenGl | Type: Performance | ID: 0 | Severity: Low | Message:
+  VBO creation for Primitive Array has failed for 168 vertices. Out of memory?
+Viewport3D::displayShape - Shape displayed, total AIS shapes: 1
+Viewport3D::displayShape - fitAll() completed
+Checkpoint: "Add Shape" | History: 1 | Index: 0 | canUndo: false
+=== displayAllShapes called ===
+Viewport exists: true
+Total shapes to display: 2
+  Shape 0 IsNull: false
+Viewport3D::displayShape - Shape IsNull: false
+Viewport3D::displayShape - Computing mesh tessellation...
+Viewport3D::displayShape - Mesh tessellation completed
+Viewport3D::displayShape - Displaying shape in AIS context...
+Viewport3D::displayShape - Shape displayed, total AIS shapes: 1
+Viewport3D::displayShape - fitAll() completed
+  Shape 0 displayed
+  Shape 1 IsNull: false
+Viewport3D::displayShape - Shape IsNull: false
+Viewport3D::displayShape - Computing mesh tessellation...
+Viewport3D::displayShape - Mesh tessellation completed
+Viewport3D::displayShape - Displaying shape in AIS context...
+Viewport3D::displayShape - Shape displayed, total AIS shapes: 2
+Viewport3D::displayShape - fitAll() completed
+  Shape 1 displayed
+Total sketches: 0
+=== displayAllShapes done ===
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+TKOpenGl.WinSystem | Type: Error | ID: 6 | Severity: High | Message:
+  wglMakeCurrent() has failed. Ä°ÅŸleyici geÃ§ersiz.
+

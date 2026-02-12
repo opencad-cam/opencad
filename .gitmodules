@@ -1,0 +1,3 @@
+[submodule "opencad/external/sam3d"]
+	path = opencad/external/sam3d
+	url = https://github.com/Pointcept/SegmentAnything3D.git

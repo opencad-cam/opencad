@@ -7,13 +7,14 @@
  * UI Module
  */
 
+#include "../core/geometry/Shape.h"
 #include <QDockWidget>
 #include <QListWidget>
 #include <QMainWindow>
 #include <QMenuBar>
+#include <QProgressBar> // Added
 #include <QStatusBar>
 #include <QToolBar>
-#include <TopoDS_Shape.hxx>
 #include <memory>
 #include <vector>
 
@@ -38,11 +39,16 @@ class Component;
 #include <AIS_InteractiveObject.hxx>
 #include <map>
 
+#include "ai/CadQueryClient.h"
+#include "ai/LLMClient.h"
+#include "dialogs/CadQueryEditorDialog.h"
+
 namespace opencad {
 namespace ui {
 
 class Viewport3D;
 class AssemblyTreeWidget;
+class AIChatPanel; // Forward declaration
 
 /**
  * @class MainWindow
@@ -59,6 +65,9 @@ public:
   void addShape(const TopoDS_Shape &shape);
   void clearShapes();
   void displayAllShapes();
+
+  // AI Integration
+  void onAiRun(const QString &prompt);
 
 protected:
   void closeEvent(QCloseEvent *event) override;
@@ -357,6 +366,16 @@ private:
   // Visual Map for Selection Sync: AIS Object -> Component
   std::map<Handle(AIS_InteractiveObject), std::weak_ptr<assembly::Component>>
       m_visualMap;
+
+  QProgressBar *m_progressBar = nullptr; // Added
+
+  // AI Clients
+  std::unique_ptr<ai::CadQueryClient> m_cqClient;
+  std::unique_ptr<ai::LLMClient> m_llmClient;
+  CadQueryEditorDialog *m_cqEditor = nullptr;
+
+  // UI Panels
+  AIChatPanel *m_aiChatPanel = nullptr;
 };
 
 } // namespace ui

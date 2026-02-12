@@ -12,6 +12,8 @@ OpenCAD, CAD (Computer-Aided Design) dosyalarını **okuma, görüntüleme ve i�
 * 🔄 Farklı formatlara dönüştürme (ileride)
 * 🧩 Modüler ve genişletilebilir mimari
 * 🆓 Açık kaynak ve topluluk odaklı
+* 🤖 **Yapay Zeka (AI) Desteği** (YENİ): Doğal dil ile 3D modelleme (Strict Domain Parser)
+
 
 > Not: Proje aktif geliştirme aşamasındadır. Bazı özellikler deneysel olabilir.
 
@@ -20,6 +22,10 @@ OpenCAD, CAD (Computer-Aided Design) dosyalarını **okuma, görüntüleme ve i�
 ## 📁 Desteklenen Dosya Formatları
 
 * `.step` / `.stp`
+* `.brep`
+* `.iges`
+* `.sldprt` / `.sldasm`
+* `.parasolid` / `.x_t`
 * `.stl`
 
 ⚠️ Kapalı ve tescilli formatlar (örn. `*.sldprt`, `*.sldasm`) **doğrudan** desteklenmez. Bu dosyalar için yalnızca:
@@ -76,6 +82,24 @@ Katkılar memnuniyetle karşılanır!
 
 ---
 
+---
+ 
+## 🤖 AI & Otomasyon
+ 
+OpenCAD, Qwen2.5-Coder tabanlı **Strict Domain Parser** ile doğal dil komutlarını 3D modellere dönüştürür.
+ 
+### Desteklenen Komutlar
+ 
+* **Temel Şekiller**: Kutu, Küp, Silindir, Küre
+* **Gelişmiş Şekiller**: Boru (Tube/Flüt), Koni
+* **Operasyonlar**: Fillet (Yuvarlama), Chamfer (Pah Kırma)
+ 
+**Örnek:**
+> "10x20x5 bir kutu yap, kenarları 2mm yuvarla"
+> "Dış çap 10, iç çap 8, boy 50 bir flüt yap"
+ 
+---
+ 
 ## 📌 Yol Haritası
 
 * [ ] Dosya dönüştürme altyapısı

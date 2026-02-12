@@ -57,6 +57,31 @@ opencad/
 └── CMakeLists.txt      # Ana CMake dosyası
 ```
 
+## 🤖 AI & Otomasyon (YENİ)
+ 
+OpenCAD artık **Strict Domain Parser** profili ile güçlendirilmiş bir yapay zeka asistanına sahiptir.
+ 
+### Özellikler
+- **Model**: `opencad-parser` (Qwen2.5-Coder-7B-Instruct tabanlı).
+- **Protokol**: Deterministik JSON formatı.
+- **Güvenilirlik**: Hallucination (uydurma) minimize edildi, belirsiz durumlarda "ambiguous" döner.
+- **Python Bridge**: JSON çıktısını doğrudan CadQuery scriptlerine dönüştürür.
+ 
+### Desteklenen Komutlar
+Doğal dil ile aşağıdaki şekilleri oluşturabilirsiniz:
+- **Kutu/Küp**: "10x10x10 bir kutu yap"
+- **Silindir**: "Yarıçapı 5, yüksekliği 20 silindir"
+- **Küre**: "Çapı 10 olan bir küre"
+- **Boru/Tüp/Flüt**: "Dış çap 10, iç çap 8, boy 50 boru"
+- **Koni**: "Taban 10, tepe 0, boy 20 koni"
+ 
+### Kurulum
+AI özelliklerini aktif etmek için Ollama gereklidir:
+```bash
+cd scripts/cadquery
+ollama create opencad-parser -f Modelfile
+```
+ 
 ## 🗺️ Yol Haritası
 
 - [x] **Faz 1**: Minimum Viable CAD (temel primitifler, boolean, viewport)

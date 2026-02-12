@@ -4,6 +4,7 @@
  */
 
 #include "Primitives.h"
+#include "BooleanOps.h"
 
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
@@ -126,6 +127,27 @@ Shape Primitives::makeWedge(double dx, double dy, double dz, double ltx) {
     }
     
     return Shape(maker.Shape());
+}
+
+Shape Primitives::makeScrew(double radius, double height, double headRadius, double headHeight) {
+    if (headRadius <= 0.0) headRadius = radius * 1.8;
+    if (headHeight <= 0.0) headHeight = radius * 0.8; 
+
+    // 1. Head (at origin, flat on XY)
+    // We want the head to be at the bottom (0..headHeight) or top?
+    // Let's put head at bottom (0 to headHeight) and shaft on top (headHeight to height+headHeight) based on typical bolt orientation when "placed".
+    
+    Shape head = makeCylinder(headRadius, headHeight);
+    
+    // 2. Shaft (on top of head)
+    // makeCylinder(baseX, baseY, baseZ, dirX, dirY, dirZ, radius, height)
+    Shape shaft = makeCylinder(0, 0, headHeight, 0, 0, 1, radius, height);
+    
+    // 3. Fuse
+    if (head.isValid() && shaft.isValid()) {
+        return BooleanOps::fuse(head, shaft);
+    }
+    return head.isValid() ? head : shaft;
 }
 
 } // namespace core

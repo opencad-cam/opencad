@@ -8,6 +8,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Qt Automoc
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
 # MinGW compatibility - M_PI definition
 add_definitions(-D_USE_MATH_DEFINES)
 
@@ -38,11 +43,11 @@ endif()
 
 # Qt6/Qt5
 if(OPENCAD_USE_QT6)
-    find_package(Qt6 COMPONENTS Core Widgets OpenGL OpenGLWidgets REQUIRED)
-    set(QT_LIBS Qt6::Core Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets)
+    find_package(Qt6 COMPONENTS Core Widgets OpenGL OpenGLWidgets Network REQUIRED)
+    set(QT_LIBS Qt6::Core Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Network)
 else()
-    find_package(Qt5 COMPONENTS Core Widgets OpenGL REQUIRED)
-    set(QT_LIBS Qt5::Core Qt5::Widgets Qt5::OpenGL)
+    find_package(Qt5 COMPONENTS Core Widgets OpenGL Network REQUIRED)
+    set(QT_LIBS Qt5::Core Qt5::Widgets Qt5::OpenGL Qt5::Network)
 endif()
 
 # OpenGL
@@ -65,6 +70,7 @@ add_subdirectory(src/io)
 add_subdirectory(src/sketch)
 add_subdirectory(src/part)
 add_subdirectory(src/assembly)
+add_subdirectory(src/ai)
 add_subdirectory(src/ui)
 
 # Main Application

@@ -7,6 +7,8 @@ set(CMAKE_AUTORCC ON)
 set(UI_SOURCES
     MainWindow.cpp
     PropertiesPanel.cpp
+    AIChatPanel.cpp
+    AIPanel.cpp
     ParameterEditor.cpp
     ToolSettingsPanel.cpp
     ProfileSelectionPanel.cpp
@@ -27,12 +29,15 @@ set(UI_SOURCES
     dialogs/MateDialog.cpp
     dialogs/NewDocumentDialog.cpp
     dialogs/ComponentPropertiesDialog.cpp
+    dialogs/CadQueryEditorDialog.cpp
     AssemblyTreeWidget.cpp
 )
 
 set(UI_HEADERS
     MainWindow.h
     PropertiesPanel.h
+    AIChatPanel.h
+    AIPanel.h
     ParameterEditor.h
     ToolSettingsPanel.h
     ProfileSelectionPanel.h
@@ -54,6 +59,7 @@ set(UI_HEADERS
     dialogs/MateDialog.h
     dialogs/NewDocumentDialog.h
     dialogs/ComponentPropertiesDialog.h
+    dialogs/CadQueryEditorDialog.h
 )
 
 add_library(opencad_ui STATIC ${UI_SOURCES} ${UI_HEADERS})
@@ -68,6 +74,7 @@ target_link_libraries(opencad_ui PUBLIC
     opencad_sketch
     opencad_part
     opencad_assembly
+    opencad_ai
     ${QT_LIBS}
     OpenGL::GL
     TKV3d
