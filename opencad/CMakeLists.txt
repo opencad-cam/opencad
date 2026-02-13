@@ -98,7 +98,34 @@ install(DIRECTORY scripts DESTINATION bin)
 install(FILES README.md DESTINATION .)
 
 # Run windeployqt to deploy Qt dependencies
+# Run windeployqt to deploy Qt dependencies
 if(WIN32)
+    # 1. OpenCASCADE DLLs
+    if(OpenCASCADE_FOUND)
+        # Try to find the bin directory from the include directory
+        # VCPKG structure: installed/x64-mingw-dynamic/include/opencascade -> actions: ../../bin
+        get_filename_component(OCCT_INCLUDE_PARENT "${OpenCASCADE_INCLUDE_DIR}" DIRECTORY) # .../include
+        get_filename_component(OCCT_ROOT "${OCCT_INCLUDE_PARENT}" DIRECTORY) # .../x64-mingw-dynamic
+        set(OCCT_BIN_DIR "${OCCT_ROOT}/bin")
+        
+        message(STATUS "Searching for OpenCASCADE DLLs in: ${OCCT_BIN_DIR}")
+        
+        file(GLOB OCCT_DLLS "${OCCT_BIN_DIR}/*.dll")
+        if(OCCT_DLLS)
+            install(FILES ${OCCT_DLLS} DESTINATION bin)
+            message(STATUS "Found OpenCASCADE DLLs to install.")
+        else()
+            message(WARNING "Could not find OpenCASCADE DLLs in ${OCCT_BIN_DIR}")
+        endif()
+    endif()
+
+    # 2. MinGW Runtime DLLs (Explicitly copy if windeployqt fails to do so reliably)
+    # We find them in the MINGW_PATH (which we might need to pass or infer)
+    # For now, let's try to assume they are in the PATH or ask windeployqt to handle it.
+    # But since user reported errors, let's force install specific ones if we can find them.
+    # However, determining the exact path within CMake without explicit variable is tricky.
+    # relying on windeployqt's --compiler-runtime is usually best, but let's double check it.
+
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS ${QT_PATH}/bin)
     if(WINDEPLOYQT_EXECUTABLE)
         install(CODE "
