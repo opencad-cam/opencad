@@ -79,6 +79,30 @@ private:
   SolverDelta
   computeDistanceCorrection(std::shared_ptr<AssemblyConstraint> constraint);
 
+  SolverDelta
+  computeAngleCorrection(std::shared_ptr<AssemblyConstraint> constraint);
+
+  SolverDelta
+  computeParallelCorrection(std::shared_ptr<AssemblyConstraint> constraint);
+
+  SolverDelta computePerpendicularCorrection(
+      std::shared_ptr<AssemblyConstraint> constraint);
+
+  SolverDelta
+  computeConcentricCorrection(std::shared_ptr<AssemblyConstraint> constraint);
+
+  SolverDelta
+  computeTangentCorrection(std::shared_ptr<AssemblyConstraint> constraint);
+
+  SolverDelta
+  computeLockCorrection(std::shared_ptr<AssemblyConstraint> constraint);
+
+  SolverDelta
+  computeGearCorrection(std::shared_ptr<AssemblyConstraint> constraint);
+
+  SolverDelta
+  computeScrewCorrection(std::shared_ptr<AssemblyConstraint> constraint);
+
   /**
    * @brief Compute closest distance between two components (or sub-shapes)
    */

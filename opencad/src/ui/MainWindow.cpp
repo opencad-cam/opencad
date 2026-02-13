@@ -5458,14 +5458,73 @@ void MainWindow::onGeometrySelected(const QString &type) {
     if (m_selectedComponents.size() == 1) {
       statusBar()->showMessage("Select the second component");
     } else if (m_selectedComponents.size() == 2) {
-      // Use MateDialog
+      // Use MateDialog with Preview
       opencad::ui::MateDialog dialog(m_selectedComponents, this);
+
+      // Variables for Preview/Undo
+      std::shared_ptr<assembly::AssemblyConstraint> previewConstraint = nullptr;
+      std::vector<std::pair<std::shared_ptr<assembly::Component>, gp_Trsf>>
+          initialTransforms;
+
+      if (m_document && m_document->assembly()) {
+        for (const auto &c : m_document->assembly()->getComponents()) {
+          initialTransforms.push_back({c, c->getPlacement()});
+        }
+      }
+
+      connect(&dialog, &opencad::ui::MateDialog::previewRequested, [&]() {
+        auto c = dialog.getConstraint();
+        if (!c || !m_document || !m_document->assembly())
+          return;
+
+        if (previewConstraint) {
+          m_document->assembly()->removeConstraint(previewConstraint);
+        }
+
+        // Note: No sub-shapes in this path usually
+        previewConstraint = c;
+        m_document->assembly()->addConstraint(c);
+
+        bool solved = m_document->assembly()->solve();
+        if (solved)
+          statusBar()->showMessage("Preview: Solved");
+        else
+          statusBar()->showMessage("Preview: Solver failed");
+
+        updateAssemblyVisuals();
+      });
+
       if (dialog.exec() == QDialog::Accepted) {
+        if (previewConstraint && m_document && m_document->assembly()) {
+          m_document->assembly()->removeConstraint(previewConstraint);
+          previewConstraint = nullptr;
+        }
+
         auto constraint = dialog.getConstraint();
         if (constraint) {
           m_document->assembly()->addConstraint(constraint);
-          statusBar()->showMessage("Constraint added");
+
+          // Trigger solver
+          bool solved = m_document->assembly()->solve();
+          if (solved) {
+            statusBar()->showMessage("Constraint added and solved");
+          } else {
+            statusBar()->showMessage(
+                "Constraint added but solver failed to converge");
+          }
+
           m_assemblyTree->updateTree(); // Refresh tree
+        }
+      } else {
+        // Cancel logic
+        if (m_document && m_document->assembly()) {
+          if (previewConstraint) {
+            m_document->assembly()->removeConstraint(previewConstraint);
+          }
+          for (const auto &pair : initialTransforms) {
+            pair.first->setPlacement(pair.second);
+          }
+          updateAssemblyVisuals();
         }
       }
 
@@ -5574,58 +5633,100 @@ void MainWindow::onShapeSelected(const TopoDS_Shape &shape,
 
       m_mateShape2 = shape;
 
-      // Show Mate Type Dialog
-      QStringList items;
-      items << "Coincident" << "Distance";
-      bool ok;
-      QString item = QInputDialog::getItem(this, "Select Constraint Type",
-                                           "Type:", items, 0, false, &ok);
+      std::vector<std::shared_ptr<assembly::Component>> selection;
+      selection.push_back(m_mateComponent1);
+      selection.push_back(comp);
 
-      if (ok && !item.isEmpty()) {
-        assembly::ConstraintType type = assembly::ConstraintType::Coincident;
-        double val = 0.0;
+      // Show MateDialog with Preview
+      opencad::ui::MateDialog dialog(selection, this);
 
-        if (item == "Distance") {
-          type = assembly::ConstraintType::Distance;
-          val = QInputDialog::getDouble(
-              this, "Distance Value", "Offset (mm):", 0.0, -1000, 1000, 2, &ok);
-          if (!ok) {
-            return;
-          }
+      // Variables for Preview/Undo
+      std::shared_ptr<assembly::AssemblyConstraint> previewConstraint = nullptr;
+      std::vector<std::pair<std::shared_ptr<assembly::Component>, gp_Trsf>>
+          initialTransforms;
+
+      // Capture initial state of all components (in case solver moves them)
+      if (m_document && m_document->assembly()) {
+        for (const auto &c : m_document->assembly()->getComponents()) {
+          initialTransforms.push_back({c, c->getPlacement()});
+        }
+      }
+
+      // Connect Preview Signal
+      connect(&dialog, &opencad::ui::MateDialog::previewRequested, [&]() {
+        auto c = dialog.getConstraint();
+        if (!c || !m_document || !m_document->assembly())
+          return;
+
+        // Remove previous preview if any
+        if (previewConstraint) {
+          m_document->assembly()->removeConstraint(previewConstraint);
         }
 
-        // Create constraint
-        auto constraint = std::make_shared<assembly::AssemblyConstraint>(
-            type, m_mateComponent1, comp);
-        constraint->setSubShapes(m_mateShape1, m_mateShape2);
-        constraint->setValue(val);
-
-        m_document->assembly()->addConstraint(constraint);
+        // Setup and Add
+        c->setSubShapes(m_mateShape1, m_mateShape2);
+        previewConstraint = c;
+        m_document->assembly()->addConstraint(c);
 
         // Solve
-        assembly::ConstraintSolver solver;
-        bool solved = solver.solve(*m_document->assembly());
+        bool solved = m_document->assembly()->solve();
         if (solved) {
-          statusBar()->showMessage("Constraint added and solved.");
+          statusBar()->showMessage("Preview: Solved");
         } else {
-          statusBar()->showMessage(
-              "Constraint added but solver failed to fully converge: " +
-              QString::fromStdString(solver.getErrorMessage()));
+          statusBar()->showMessage("Preview: Solver failed");
         }
+
         updateAssemblyVisuals();
+      });
 
-        if (m_assemblyTree) {
-          m_assemblyTree->updateTree();
+      if (dialog.exec() == QDialog::Accepted) {
+        // Clean up preview before adding final
+        if (previewConstraint && m_document && m_document->assembly()) {
+          m_document->assembly()->removeConstraint(previewConstraint);
+          previewConstraint = nullptr;
         }
 
-        // Reset
-        m_mateStep = MateStep::SelectFirst;
-        m_mateShape1.Nullify();
-        m_mateShape2.Nullify();
-        m_mateComponent1.reset();
-        statusBar()->showMessage(
-            "Constraint added. Ready for next mate (Select first geometry).");
+        auto constraint = dialog.getConstraint();
+        if (constraint) {
+          // Set sub-shapes
+          constraint->setSubShapes(m_mateShape1, m_mateShape2);
+
+          m_document->assembly()->addConstraint(constraint);
+
+          // Trigger solver
+          bool solved = m_document->assembly()->solve();
+
+          if (solved) {
+            statusBar()->showMessage("Constraint added and solved");
+          } else {
+            statusBar()->showMessage(
+                "Constraint added but solver failed to fully converge");
+          }
+
+          updateAssemblyVisuals();
+          if (m_assemblyTree) {
+            m_assemblyTree->updateTree();
+          }
+        }
+      } else {
+        // Rejected (Cancel) - Undo Changes
+        if (m_document && m_document->assembly()) {
+          if (previewConstraint) {
+            m_document->assembly()->removeConstraint(previewConstraint);
+          }
+          // Restore transforms
+          for (const auto &pair : initialTransforms) {
+            pair.first->setPlacement(pair.second);
+          }
+          updateAssemblyVisuals();
+          statusBar()->showMessage("Constraint cancelled");
+        }
       }
+
+      // Reset
+      m_mateStep = MateStep::SelectFirst;
+      m_mateComponent1.reset();
+      m_mateShape2.Nullify();
     }
   }
 }

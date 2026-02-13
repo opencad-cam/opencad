@@ -6,6 +6,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
+#include <QLabel>
 #include <memory>
 #include <vector>
 
@@ -25,9 +26,13 @@ public:
 
   std::shared_ptr<assembly::AssemblyConstraint> getConstraint() const;
 
+signals:
+  void previewRequested();
+
 private:
   void setupUi();
   void updateUiForType();
+  void onPreviewClicked();
 
   std::vector<std::shared_ptr<assembly::Component>> m_selection;
 
@@ -35,6 +40,12 @@ private:
   QDoubleSpinBox *m_distanceSpin;
   QCheckBox *m_flipCheck;
   QDialogButtonBox *m_buttonBox;
+
+  // New fields
+  QDoubleSpinBox *m_ratioSpin;
+  QDoubleSpinBox *m_pitchSpin;
+  QLabel *m_ratioLabel;
+  QLabel *m_pitchLabel;
 };
 
 } // namespace ui

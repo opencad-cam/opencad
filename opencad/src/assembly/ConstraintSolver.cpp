@@ -66,10 +66,29 @@ bool ConstraintSolver::solve(Assembly &assembly, int maxIterations,
         break;
 
       case ConstraintType::Parallel:
+        delta = computeParallelCorrection(constraint);
+        break;
       case ConstraintType::Perpendicular:
+        delta = computePerpendicularCorrection(constraint);
+        break;
+      case ConstraintType::Concentric:
+        delta = computeConcentricCorrection(constraint);
+        break;
+      case ConstraintType::Tangent:
+        delta = computeTangentCorrection(constraint);
+        break;
       case ConstraintType::Angle:
-        // TODO: Implement explicit rotation constraints
-        continue;
+        delta = computeAngleCorrection(constraint);
+        break;
+      case ConstraintType::Lock:
+        delta = computeLockCorrection(constraint);
+        break;
+      case ConstraintType::Gear:
+        delta = computeGearCorrection(constraint);
+        break;
+      case ConstraintType::Screw:
+        delta = computeScrewCorrection(constraint);
+        break;
       }
 
       // Apply damped movement to non-fixed component
@@ -213,7 +232,10 @@ ConstraintSolver::SolverDelta ConstraintSolver::computeCoincidentCorrection(
 
         // Target: n1 should be anti-parallel to n2 (opposing faces)
         // So we want n1 to align with -n2.
-        gp_Vec targetN1 = -normal2;
+        // Target: n1 should be anti-parallel to n2 (opposing faces) unless
+        // flipped (aligned) Normal behavior: n1 aligns with -n2. Flipped
+        // behavior: n1 aligns with n2.
+        gp_Vec targetN1 = constraint->isFlipped() ? normal2 : -normal2;
 
         if (normal1.Magnitude() > 1e-6 && targetN1.Magnitude() > 1e-6) {
           double angle = normal1.Angle(targetN1);
@@ -459,4 +481,421 @@ double ConstraintSolver::computeTotalResidual(const Assembly &assembly) {
 }
 
 } // namespace assembly
+
+using namespace opencad::assembly;
+
+ConstraintSolver::SolverDelta ConstraintSolver::computeParallelCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  SolverDelta delta;
+  auto c1 = constraint->getComponent1();
+  auto c2 = constraint->getComponent2();
+
+  TopoDS_Shape shape1, shape2;
+
+  // Handle SubShape 1
+  if (!constraint->getSubShape1().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape1(),
+                                   c1->getPlacement());
+    shape1 = xform.Shape();
+  } else {
+    shape1 = c1->getTransformedShape();
+  }
+
+  // Handle SubShape 2
+  if (!constraint->getSubShape2().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape2(),
+                                   c2->getPlacement());
+    shape2 = xform.Shape();
+  } else {
+    shape2 = c2->getTransformedShape();
+  }
+
+  if (shape1.IsNull() || shape2.IsNull()) {
+    return delta;
+  }
+
+  // Only rotation for parallel
+  if (shape1.ShapeType() == TopAbs_FACE && shape2.ShapeType() == TopAbs_FACE) {
+    TopoDS_Face f1 = TopoDS::Face(shape1);
+    TopoDS_Face f2 = TopoDS::Face(shape2);
+
+    BRepAdaptor_Surface surf1(f1);
+    BRepAdaptor_Surface surf2(f2);
+
+    // Get normals
+    gp_Vec normal1, normal2;
+    gp_Pnt tmp;
+
+    double u1 = (surf1.FirstUParameter() + surf1.LastUParameter()) * 0.5;
+    double v1 = (surf1.FirstVParameter() + surf1.LastVParameter()) * 0.5;
+    gp_Vec d1u, d1v;
+    surf1.D1(u1, v1, tmp, d1u, d1v);
+    normal1 = d1u.Crossed(d1v);
+    if (f1.Orientation() == TopAbs_REVERSED)
+      normal1.Reverse();
+
+    double u2 = (surf2.FirstUParameter() + surf2.LastUParameter()) * 0.5;
+    double v2 = (surf2.FirstVParameter() + surf2.LastVParameter()) * 0.5;
+    gp_Vec d2u, d2v;
+    surf2.D1(u2, v2, tmp, d2u, d2v);
+    normal2 = d2u.Crossed(d2v);
+    if (f2.Orientation() == TopAbs_REVERSED)
+      normal2.Reverse();
+
+    normal1.Normalize();
+    normal2.Normalize();
+
+    // Target: n1 parallel to n2 (0) or anti-parallel (180)
+    // Default: Parallel (0). Flipped: Anti-Parallel (180).
+    gp_Vec targetN1 = constraint->isFlipped() ? -normal2 : normal2;
+
+    if (normal1.Magnitude() > 1e-6 && targetN1.Magnitude() > 1e-6) {
+      double rotAngle = normal1.Angle(targetN1);
+      if (std::abs(rotAngle) > 1e-3) {
+        delta.rotationAxis = normal1.Crossed(targetN1);
+        if (delta.rotationAxis.Magnitude() < 1e-6) {
+          // 180 degree flip needed
+          gp_Vec arbitrary(1, 0, 0);
+          if (normal1.IsParallel(arbitrary, 1e-2))
+            arbitrary = gp_Vec(0, 1, 0);
+          delta.rotationAxis = normal1.Crossed(arbitrary);
+        }
+        delta.rotationAngle = rotAngle;
+      }
+    }
+  }
+
+  return delta;
+}
+
+ConstraintSolver::SolverDelta ConstraintSolver::computePerpendicularCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  SolverDelta delta;
+  auto c1 = constraint->getComponent1();
+  auto c2 = constraint->getComponent2();
+
+  TopoDS_Shape shape1, shape2;
+
+  // Handle SubShape 1
+  if (!constraint->getSubShape1().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape1(),
+                                   c1->getPlacement());
+    shape1 = xform.Shape();
+  } else {
+    shape1 = c1->getTransformedShape();
+  }
+
+  // Handle SubShape 2
+  if (!constraint->getSubShape2().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape2(),
+                                   c2->getPlacement());
+    shape2 = xform.Shape();
+  } else {
+    shape2 = c2->getTransformedShape();
+  }
+
+  if (shape1.IsNull() || shape2.IsNull()) {
+    return delta;
+  }
+
+  if (shape1.ShapeType() == TopAbs_FACE && shape2.ShapeType() == TopAbs_FACE) {
+    TopoDS_Face f1 = TopoDS::Face(shape1);
+    TopoDS_Face f2 = TopoDS::Face(shape2);
+
+    BRepAdaptor_Surface surf1(f1);
+    BRepAdaptor_Surface surf2(f2);
+
+    // Get normals
+    gp_Vec normal1, normal2;
+    gp_Pnt tmp;
+
+    double u1 = (surf1.FirstUParameter() + surf1.LastUParameter()) * 0.5;
+    double v1 = (surf1.FirstVParameter() + surf1.LastVParameter()) * 0.5;
+    gp_Vec d1u, d1v;
+    surf1.D1(u1, v1, tmp, d1u, d1v);
+    normal1 = d1u.Crossed(d1v);
+    if (f1.Orientation() == TopAbs_REVERSED)
+      normal1.Reverse();
+
+    double u2 = (surf2.FirstUParameter() + surf2.LastUParameter()) * 0.5;
+    double v2 = (surf2.FirstVParameter() + surf2.LastVParameter()) * 0.5;
+    gp_Vec d2u, d2v;
+    surf2.D1(u2, v2, tmp, d2u, d2v);
+    normal2 = d2u.Crossed(d2v);
+    if (f2.Orientation() == TopAbs_REVERSED)
+      normal2.Reverse();
+
+    normal1.Normalize();
+    normal2.Normalize();
+
+    // Target: n1 perpendicular to n2
+    // We want n1 to rotate to be 90 degrees from n2.
+    // axis = n1 x n2.
+    // targetN1 = axis x n2 (vector in plane perpendicular to n2) ?
+    // Actually, we just need to rotate n1 such that dot(n1, n2) = 0.
+    // Shortest rotation: rotate n1 around axis (n1 x n2) until angle is 90.
+
+    double currentAngle = normal1.Angle(normal2);
+    double targetAngle = M_PI / 2.0;
+    double diff = currentAngle - targetAngle; // How much we need to rotate
+
+    // Check direction
+    // If angle is 45, we need +45.
+    // If angle is 135, we need -45 (to get to 90).
+
+    if (std::abs(diff) > 1e-3) {
+      delta.rotationAxis = normal1.Crossed(normal2);
+      if (delta.rotationAxis.Magnitude() < 1e-6) {
+        // Parallel? Then any rotation by 90 deg works.
+        gp_Vec arbitrary(1, 0, 0);
+        if (normal1.IsParallel(arbitrary, 1e-2))
+          arbitrary = gp_Vec(0, 1, 0);
+        delta.rotationAxis = normal1.Crossed(arbitrary);
+        delta.rotationAngle = M_PI / 2.0;
+      } else {
+        // We need to rotate n1 by 'diff' around axis?
+        // Not exactly. n1, n2, and axis form a frame.
+        // We want n1 to move towards perpendicularity.
+        // The axis n1 x n2 is orthogonal to both. Rotating around it changes
+        // angle between n1 and n2 directly. Yes, rotating by (currentAngle -
+        // 90deg) should work. However we need to be careful with sign. angle
+        // returns [0, PI]. If we rotate n1 around (n1 x n2) by +alpha? Right
+        // hand rule:
+        delta.rotationAngle = -(currentAngle - M_PI / 2.0);
+        // Wait, let's verify.
+        // If angle is 0 (parallel). n1 x n2 is 0 (handled above).
+        // If angle is SMALL (e.g. 10 deg). We want 90. Delta = 80.
+        // If angle is LARGE (170 deg). We want 90. Delta = -80.
+      }
+    }
+  }
+
+  return delta;
+}
+
+ConstraintSolver::SolverDelta ConstraintSolver::computeConcentricCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  SolverDelta delta;
+  auto c1 = constraint->getComponent1();
+  auto c2 = constraint->getComponent2();
+
+  TopoDS_Shape shape1, shape2;
+
+  // Handle SubShape 1
+  if (!constraint->getSubShape1().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape1(),
+                                   c1->getPlacement());
+    shape1 = xform.Shape();
+  } else {
+    shape1 = c1->getTransformedShape();
+  }
+
+  // Handle SubShape 2
+  if (!constraint->getSubShape2().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape2(),
+                                   c2->getPlacement());
+    shape2 = xform.Shape();
+  } else {
+    shape2 = c2->getTransformedShape();
+  }
+
+  if (shape1.IsNull() || shape2.IsNull()) {
+    return delta;
+  }
+
+  // Helper to extract axis
+  auto getAxis = [](const TopoDS_Shape &s, gp_Ax1 &axis) -> bool {
+    if (s.ShapeType() != TopAbs_FACE && s.ShapeType() != TopAbs_EDGE)
+      return false;
+
+    if (s.ShapeType() == TopAbs_FACE) {
+      BRepAdaptor_Surface surf(TopoDS::Face(s));
+      if (surf.GetType() == GeomAbs_Cylinder) {
+        axis = surf.Cylinder().Axis();
+        return true;
+      } else if (surf.GetType() == GeomAbs_Cone) {
+        axis = surf.Cone().Axis();
+        return true;
+      } else if (surf.GetType() == GeomAbs_Torus) {
+        axis = surf.Torus().Axis();
+        return true;
+      }
+    } else if (s.ShapeType() == TopAbs_EDGE) {
+      BRepAdaptor_Curve curve(TopoDS::Edge(s));
+      if (curve.GetType() == GeomAbs_Circle) {
+        axis = curve.Circle().Axis();
+        return true;
+      } else if (curve.GetType() == GeomAbs_Ellipse) {
+        axis = curve.Ellipse().Axis();
+        return true;
+      }
+    }
+    return false;
+  };
+
+  gp_Ax1 axis1, axis2;
+  bool hasAxis1 = getAxis(shape1, axis1);
+  bool hasAxis2 = getAxis(shape2, axis2);
+
+  if (hasAxis1 && hasAxis2) {
+    // 1. Align axes (Rotation)
+    gp_Vec dir1 = axis1.Direction();
+    gp_Vec dir2 = axis2.Direction();
+
+    // For concentric, alignment can be parallel or anti-parallel
+    // Default: Parallel. Flipped: Anti-parallel.
+    gp_Vec targetDir1 = constraint->isFlipped() ? -dir2 : dir2;
+
+    if (dir1.Magnitude() > 1e-6 && targetDir1.Magnitude() > 1e-6) {
+      double rotAngle = dir1.Angle(targetDir1);
+      if (std::abs(rotAngle) > 1e-3) {
+        delta.rotationAxis = dir1.Crossed(targetDir1);
+        if (delta.rotationAxis.Magnitude() < 1e-6) {
+          gp_Vec arbitrary(1, 0, 0);
+          if (dir1.IsParallel(arbitrary, 1e-2))
+            arbitrary = gp_Vec(0, 1, 0);
+          delta.rotationAxis = dir1.Crossed(arbitrary);
+        }
+        delta.rotationAngle = rotAngle;
+      }
+    }
+
+    // 2. Coincident Axes (Translation)
+    // Project origin of axis1 onto axis2.
+    gp_Vec v2 = axis2.Direction();
+    gp_Vec p2p1(axis2.Location(), axis1.Location());
+
+    double t = p2p1.Dot(v2);
+    gp_Pnt pClosest = axis2.Location().Translated(v2 * t);
+
+    delta.translation = gp_Vec(axis1.Location(), pClosest);
+  }
+
+  return delta;
+}
+
+ConstraintSolver::SolverDelta ConstraintSolver::computeTangentCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  // Reuse coincident correction logic which handles distance minimization and
+  // face alignment
+  return computeCoincidentCorrection(constraint);
+}
+
+ConstraintSolver::SolverDelta ConstraintSolver::computeAngleCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  SolverDelta delta;
+  auto c1 = constraint->getComponent1();
+  auto c2 = constraint->getComponent2();
+  double targetAngle =
+      constraint->getValue() * (M_PI / 180.0); // Convert deg to rad
+
+  TopoDS_Shape shape1, shape2;
+  // Handle SubShape 1
+  if (!constraint->getSubShape1().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape1(),
+                                   c1->getPlacement());
+    shape1 = xform.Shape();
+  } else {
+    shape1 = c1->getTransformedShape();
+  }
+  // Handle SubShape 2
+  if (!constraint->getSubShape2().IsNull()) {
+    BRepBuilderAPI_Transform xform(constraint->getSubShape2(),
+                                   c2->getPlacement());
+    shape2 = xform.Shape();
+  } else {
+    shape2 = c2->getTransformedShape();
+  }
+
+  if (shape1.IsNull() || shape2.IsNull())
+    return delta;
+
+  if (shape1.ShapeType() == TopAbs_FACE && shape2.ShapeType() == TopAbs_FACE) {
+    TopoDS_Face f1 = TopoDS::Face(shape1);
+    TopoDS_Face f2 = TopoDS::Face(shape2);
+    BRepAdaptor_Surface surf1(f1);
+    BRepAdaptor_Surface surf2(f2);
+
+    // Simplification: use center normals
+    gp_Pnt tmp;
+    double u1 = (surf1.FirstUParameter() + surf1.LastUParameter()) * 0.5;
+    double v1 = (surf1.FirstVParameter() + surf1.LastVParameter()) * 0.5;
+    gp_Vec d1u, d1v, n1;
+    surf1.D1(u1, v1, tmp, d1u, d1v);
+    n1 = d1u.Crossed(d1v);
+    if (f1.Orientation() == TopAbs_REVERSED)
+      n1.Reverse();
+
+    double u2 = (surf2.FirstUParameter() + surf2.LastUParameter()) * 0.5;
+    double v2 = (surf2.FirstVParameter() + surf2.LastVParameter()) * 0.5;
+    gp_Vec d2u, d2v, n2;
+    surf2.D1(u2, v2, tmp, d2u, d2v);
+    n2 = d2u.Crossed(d2v);
+    if (f2.Orientation() == TopAbs_REVERSED)
+      n2.Reverse();
+
+    double currentAngle = n1.Angle(n2);
+    double diff = currentAngle - targetAngle;
+
+    if (std::abs(diff) > 1e-3) {
+      delta.rotationAxis = n1.Crossed(n2);
+      if (delta.rotationAxis.Magnitude() < 1e-6) {
+        // Vectors are parallel (angle 0 or PI)
+        gp_Vec arbitrary(1, 0, 0);
+        if (n1.IsParallel(arbitrary, 1e-2))
+          arbitrary = gp_Vec(0, 1, 0);
+        delta.rotationAxis = n1.Crossed(arbitrary);
+      }
+      // Determine direction - heuristic
+      delta.rotationAngle = -diff;
+    }
+  }
+  return delta;
+}
+
+ConstraintSolver::SolverDelta ConstraintSolver::computeLockCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  // Lock means fully rigid.
+  // Treat as Coincident (Distance=0) + Alignment of all axes
+  SolverDelta delta = computeCoincidentCorrection(constraint);
+
+  // If no rotation from Coincident, check alignment
+  if (!delta.hasRotation()) {
+    auto c1 = constraint->getComponent1();
+    auto c2 = constraint->getComponent2();
+    gp_Trsf t1 = c1->getPlacement();
+    gp_Trsf t2 = c2->getPlacement();
+
+    gp_Vec xAxis(1, 0, 0);
+    gp_Vec x1 = xAxis.Transformed(t1);
+    gp_Vec x2 = xAxis.Transformed(t2);
+
+    if (!x1.IsParallel(x2, 1e-2)) {
+      delta.rotationAxis = x1.Crossed(x2);
+      if (delta.rotationAxis.Magnitude() < 1e-6) {
+        // 180 flip
+        gp_Vec arbitrary(0, 1, 0);
+        if (x1.IsParallel(arbitrary, 1e-2))
+          arbitrary = gp_Vec(0, 0, 1);
+        delta.rotationAxis = x1.Crossed(arbitrary);
+      }
+      delta.rotationAngle = x1.Angle(x2);
+    }
+  }
+  return delta;
+}
+
+ConstraintSolver::SolverDelta ConstraintSolver::computeGearCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  // Simplification: Treat like Distance/Tangent for now to just bring them
+  // close
+  return computeDistanceCorrection(constraint);
+}
+
+ConstraintSolver::SolverDelta ConstraintSolver::computeScrewCorrection(
+    std::shared_ptr<AssemblyConstraint> constraint) {
+  // Simplification: Treat like Concentric for now
+  return computeConcentricCorrection(constraint);
+}
+
 } // namespace opencad
