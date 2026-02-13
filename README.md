@@ -40,7 +40,7 @@ kapsam dahilindedir.
 ## 🛠️ Kurulum
 
 ```bash
-git clone https://github.com/opencad-cam/opencad
+git clone https://github.com/opencad-cam/opencad.git
 ```
 
 ## ▶️ Kullanım
