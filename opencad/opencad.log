@@ -11,3 +11,8 @@ makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
 QRhiGles2: Failed to make context current. Expect bad things to happen.
 makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
 QRhiGles2: Failed to make context current. Expect bad things to happen.
+makeCurrent: SetPixelFormat() failed (Piksel biçimi geçersiz.)
+QRhiGles2: Failed to make context current. Expect bad things to happen.
+TKOpenGl.WinSystem | Type: Error | ID: 6 | Severity: High | Message:
+  wglMakeCurrent() has failed. Ä°ÅŸleyici geÃ§ersiz.
+
