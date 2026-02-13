@@ -96,6 +96,27 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
   include("C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/opencad.dir/install-cxx-module-bmi-Release.cmake" OPTIONAL)
 endif()
 
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE DIRECTORY FILES "C:/Projects/opencadandsimulation/opencad/scripts")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/." TYPE FILE FILES "C:/Projects/opencadandsimulation/opencad/README.md")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  
+            message(STATUS "Running windeployqt...")
+            execute_process(
+                COMMAND "C:/Qt/6.10.1/mingw_64/bin/windeployqt.exe"
+                        --no-translations
+                        --compiler-runtime
+                        --dir "${CMAKE_INSTALL_PREFIX}/bin"
+                        "${CMAKE_INSTALL_PREFIX}/bin/opencad.exe"
+            )
+        
+endif()
+
 if(CMAKE_INSTALL_COMPONENT)
   if(CMAKE_INSTALL_COMPONENT MATCHES "^[a-zA-Z0-9_.+-]+$")
     set(CMAKE_INSTALL_MANIFEST "install_manifest_${CMAKE_INSTALL_COMPONENT}.txt")

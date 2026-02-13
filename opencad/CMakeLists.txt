@@ -87,7 +87,53 @@ endif()
 # ============================================================================
 # Installation
 # ============================================================================
+
+# Install the executable
 install(TARGETS opencad DESTINATION bin)
+
+# Install the scripts directory
+install(DIRECTORY scripts DESTINATION bin)
+
+# Install README
+install(FILES README.md DESTINATION .)
+
+# Run windeployqt to deploy Qt dependencies
+if(WIN32)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS ${QT_PATH}/bin)
+    if(WINDEPLOYQT_EXECUTABLE)
+        install(CODE "
+            message(STATUS \"Running windeployqt...\")
+            execute_process(
+                COMMAND \"${WINDEPLOYQT_EXECUTABLE}\"
+                        --no-translations
+                        --compiler-runtime
+                        --dir \"\${CMAKE_INSTALL_PREFIX}/bin\"
+                        \"\${CMAKE_INSTALL_PREFIX}/bin/opencad.exe\"
+            )
+        ")
+    else()
+        message(WARNING "windeployqt not found! Installer will not include Qt dependencies.")
+    endif()
+endif()
+
+# ============================================================================
+# CPack Configuration
+# ============================================================================
+set(CPACK_PACKAGE_NAME "OpenCAD")
+set(CPACK_PACKAGE_VENDOR "OpenCAD Team")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Open Source CAD and Simulation Tool")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "OpenCAD")
+set(CPACK_PACKAGE_EXECUTABLES "opencad" "OpenCAD")
+set(CPACK_CREATE_DESKTOP_LINKS "opencad")
+
+if(WIN32)
+    set(CPACK_GENERATOR "NSIS;ZIP")
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+endif()
+
+include(CPack)
 
 message(STATUS "")
 message(STATUS "=== OpenCAD Configuration ===")
@@ -96,4 +142,5 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "Qt Version:  ${OPENCAD_USE_QT6}")
 message(STATUS "Build Tests: ${OPENCAD_BUILD_TESTS}")
 message(STATUS "Python:      ${OPENCAD_BUILD_PYTHON}")
+message(STATUS "Packing:     CPack enabled")
 message(STATUS "=============================")

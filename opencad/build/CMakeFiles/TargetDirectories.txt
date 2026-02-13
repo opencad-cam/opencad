@@ -1,3 +1,5 @@
+C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/rebuild_cache.dir
@@ -6,6 +8,8 @@ C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/install.dir
 C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/install/local.dir
 C:/Projects/opencadandsimulation/opencad/build/CMakeFiles/install/strip.dir
 C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/opencad_core.dir
+C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/rebuild_cache.dir
@@ -16,6 +20,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/install/strip
 C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/opencad_core_autogen_timestamp_deps.dir
 C:/Projects/opencadandsimulation/opencad/build/src/core/CMakeFiles/opencad_core_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/opencad_io.dir
+C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/rebuild_cache.dir
@@ -26,6 +32,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/install/strip.d
 C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/opencad_io_autogen_timestamp_deps.dir
 C:/Projects/opencadandsimulation/opencad/build/src/io/CMakeFiles/opencad_io_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/opencad_sketch.dir
+C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/rebuild_cache.dir
@@ -36,6 +44,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/install/str
 C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/opencad_sketch_autogen_timestamp_deps.dir
 C:/Projects/opencadandsimulation/opencad/build/src/sketch/CMakeFiles/opencad_sketch_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/opencad_part.dir
+C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/rebuild_cache.dir
@@ -46,6 +56,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/install/strip
 C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/opencad_part_autogen_timestamp_deps.dir
 C:/Projects/opencadandsimulation/opencad/build/src/part/CMakeFiles/opencad_part_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/opencad_assembly.dir
+C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/rebuild_cache.dir
@@ -56,6 +68,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/install/s
 C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/opencad_assembly_autogen_timestamp_deps.dir
 C:/Projects/opencadandsimulation/opencad/build/src/assembly/CMakeFiles/opencad_assembly_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/opencad_ai.dir
+C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/rebuild_cache.dir
@@ -66,6 +80,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/install/strip.d
 C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/opencad_ai_autogen_timestamp_deps.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ai/CMakeFiles/opencad_ai_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/opencad_ui.dir
+C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/rebuild_cache.dir
@@ -76,6 +92,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/install/strip.d
 C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/opencad_ui_autogen_timestamp_deps.dir
 C:/Projects/opencadandsimulation/opencad/build/src/ui/CMakeFiles/opencad_ui_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/opencad.dir
+C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/rebuild_cache.dir
@@ -87,6 +105,8 @@ C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/opencad_autoge
 C:/Projects/opencadandsimulation/opencad/build/src/app/CMakeFiles/opencad_autogen.dir
 C:/Projects/opencadandsimulation/opencad/build/tests/CMakeFiles/test_geometry.dir
 C:/Projects/opencadandsimulation/opencad/build/tests/CMakeFiles/test_extrude.dir
+C:/Projects/opencadandsimulation/opencad/build/tests/CMakeFiles/package.dir
+C:/Projects/opencadandsimulation/opencad/build/tests/CMakeFiles/package_source.dir
 C:/Projects/opencadandsimulation/opencad/build/tests/CMakeFiles/test.dir
 C:/Projects/opencadandsimulation/opencad/build/tests/CMakeFiles/edit_cache.dir
 C:/Projects/opencadandsimulation/opencad/build/tests/CMakeFiles/rebuild_cache.dir
