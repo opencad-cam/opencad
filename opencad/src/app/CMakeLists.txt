@@ -2,7 +2,7 @@
 
 set(CMAKE_AUTOMOC ON)
 
-add_executable(opencad
+add_executable(opencad WIN32
     main.cpp
 )
 
