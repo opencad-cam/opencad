@@ -7,7 +7,7 @@ void SketchView2D::drawProfileOverlays(QPainter &painter) {
 
   // Draw all profiles with different colors
   for (size_t i = 0; i < m_profiles.size(); ++i) {
-    const TopoDS_Wire &wire = m_profiles[i];
+    const TopoDS_Shape &profileShape = m_profiles[i];
 
     // Check if this profile is selected
     bool isSelected = false;
@@ -41,7 +41,7 @@ void SketchView2D::drawProfileOverlays(QPainter &painter) {
 
     // Draw wire outline
     try {
-      TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
+      TopExp_Explorer edgeExp(profileShape, TopAbs_EDGE);
 
       while (edgeExp.More()) {
         TopoDS_Edge edge = static_cast<const TopoDS_Edge &>(edgeExp.Current());

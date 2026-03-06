@@ -1,4 +1,5 @@
 #include "ConstraintSolver.h"
+#include "GeometryHelper.h"
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
@@ -163,15 +164,66 @@ ConstraintSolver::SolverDelta ConstraintSolver::computeCoincidentCorrection(
     return delta;
   }
 
-  // 1. Translation
+  // Optimization: Analytical Plane-Plane Coincidence
+  gp_Pln p1, p2;
+  if (GeometryHelper::getPlane(shape1, p1) &&
+      GeometryHelper::getPlane(shape2, p2)) {
+    // 1. Rotation (Align Normals)
+    gp_Vec n1 = p1.Axis().Direction();
+    gp_Vec n2 = p2.Axis().Direction();
+
+    if (shape1.Orientation() == TopAbs_REVERSED)
+      n1.Reverse();
+    if (shape2.Orientation() == TopAbs_REVERSED)
+      n2.Reverse();
+
+    // Target: n1 should be anti-parallel to n2 (opposing faces)
+    // Default: n1 aligns with -n2. Flipped: n1 aligns with n2.
+    gp_Vec targetN1 = constraint->isFlipped() ? n2 : -n2;
+
+    if (n1.Magnitude() > 1e-6 && targetN1.Magnitude() > 1e-6) {
+      double angle = n1.Angle(targetN1);
+      if (std::abs(angle) > 1e-3) {
+        delta.rotationAxis = n1.Crossed(targetN1);
+        if (delta.rotationAxis.Magnitude() < 1e-6) {
+          // 180 deg flip
+          gp_Vec arbitrary(1, 0, 0);
+          if (n1.IsParallel(arbitrary, 1e-2))
+            arbitrary = gp_Vec(0, 1, 0);
+          delta.rotationAxis = n1.Crossed(arbitrary);
+        }
+        delta.rotationAngle = angle;
+      }
+    }
+
+    // 2. Translation (Plane to Plane distance)
+    // We want p1 to be on p2.
+    // Distance from p1 location to p2.
+    // Calculate signed distance from origin of p1 to plane p2
+    double A, B, C, D;
+    p2.Coefficients(A, B, C, D);
+    double val = A * p1.Location().X() + B * p1.Location().Y() +
+                 C * p1.Location().Z() + D;
+
+    // We want to move p1 by vector V such that new pos adheres to plane eq.
+    // Simplest approach: Move along plane normal (gradient descent direction)
+    // p2 normal is (A, B, C).
+    // Translation = -val * Normal
+    gp_Vec normal(A, B, C);
+    delta.translation = normal * (-val);
+
+    return delta;
+  }
+
+  // Fallback to General BRepExtrema
   try {
     BRepExtrema_DistShapeShape distCalc(shape1, shape2);
     if (distCalc.IsDone() && distCalc.NbSolution() > 0) {
-      gp_Pnt p1 = distCalc.PointOnShape1(1);
-      gp_Pnt p2 = distCalc.PointOnShape2(1);
+      gp_Pnt pt1 = distCalc.PointOnShape1(1);
+      gp_Pnt pt2 = distCalc.PointOnShape2(1);
 
       // Vector from p1 to p2
-      delta.translation = gp_Vec(p1, p2);
+      delta.translation = gp_Vec(pt1, pt2);
 
       // 2. Rotation (Align Normals for Faces)
       if (shape1.ShapeType() == TopAbs_FACE &&
@@ -183,58 +235,29 @@ ConstraintSolver::SolverDelta ConstraintSolver::computeCoincidentCorrection(
         BRepAdaptor_Surface surf1(f1);
         BRepAdaptor_Surface surf2(f2);
 
-        // Get normals at closest points roughly
-        // Ideally project p1/p2 onto surface to get UV parameters
-        // For simplicity, take center of surface or use the points
-
         // Find U,V parameters for p1 on surf1
-        double u1, v1, u2, v2;
-        // Approximation: center of parameter space if projection complex
-        // Or if we trust PointOnShape1 is on the surface:
-        // Project p1 on surf1
-        // Simplified: Just use surface properties at 'center' for planar faces
-        // For curved faces, we need local normal at contact point.
-
-        // Let's assume planar for V1 MVP or use approximate UV
-        u1 = (surf1.FirstUParameter() + surf1.LastUParameter()) * 0.5;
-        v1 = (surf1.FirstVParameter() + surf1.LastVParameter()) * 0.5;
-
-        u2 = (surf2.FirstUParameter() + surf2.LastUParameter()) * 0.5;
-        v2 = (surf2.FirstVParameter() + surf2.LastVParameter()) * 0.5;
+        double u1 = (surf1.FirstUParameter() + surf1.LastUParameter()) * 0.5;
+        double v1 = (surf1.FirstVParameter() + surf1.LastVParameter()) * 0.5;
+        double u2 = (surf2.FirstUParameter() + surf2.LastUParameter()) * 0.5;
+        double v2 = (surf2.FirstVParameter() + surf2.LastVParameter()) * 0.5;
 
         gp_Pnt tmp;
-        gp_Vec n1, n2;
-        surf1.D1(u1, v1, tmp, n1,
-                 n2); // For plane D1 gives vectors, cross product is normal
-        gp_Vec normal1;
-        if (surf1.GetType() == GeomAbs_Plane) {
-          normal1 = surf1.Plane().Axis().Direction();
-        } else {
-          // Basic normal calculation from derivatives
-          gp_Vec d1u, d1v;
-          surf1.D1(u1, v1, tmp, d1u, d1v);
-          normal1 = d1u.Crossed(d1v);
-        }
+        gp_Vec d1u, d1v;
+        surf1.D1(u1, v1, tmp, d1u, d1v);
+        gp_Vec normal1 = d1u.Crossed(d1v);
 
-        gp_Vec normal2;
-        if (surf2.GetType() == GeomAbs_Plane) {
-          normal2 = surf2.Plane().Axis().Direction();
-        } else {
-          gp_Vec d1u, d1v;
-          surf2.D1(u2, v2, tmp, d1u, d1v);
-          normal2 = d1u.Crossed(d1v);
-        }
+        gp_Vec d2u, d2v;
+        surf2.D1(u2, v2, tmp, d2u, d2v);
+        gp_Vec normal2 = d2u.Crossed(d2v);
 
         if (f1.Orientation() == TopAbs_REVERSED)
           normal1.Reverse();
         if (f2.Orientation() == TopAbs_REVERSED)
           normal2.Reverse();
 
-        // Target: n1 should be anti-parallel to n2 (opposing faces)
-        // So we want n1 to align with -n2.
-        // Target: n1 should be anti-parallel to n2 (opposing faces) unless
-        // flipped (aligned) Normal behavior: n1 aligns with -n2. Flipped
-        // behavior: n1 aligns with n2.
+        normal1.Normalize();
+        normal2.Normalize();
+
         gp_Vec targetN1 = constraint->isFlipped() ? normal2 : -normal2;
 
         if (normal1.Magnitude() > 1e-6 && targetN1.Magnitude() > 1e-6) {
@@ -242,8 +265,6 @@ ConstraintSolver::SolverDelta ConstraintSolver::computeCoincidentCorrection(
           if (std::abs(angle) > 1e-3) {
             delta.rotationAxis = normal1.Crossed(targetN1);
             if (delta.rotationAxis.Magnitude() < 1e-6) {
-              // Parallel but opposite? Or 180 deg?
-              // If 180 deg, cross product is 0. Need arbitrary axis.
               if (angle > 1.0) { // Near PI
                 gp_Vec arbitrary(1, 0, 0);
                 if (normal1.IsParallel(arbitrary, 1e-2))
@@ -293,6 +314,76 @@ ConstraintSolver::SolverDelta ConstraintSolver::computeDistanceCorrection(
     return delta;
   }
 
+  // Optimization: Analytical Plane-Plane Distance
+  gp_Pln p1, p2;
+  if (GeometryHelper::getPlane(shape1, p1) &&
+      GeometryHelper::getPlane(shape2, p2)) {
+
+    // We assume no rotation needed for Distance constraint for now in this MVP,
+    // or we might want to align them parallel first?
+    // Usually Distance constraint implies parallel planes.
+    // Let's enforce parallel alignment first if needed, similar to Coincident.
+
+    gp_Vec n1 = p1.Axis().Direction();
+    gp_Vec n2 = p2.Axis().Direction();
+
+    if (shape1.Orientation() == TopAbs_REVERSED)
+      n1.Reverse();
+    if (shape2.Orientation() == TopAbs_REVERSED)
+      n2.Reverse();
+
+    // Default: n1 aligns with -n2 (opposing faces, standard distance).
+    gp_Vec targetN1 = -n2; // Distance usually between opposing faces
+
+    if (n1.Magnitude() > 1e-6 && targetN1.Magnitude() > 1e-6) {
+      double angle = n1.Angle(targetN1);
+      if (std::abs(angle) > 1e-3) {
+        delta.rotationAxis = n1.Crossed(targetN1);
+        if (delta.rotationAxis.Magnitude() < 1e-6) {
+          gp_Vec arbitrary(1, 0, 0);
+          if (n1.IsParallel(arbitrary, 1e-2))
+            arbitrary = gp_Vec(0, 1, 0);
+          delta.rotationAxis = n1.Crossed(arbitrary);
+        }
+        delta.rotationAngle = angle;
+      }
+    }
+
+    // Translation
+    // Calculate current signed distance
+    double A, B, C, D;
+    p2.Coefficients(A, B, C, D);
+    double val = A * p1.Location().X() + B * p1.Location().Y() +
+                 C * p1.Location().Z() + D;
+
+    // val is positive if p1 is on the normal side of p2.
+    // If faces are opposing (n1 = -n2), and we want positive distance:
+    // This depends on how distance is defined.
+    // Currently, let's look at absolute difference for magnitude, and normal
+    // for direction.
+
+    // Current 'gap' is roughly |val|.
+    // We want |gap| to be targetDist.
+    // We should move p1 along p2's normal.
+    // If we move p1 by -val * n2, we get to 0.
+    // We want to be at targetDist.
+    // Move amount = (-val) + (targetDist * Sign(val?))
+    // Actually simpler:
+    // Goal: Directed distance from p2 to p1 should be targetDist?
+    // Or just distance regardless of side.
+
+    // Simplification: Move to 0 then move back by targetDist.
+    // Move to 0: delta = -val * n2.
+    // Then move out: delta += targetDist * n2.
+    // Net: (targetDist - val) * n2.
+
+    gp_Vec normal(A, B, C); // This is n2 usually
+    delta.translation =
+        normal * (targetDist - val); // Use signed distance logic
+
+    return delta;
+  }
+
   try {
     BRepExtrema_DistShapeShape distCalc(shape1, shape2);
     if (distCalc.IsDone() && distCalc.NbSolution() > 0) {
@@ -301,34 +392,19 @@ ConstraintSolver::SolverDelta ConstraintSolver::computeDistanceCorrection(
       double currentDist = distCalc.Value();
 
       if (currentDist < 1e-9) {
-        // Shapes are coincident, need a direction
-        // Use normal or arbitrary direction
         delta.translation = gp_Vec(0, 0, targetDist);
       } else {
-        // Direction from p1 to p2
-        gp_Vec dir(p1, p2);
+        gp_Vec dir(p1, p2); // Vector from 1 to 2
         dir.Normalize();
 
-        // How much to move: (targetDist - currentDist)
-        // If current < target, we need to move AWAY (increase dist)
-        // If dist vector is p1->p2. Moving c1 by p1->p2 moves it closer?
-        // Wait, p1 is on c1. p2 is on c2.
-        // vec = p2 - p1.
-        // If we move c1 by vec, c1 moves to c2. Dist becomes 0.
-        // We want dist to be target.
-        // So we move by vec * (1 - target/current)?
-        // Or: move amount = distance - targetDistance (to close gap)?
-        // If we want distance = target.
-        // Current delta vector D moves c1 to c2 (dist 0). magnitude |D| =
-        // currentDist. We want to move c1 such that final dist is targetDist.
-        // We should move c1 by D * ((currentDist - targetDist) / currentDist)
+        // We want to move p1.
+        // dir is p2 - p1.
+        // If we move p1 by dir * dist, p1 goes to p2.
+        // We want final dist to be targetDist.
+        // We want to move p1 by (currentDist - targetDist) towards p2.
 
-        double moveFactor = (currentDist - targetDist) / currentDist;
-        delta.translation = dir * (currentDist * moveFactor);
-
-        // Simplified:
-        // moveAmount = currentDist - targetDist.
-        // delta = dir * moveAmount;
+        double moveAmount = currentDist - targetDist;
+        delta.translation = dir * moveAmount;
       }
     }
   } catch (...) {

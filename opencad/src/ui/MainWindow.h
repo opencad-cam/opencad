@@ -8,13 +8,17 @@
  */
 
 #include "../core/geometry/Shape.h"
+#include <AIS_Shape.hxx>
 #include <QDockWidget>
 #include <QListWidget>
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QProgressBar> // Added
 #include <QStatusBar>
+#include <QTabWidget>
 #include <QToolBar>
+#include <TopoDS_Shape.hxx>
+#include <TopoDS_Wire.hxx>
 #include <memory>
 #include <vector>
 
@@ -124,6 +128,7 @@ private slots:
   void onSketchPoint();
   void onSketchSpline();
   void onSketchEllipse();
+  void onSketchDimension();
   void onSketchProject(); // Added
 
   // Sketch constraints
@@ -182,8 +187,7 @@ private slots:
   // Profile selection (visual Extrude/Cut)
   void onProfileSelected(int profileIndex);
   void onRingSelected(int outerProfileIndex, int innerProfileIndex);
-  void
-  onMultiProfilesConfirmed(const std::vector<std::pair<int, int>> &selections);
+  void onMultiProfilesConfirmed(const std::vector<int> &selections);
   void onProfileSelectionCancelled();
 
   // Selection modes
@@ -191,12 +195,14 @@ private slots:
   void onSelectFace();
   void onSelectEdge();
   void onSelectVertex();
+  void onViewportEdgeSelected();
 
   // Help menu
   void onAbout();
 
   // Tool settings apply
   void onToolApply();
+  void updateExtrudePreview();
 
   // Feature tree interaction
   void onFeatureSelected(QListWidgetItem *item);
@@ -218,12 +224,14 @@ private:
   void updateSketchToolsEnabled(bool enabled);
   void showSketchEditor();
 
-  std::unique_ptr<Viewport3D> m_viewport;
+  // Central document (managed by tabs now)
+  // std::unique_ptr<core::Document> m_document; // REMOVED
+
+  // Viewport (managed by tabs now)
+  // std::unique_ptr<Viewport3D> m_viewport; // REMOVED
+
   QString m_currentFile;
   bool m_modified = false;
-
-  // Central document (contains FeatureTree, UndoRedoManager, ParameterManager)
-  std::unique_ptr<core::Document> m_document;
 
   // Sketch
   std::shared_ptr<sketch::Sketch> m_currentSketch;
@@ -252,8 +260,9 @@ private:
   QToolBar *m_assemblyToolbar = nullptr;
 
   // Profile selection state (for visual Extrude/Cut)
-  enum class PendingOperation { None, Extrude, Cut };
+  enum class PendingOperation { None, Extrude, Cut, Revolve, Sweep };
   PendingOperation m_pendingOperation = PendingOperation::None;
+  Handle(AIS_Shape) m_previewShape;
 
   // Face-based operation state
   enum class PendingFaceOperation {
@@ -262,7 +271,8 @@ private:
     Shell,
     Draft,
     Thicken,
-    OffsetSurface
+    OffsetSurface,
+    SketchOnFace // Added
   };
   PendingFaceOperation m_pendingFaceOperation = PendingFaceOperation::None;
 
@@ -274,6 +284,8 @@ private:
   double m_pendingDraftAngle = 3.0;
   double m_pendingThickenValue = 5.0;
   double m_pendingOffsetValue = 5.0;
+  double m_pendingOffsetSketchDistance = 0.0; // 0 = use QInputDialog
+  double m_pendingSketchAngle = 0.0;          // Angle for sketch plane
 
   // Selected profile index for Extrude/Cut (after visual selection)
   int m_selectedProfileIndex = -1;
@@ -305,6 +317,7 @@ private:
     Shell,
     Dome,
     Draft,
+    Rib,
     Pattern,
     Mirror,
     Boolean,
@@ -312,10 +325,17 @@ private:
     Split,
     NewSketch,
 
-    Project, // Added
-    Gear     // Added
+    Project,    // Added
+    Gear,       // Added
+    HoleWizard, // Added
+    SketchLinearPattern,
+    SketchCircularPattern
   };
   ActivePartTool m_activePartTool = ActivePartTool::None;
+
+  // Hole Wizard points cache
+  std::vector<gp_Pnt> m_holePoints;
+  void clearHoleSelection();
 
   // Assembly
   bool m_assemblyMode = false;
@@ -362,12 +382,13 @@ private:
   void onShapeSelected(const TopoDS_Shape &shape,
                        Handle(AIS_InteractiveObject) object);
 
-private:
-  // Visual Map for Selection Sync: AIS Object -> Component
   std::map<Handle(AIS_InteractiveObject), std::weak_ptr<assembly::Component>>
       m_visualMap;
 
-  QProgressBar *m_progressBar = nullptr; // Added
+  // Map Tab Widget (Viewport) -> Document
+  std::map<QWidget *, std::shared_ptr<core::Document>> m_documentMap;
+
+  QProgressBar *m_progressBar = nullptr;
 
   // AI Clients
   std::unique_ptr<ai::CadQueryClient> m_cqClient;
@@ -376,6 +397,28 @@ private:
 
   // UI Panels
   AIChatPanel *m_aiChatPanel = nullptr;
+
+  // Multi-Document Support
+  struct DocumentTab {
+    std::shared_ptr<core::Document> document;
+    Viewport3D *viewport = nullptr;
+    QString filePath;
+  };
+
+  QTabWidget *m_tabWidget = nullptr;
+
+  // Current active document/viewport (observers of current tab)
+  std::shared_ptr<core::Document> m_document;
+  Viewport3D *m_viewport = nullptr;
+
+  // Helper to create a new tab
+  std::shared_ptr<core::Document>
+  createNewTab(const QString &title = "Untitled");
+
+private slots:
+  void onTabChanged(int index);
+  void onCloseTab(int index);
+  void onCopyGeometryToNewPart(); // Feature: Copy selected geometry to new part
 };
 
 } // namespace ui

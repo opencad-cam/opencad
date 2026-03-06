@@ -25,6 +25,7 @@
 #include <OpenGl_GraphicDriver.hxx>
 #include <QDebug>
 #include <StdSelect_BRepOwner.hxx>
+#include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
@@ -38,16 +39,14 @@
 namespace opencad {
 namespace ui {
 
-Viewport3D::Viewport3D(QWidget *parent) : QOpenGLWidget(parent) {
+Viewport3D::Viewport3D(QWidget *parent) : QWidget(parent) {
+  // Essential for OpenCASCADE rendering on a QWidget
+  setAttribute(Qt::WA_PaintOnScreen);
+  setAttribute(Qt::WA_NoSystemBackground);
+  setAttribute(Qt::WA_NativeWindow);
+
   setMouseTracking(true);
   setFocusPolicy(Qt::StrongFocus);
-
-  // Enable multisampling for smoother edges
-  QSurfaceFormat format;
-  format.setDepthBufferSize(24);
-  format.setStencilBufferSize(8);
-  format.setSamples(4);
-  setFormat(format);
 }
 
 Viewport3D::~Viewport3D() {
@@ -99,38 +98,40 @@ void Viewport3D::initViewer() {
   m_view->SetProj(V3d_XposYposZpos);
   // Enable selection for faces by default
   m_context->SetAutomaticHilight(true);
+
+  // Ensure view knows the window size immediately
+  m_view->MustBeResized();
 }
 
-void Viewport3D::initializeGL() { initViewer(); }
-
-void Viewport3D::paintGL() {
+void Viewport3D::paintEvent(QPaintEvent * /*event*/) {
+  if (m_view.IsNull()) {
+    initViewer();
+  }
   if (!m_view.IsNull()) {
     m_view->Redraw();
   }
 }
 
-void Viewport3D::resizeGL(int w, int h) {
+void Viewport3D::resizeEvent(QResizeEvent * /*event*/) {
   if (!m_view.IsNull()) {
     m_view->MustBeResized();
   }
 }
 
 Handle(AIS_Shape) Viewport3D::displayShape(const core::Shape &shape) {
-  if (m_context.IsNull())
-    return nullptr;
-
-  Handle(AIS_Shape) aisShape = new AIS_Shape(shape.occShape());
-  m_context->Display(aisShape, AIS_Shaded, 0, true);
-  m_aisShapes.push_back(aisShape); // Store for selection
-  fitAll();
-  return aisShape;
+  return displayShape(shape.occShape());
 }
 
 Handle(AIS_Shape) Viewport3D::displayShape(const TopoDS_Shape &shape) {
-  if (m_context.IsNull())
-    return nullptr;
-
-  qDebug() << "Viewport3D::displayShape - Shape IsNull:" << shape.IsNull();
+  if (m_context.IsNull()) {
+    qDebug()
+        << "Viewport3D::displayShape - Context is null, initializing viewer...";
+    initViewer();
+    if (m_context.IsNull()) {
+      qDebug() << "Viewport3D::displayShape - Failed to initialize viewer!";
+      return nullptr;
+    }
+  }
 
   if (shape.IsNull()) {
     qDebug() << "Viewport3D::displayShape - WARNING: Received null shape!";
@@ -138,23 +139,46 @@ Handle(AIS_Shape) Viewport3D::displayShape(const TopoDS_Shape &shape) {
   }
 
   // Compute mesh tessellation for proper display
-  qDebug() << "Viewport3D::displayShape - Computing mesh tessellation...";
   try {
     BRepMesh_IncrementalMesh mesh(shape, 0.1);
     mesh.Perform();
-    qDebug() << "Viewport3D::displayShape - Mesh tessellation completed";
   } catch (...) {
     qDebug() << "Viewport3D::displayShape - Mesh tessellation failed";
   }
 
   Handle(AIS_Shape) aisShape = new AIS_Shape(shape);
-  qDebug() << "Viewport3D::displayShape - Displaying shape in AIS context...";
-  m_context->Display(aisShape, AIS_Shaded, 0, true);
+
+  // Display with default Shape mode (0) initially
+  m_context->Display(aisShape, AIS_Shaded, 0, false);
+
+  // Deactivate all modes for this shape to be sure
+  m_context->Deactivate(aisShape);
+
+  // Activate the correct mode based on current state
+  switch (m_selectionMode) {
+  case SelectionMode::Face:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_FACE));
+    break;
+  case SelectionMode::Edge:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_EDGE));
+    break;
+  case SelectionMode::Vertex:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_VERTEX));
+    break;
+  case SelectionMode::Mate:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_FACE));
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_EDGE));
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_VERTEX));
+    break;
+  case SelectionMode::Shape:
+  default:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_SHAPE));
+    break;
+  }
+
   m_aisShapes.push_back(aisShape); // Store for selection
-  qDebug() << "Viewport3D::displayShape - Shape displayed, total AIS shapes:"
-           << m_aisShapes.size();
+
   fitAll();
-  qDebug() << "Viewport3D::displayShape - fitAll() completed";
   return aisShape;
 }
 
@@ -176,8 +200,35 @@ void Viewport3D::displaySketchWire(const TopoDS_Shape &wire) {
   // Add slight transparency for holographic look
   aisShape->SetTransparency(0.1);
 
-  // Display without selection (sketch is just for visual reference)
-  m_context->Display(aisShape, false);
+  // Display with default shape mode initially
+  m_context->Display(aisShape, AIS_WireFrame, 0, false);
+
+  // Deactivate all modes for this shape to be sure
+  m_context->Deactivate(aisShape);
+
+  // Activate the correct mode based on current state
+  switch (m_selectionMode) {
+  case SelectionMode::Face:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_FACE));
+    break;
+  case SelectionMode::Edge:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_EDGE));
+    break;
+  case SelectionMode::Vertex:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_VERTEX));
+    break;
+  case SelectionMode::Mate:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_FACE));
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_EDGE));
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_VERTEX));
+    break;
+  case SelectionMode::Shape:
+  default:
+    m_context->Activate(aisShape, AIS_Shape::SelectionMode(TopAbs_SHAPE));
+    break;
+  }
+
+  m_aisShapes.push_back(aisShape); // Store for selection
 
   // Also display a "glow" outline with thicker semi-transparent lines
   Handle(AIS_Shape) glowShape = new AIS_Shape(wire);
@@ -283,6 +334,7 @@ void Viewport3D::clearAll() {
     m_context->RemoveAll(true);
   }
   m_aisShapes.clear();
+  clearSelection();
 }
 
 void Viewport3D::fitAll() {
@@ -417,11 +469,17 @@ void Viewport3D::enableEdgeSelection(bool enable) {
     m_selectedEdges.clear();
     setSelectionMode(SelectionMode::Edge);
     setCursor(Qt::CrossCursor);
-    // DEBUG: Show popup when edge selection is enabled
-    QMessageBox::information(
-        nullptr, "Edge Mode",
-        QString("Edge selection ENABLED!\nm_aisShapes count: %1")
-            .arg(m_aisShapes.size()));
+  } else {
+    setSelectionMode(SelectionMode::Shape);
+    setCursor(Qt::ArrowCursor);
+  }
+  update();
+}
+
+void Viewport3D::enableVertexSelection(bool enable) {
+  if (enable) {
+    setSelectionMode(SelectionMode::Vertex);
+    setCursor(Qt::CrossCursor);
   } else {
     setSelectionMode(SelectionMode::Shape);
     setCursor(Qt::ArrowCursor);
@@ -453,6 +511,17 @@ void Viewport3D::enableComponentDragMode(bool enable) {
   update();
 }
 
+void Viewport3D::clearSelection() {
+  if (!m_context.IsNull()) {
+    m_context->ClearSelected(true);
+  }
+  m_selectedFace.Nullify();
+  m_selectedFaces.clear();
+  m_selectedEdges.clear();
+  m_selectedShape.Nullify();
+  emit selectionCleared();
+}
+
 void Viewport3D::handlePick(int x, int y) {
   if (m_context.IsNull() || m_view.IsNull())
     return;
@@ -464,79 +533,140 @@ void Viewport3D::handlePick(int x, int y) {
   if (m_selectionMode == SelectionMode::None)
     return;
 
-  // Perform selection using new OCCT 7.8+ API
-  m_context->SelectDetected();
+  // Handle modifiers for multi-selection
+  bool multiSelect =
+      (QGuiApplication::queryKeyboardModifiers() & Qt::ControlModifier) ||
+      (QGuiApplication::queryKeyboardModifiers() & Qt::ShiftModifier);
 
-  if (m_context->NbSelected() > 0) {
-    m_context->InitSelected();
-    if (m_context->MoreSelected()) {
-      Handle(StdSelect_BRepOwner) owner =
-          Handle(StdSelect_BRepOwner)::DownCast(m_context->SelectedOwner());
+  // Perform selection
+  if (multiSelect) {
+    m_context->SelectDetected(AIS_SelectionScheme_XOR);
+  } else {
+    m_context->SelectDetected(AIS_SelectionScheme_Replace);
+  }
 
-      if (!owner.IsNull() && owner->HasShape()) {
-        TopoDS_Shape selected = owner->Shape();
+  // Clear our local cache
+  if (!multiSelect) {
+    m_selectedFaces.clear();
+    m_selectedEdges.clear();
+  }
 
-        // Handle based on selection mode
-        switch (m_selectionMode) {
-        case SelectionMode::Face:
-          if (selected.ShapeType() == TopAbs_FACE) {
-            m_selectedFace = TopoDS::Face(selected);
-            emit faceSelected();
-            emit geometrySelected("Face");
+  // Iterate over ALL selected objects in context
+  m_context->InitSelected();
+
+  if (!m_context->MoreSelected()) {
+    // Debug: Check if we detected anything but failed to select
+  }
+
+  while (m_context->MoreSelected()) {
+    Handle(StdSelect_BRepOwner) owner =
+        Handle(StdSelect_BRepOwner)::DownCast(m_context->SelectedOwner());
+
+    if (!owner.IsNull() && owner->HasShape()) {
+      TopoDS_Shape selected = owner->Shape();
+
+      // Debug info
+      QString typeStr;
+      if (selected.ShapeType() == TopAbs_FACE)
+        typeStr = "Face";
+      else if (selected.ShapeType() == TopAbs_EDGE)
+        typeStr = "Edge";
+      else if (selected.ShapeType() == TopAbs_SOLID)
+        typeStr = "Solid";
+      else if (selected.ShapeType() == TopAbs_COMPOUND)
+        typeStr = "Compound";
+      else
+        typeStr = QString("Other (%1)").arg(selected.ShapeType());
+
+      // Show specific debug for the FIRST item only to avoid spam
+      // But only if it mismatch? No, let's show what we found.
+      // QMessageBox::information(this, "Debug Pick", "Found: " + typeStr);
+
+      // Handle based on selection mode
+      switch (m_selectionMode) {
+      case SelectionMode::Face:
+        if (selected.ShapeType() == TopAbs_FACE) {
+          TopoDS_Face face = TopoDS::Face(selected);
+
+          // Add to selection (avoid duplicates)
+          bool found = false;
+          for (const auto &f : m_selectedFaces) {
+            if (f.IsSame(face)) {
+              found = true;
+              break;
+            }
           }
-          break;
-        case SelectionMode::Edge:
-          if (selected.ShapeType() == TopAbs_EDGE) {
-            TopoDS_Edge edge = TopoDS::Edge(selected);
-            m_selectedEdges.push_back(edge);
-            emit edgeSelected();
-            emit geometrySelected(
-                "Edge (" + QString::number(m_selectedEdges.size()) + ")");
-            // DEBUG: Show popup when edge is selected
-            QMessageBox::information(
-                nullptr, "Edge Selected",
-                QString("Edge added! Total: %1").arg(m_selectedEdges.size()));
-          }
-          break;
-        case SelectionMode::Vertex:
-          if (selected.ShapeType() == TopAbs_VERTEX) {
-            emit geometrySelected("Vertex");
-          }
-          break;
-          break;
-        case SelectionMode::Mate:
-          // In Mate mode, we accept Face, Edge or Vertex and emit shapeSelected
-          if (selected.ShapeType() == TopAbs_FACE ||
-              selected.ShapeType() == TopAbs_EDGE ||
-              selected.ShapeType() == TopAbs_VERTEX) {
-
-            emit shapeSelected(
-                selected,
-                Handle(AIS_InteractiveObject)::DownCast(owner->Selectable()));
-
-            // Also optional debug
-            if (selected.ShapeType() == TopAbs_FACE)
-              emit geometrySelected("Face");
-            else if (selected.ShapeType() == TopAbs_EDGE)
-              emit geometrySelected("Edge");
-          }
-          break;
-        case SelectionMode::Shape:
-          m_selectedShape = selected;
-          emit geometrySelected("Shape");
+          if (!found)
+            m_selectedFaces.push_back(face);
+          m_selectedFace = face; // Set singular face for selectedFace() getter
+        } else {
+          // Found something that is NOT a face while in Face mode
+          QMessageBox::warning(this, "Debug Selection",
+                               "In Face Mode, but picked: " + typeStr +
+                                   "\nThis implies activation logic failed.");
+        }
+        break;
+      case SelectionMode::Edge:
+        if (selected.ShapeType() == TopAbs_EDGE) {
+          TopoDS_Edge edge = TopoDS::Edge(selected);
+          m_selectedEdges.push_back(edge);
+        }
+        break;
+      case SelectionMode::Vertex:
+        if (selected.ShapeType() == TopAbs_VERTEX) {
+          emit geometrySelected("Vertex");
           emit shapeSelected(selected, Handle(AIS_InteractiveObject)::DownCast(
                                            owner->Selectable()));
-          break;
-        default:
-          break;
         }
-        update();
+        break;
+      case SelectionMode::Mate:
+        if (selected.ShapeType() == TopAbs_FACE) {
+          TopoDS_Face face = TopoDS::Face(selected);
+          bool found = false;
+          for (const auto &f : m_selectedFaces) {
+            if (f.IsSame(face)) {
+              found = true;
+              break;
+            }
+          }
+          if (!found)
+            m_selectedFaces.push_back(face);
+        } else if (selected.ShapeType() == TopAbs_EDGE) {
+          TopoDS_Edge edge = TopoDS::Edge(selected);
+          m_selectedEdges.push_back(edge);
+        }
+
+        if (selected.ShapeType() == TopAbs_FACE ||
+            selected.ShapeType() == TopAbs_EDGE ||
+            selected.ShapeType() == TopAbs_VERTEX) {
+          emit shapeSelected(selected, Handle(AIS_InteractiveObject)::DownCast(
+                                           owner->Selectable()));
+        }
+        break;
+      case SelectionMode::Shape:
+        m_selectedShape = selected;
+        emit shapeSelected(selected, Handle(AIS_InteractiveObject)::DownCast(
+                                         owner->Selectable()));
+        break;
+      default:
+        break;
       }
     }
-  } else {
+    m_context->NextSelected();
+  }
+
+  // Emit events after processing all
+  if (!m_selectedFaces.empty()) {
+    emit faceSelected();
+    QString msg = QString("Selected %1 Faces").arg(m_selectedFaces.size());
+    emit geometrySelected(msg);
+  }
+  if (m_context->NbSelected() == 0) {
     m_selectedFace.Nullify();
     emit selectionCleared();
   }
+
+  update();
 }
 
 bool Viewport3D::getSelectedFacePlane(gp_Pln &plane) const {
@@ -617,6 +747,8 @@ void Viewport3D::mousePressEvent(QMouseEvent *event) {
 
   // Handle component drag mode
   if (m_componentDragMode && event->button() == Qt::LeftButton) {
+    // QMessageBox::information(this, "Debug Drag", "Entering Drag Logic
+    // (Stealing Event?)");
     m_context->MoveTo(event->pos().x(), event->pos().y(), m_view, true);
     m_context->SelectDetected();
 
@@ -642,6 +774,7 @@ void Viewport3D::mousePressEvent(QMouseEvent *event) {
         }
       }
     }
+    // If we didn't start dragging, do we fall through? Yes.
   }
 
   // Handle left click for selection (in any selection mode)
@@ -656,6 +789,9 @@ void Viewport3D::mousePressEvent(QMouseEvent *event) {
       m_panning = true;
     } else {
       m_rotating = true;
+      if (!m_view.IsNull()) {
+        m_view->StartRotation(event->pos().x(), event->pos().y());
+      }
     }
   }
 }
@@ -702,14 +838,16 @@ void Viewport3D::mouseMoveEvent(QMouseEvent *event) {
     return;
   }
 
-  // Update highlight when in selection mode
-  if (m_faceSelectionEnabled && !m_context.IsNull()) {
+  // Update highlight when in any active selection mode
+  if (m_selectionMode != SelectionMode::None && !m_context.IsNull()) {
     m_context->MoveTo(event->pos().x(), event->pos().y(), m_view, true);
     update();
   }
 
   if (m_rotating) {
     m_view->Rotation(event->pos().x(), event->pos().y());
+    // update() is not needed for specific OCCT viewer updates usually if Redraw
+    // is managed, but good for Qt integration
     update();
   } else if (m_panning) {
     m_view->Pan(delta.x(), -delta.y());
@@ -722,10 +860,35 @@ void Viewport3D::wheelEvent(QWheelEvent *event) {
     return;
 
   double delta = event->angleDelta().y();
-  double factor = delta > 0 ? 1.1 : 0.9;
+  if (delta == 0)
+    return;
 
-  m_view->SetZoom(factor);
+  // Zoom at cursor position with reduced sensitivity
+  double zoomFactor = 0.2;
+  m_view->StartZoomAtPoint(event->position().x(), event->position().y());
+  m_view->ZoomAtPoint(0, 0, delta * zoomFactor, 0);
+
   update();
+}
+
+TopoDS_Shape Viewport3D::getSelectedParentShape() {
+  if (m_context.IsNull())
+    return TopoDS_Shape();
+
+  m_context->InitSelected();
+  if (m_context->MoreSelected()) {
+    const Handle(SelectMgr_EntityOwner) &owner = m_context->SelectedOwner();
+    if (!owner.IsNull()) {
+      const Handle(SelectMgr_SelectableObject) &selectable =
+          owner->Selectable();
+      // Cast to AIS_Shape
+      Handle(AIS_Shape) aisShape = Handle(AIS_Shape)::DownCast(selectable);
+      if (!aisShape.IsNull()) {
+        return aisShape->Shape();
+      }
+    }
+  }
+  return TopoDS_Shape();
 }
 
 } // namespace ui

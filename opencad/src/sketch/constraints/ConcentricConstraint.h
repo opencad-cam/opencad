@@ -8,7 +8,6 @@
 #include "../entities/SketchCircle.h"
 #include "Constraint.h"
 
-
 namespace opencad {
 namespace sketch {
 
@@ -48,6 +47,7 @@ public:
    * @brief Compute constraint error
    * @return Distance between centers (should be 0 for concentric)
    */
+  std::vector<double> errorVector() const override;
   double error() const override;
 
   /**

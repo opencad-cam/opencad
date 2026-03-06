@@ -8,16 +8,37 @@
 #include "RevolveFeature.h"
 #include "../sketch/Sketch.h"
 
+#include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepAlgoAPI_Splitter.hxx>
+#include <BRepBndLib.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeSolid.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepPrimAPI_MakeHalfSpace.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
+#include <BRepPrimAPI_MakeSphere.hxx>
+#include <BRep_Tool.hxx>
+#include <Bnd_Box.hxx>
+#include <GC_MakeArcOfCircle.hxx>
+#include <Geom_Circle.hxx>
+#include <Geom_Curve.hxx>
+#include <Geom_Plane.hxx>
+#include <Geom_Surface.hxx>
+#include <Geom_TrimmedCurve.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
 #include <gp_Ax1.hxx>
+#include <gp_Ax2.hxx>
+#include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
+#include <gp_Lin.hxx>
+#include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
-
+#include <gp_Vec.hxx>
 
 #include <cmath>
 
@@ -201,15 +222,34 @@ TopoDS_Shape RevolveFeature::executeFace(const TopoDS_Face &profile,
   m_error.clear();
 
   try {
-    BRepPrimAPI_MakeRevol revolve(profile, axis, toRadians(angleDeg), true);
-    if (!revolve.IsDone()) {
-      m_error = "Failed to create revolve from face";
-      return TopoDS_Shape();
+    if (std::abs(angleDeg - 360.0) < 1e-6) {
+      BRepPrimAPI_MakeRevol revolve(profile, axis, Standard_True);
+      revolve.Build();
+      if (revolve.IsDone() && !revolve.Shape().IsNull()) {
+        return revolve.Shape();
+      }
+    } else {
+      BRepPrimAPI_MakeRevol revolve(profile, axis, toRadians(angleDeg),
+                                    Standard_True);
+      revolve.Build();
+      if (revolve.IsDone() && !revolve.Shape().IsNull()) {
+        return revolve.Shape();
+      }
     }
-    return revolve.Shape();
+
+    m_error = "Failed to create revolve from face. "
+              "The rotation axis may intersect the profile. "
+              "Move the profile away from the axis or select a different axis.";
+    return TopoDS_Shape();
+
   } catch (const Standard_Failure &e) {
-    m_error = "OpenCASCADE error: ";
-    m_error += e.GetMessageString();
+    m_error = "Revolve failed: ";
+    m_error += e.GetMessageString() ? e.GetMessageString() : "unknown error";
+    m_error += ". The rotation axis may intersect the profile.";
+    return TopoDS_Shape();
+  } catch (const std::exception &e) {
+    m_error = "Error: ";
+    m_error += e.what();
     return TopoDS_Shape();
   }
 }

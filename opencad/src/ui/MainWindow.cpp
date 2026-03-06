@@ -8,10 +8,15 @@
 #include "viewport/Viewport3D.h"
 #include <QStackedWidget>
 
+#include <BRepBndLib.hxx>
+#include <BRepGProp.hxx>
+#include <Bnd_Box.hxx>
+#include <GProp_GProps.hxx>
 #include <QApplication>
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QString>
+#include <ShapeFix_Face.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 
@@ -41,6 +46,7 @@
 #include "sketch/constraints/EqualConstraint.h"
 #include "sketch/constraints/FixConstraint.h"
 #include "sketch/constraints/TangentConstraint.h"
+#include "sketch/entities/SketchLine.h" // Added for Revolve axis selection
 #include <QShortcut>
 
 // Part features
@@ -50,6 +56,7 @@
 #include "part/ExtrudeFeature.h"
 #include "part/HoleFeature.h"
 #include "part/LoftFeature.h"
+#include "part/MirrorFeature.h"
 #include "part/OffsetSurfaceFeature.h"
 #include "part/RevolveFeature.h"
 #include "part/RibFeature.h"
@@ -89,6 +96,7 @@
 #include <BRepAlgoAPI_Section.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepOffsetAPI_DraftAngle.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
@@ -106,6 +114,7 @@
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Edge.hxx>
+#include <TopoDS_Wire.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
 
@@ -113,6 +122,7 @@
 #include "part/ChamferFeature.h"
 #include "part/FilletFeature.h"
 #include "part/GearFeature.h"
+#include "part/PatternFeature.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -131,6 +141,47 @@
 // IO
 #include "io/step/StepReader.h"
 
+#include <BRepTools.hxx>
+#include <BRep_Builder.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS_Wire.hxx>
+
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <vector>
+
+namespace {
+TopoDS_Face enforceFaceHoles(const TopoDS_Face &face) {
+  if (face.IsNull())
+    return face;
+  TopoDS_Wire outerWire = BRepTools::OuterWire(face);
+  if (outerWire.IsNull())
+    return face;
+
+  TopExp_Explorer exp(face, TopAbs_WIRE);
+  std::vector<TopoDS_Wire> innerWires;
+  while (exp.More()) {
+    TopoDS_Wire wire = TopoDS::Wire(exp.Current());
+    if (!wire.IsSame(outerWire)) {
+      innerWires.push_back(wire);
+    }
+    exp.Next();
+  }
+
+  BRepBuilderAPI_MakeFace mkFace(BRep_Tool::Surface(face), outerWire, true);
+  if (!mkFace.IsDone())
+    return face;
+
+  for (const auto &w : innerWires) {
+    mkFace.Add(w);
+  }
+
+  if (mkFace.IsDone()) {
+    return mkFace.Face();
+  }
+  return face;
+}
+} // namespace
+
 namespace opencad {
 namespace ui {
 
@@ -138,12 +189,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   setWindowTitle("OpenCAD");
   resize(1280, 800);
 
-  // Create central document
-  m_document = std::make_unique<core::Document>(this);
+  // Create TabWidget
+  m_tabWidget = new QTabWidget(this);
+  m_tabWidget->setTabsClosable(true);
+  setCentralWidget(m_tabWidget);
 
-  // Create central viewport
-  m_viewport = std::make_unique<Viewport3D>(this);
-  setCentralWidget(m_viewport.get());
+  // Connect tab signals
+  connect(m_tabWidget, &QTabWidget::currentChanged, this,
+          &MainWindow::onTabChanged);
+  connect(m_tabWidget, &QTabWidget::tabCloseRequested, this,
+          &MainWindow::onCloseTab);
 
   // Initialize AI Clients
   m_cqClient = std::make_unique<opencad::ai::CadQueryClient>(this);
@@ -246,61 +301,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
           });
 
-  // Connect face selection signal
-  connect(m_viewport.get(), &Viewport3D::faceSelected, this,
-          &MainWindow::onFaceSelected);
-  connect(m_viewport.get(), &Viewport3D::geometrySelected, this,
-          &MainWindow::onGeometrySelected);
-  connect(m_viewport.get(), &Viewport3D::shapeSelected, this,
-          &MainWindow::onShapeSelected);
-
-  // Connect component drag signal for assembly move
-  connect(m_viewport.get(), &Viewport3D::componentDragEnded, this,
-          [this](Handle(AIS_InteractiveObject) aisObj, gp_Pnt dropPoint) {
-            if (!m_assemblyMode || !m_document->assembly())
-              return;
-
-            // Find the component from the AIS object
-            auto it = m_visualMap.find(aisObj);
-            if (it != m_visualMap.end()) {
-              auto compWeak = it->second;
-              if (auto comp = compWeak.lock()) {
-                // Calculate translation from original position
-                gp_Trsf currentPlacement = comp->getPlacement();
-                gp_Trsf newPlacement;
-                newPlacement.SetTranslation(gp_Vec(gp_Pnt(0, 0, 0), dropPoint));
-                comp->setPlacement(newPlacement);
-
-                displayAllShapes();
-                statusBar()->showMessage(
-                    QString("Moved component '%1'")
-                        .arg(QString::fromStdString(comp->getName())));
-              }
-            }
-
-            // Disable drag mode after drop
-            m_viewport->enableComponentDragMode(false);
-            m_currentAssemblyAction = AssemblyAction::None;
-          });
+  // Viewport connections are now handled in createNewTab/onTabChanged
 
   setupMenus();
   setupToolbars();
   setupDockWidgets();
   setupStatusBar();
 
-  // Save initial empty state
-  m_document->checkpoint("Initial");
-
-  // Don't install global event filter - it blocks menu clicks
-  // Instead, install event filter only on sketch view in setupDockWidgets
-  // if (QCoreApplication::instance()) {
-  //   QCoreApplication::instance()->installEventFilter(this);
-  // }
-
-  // Initialize feature list
-  updateFeatureList();
-
-  updateWindowTitle();
+  // Initial state is set by createNewTab
 
   // Add Enter shortcut to show Tool Settings when in part tool mode
   auto *enterShortcut = new QShortcut(QKeySequence(Qt::Key_Return), this);
@@ -324,7 +332,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
       statusBar()->showMessage("Adjust settings and click Apply");
     }
   });
-} // namespace ui
+
+  // Create initial empty tab
+  createNewTab("Untitled");
+}
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
   if (event->type() == QEvent::KeyPress) {
@@ -497,63 +508,21 @@ void MainWindow::closeEvent(QCloseEvent *event) {
   }
 }
 
-void MainWindow::onNewFile() {
-  if (m_modified) {
-    auto result = QMessageBox::question(
-        this, "Unsaved Changes",
-        "You have unsaved changes. Do you want to save before creating a new "
-        "document?",
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-    if (result == QMessageBox::Save) {
-      onSaveFile();
-    } else if (result == QMessageBox::Cancel) {
-      return;
-    }
-  }
-
-  // Show New Document Dialog
-  opencad::ui::NewDocumentDialog dialog(this);
-  if (dialog.exec() != QDialog::Accepted) {
-    return;
-  }
-
-  auto type = dialog.getSelectedType();
-
-  // Reset Document
-  m_document->newDocument();
-  m_currentFile.clear();
-  m_modified = false;
-  updateWindowTitle();
-
-  // Set Mode
-  if (type == opencad::ui::DocumentType::Assembly) {
-    m_assemblyMode = true;
-    m_sketchMode = false;
-    statusBar()->showMessage("New Assembly created");
-  } else {
-    m_assemblyMode = false;
-    m_sketchMode = false;
-    statusBar()->showMessage("New Part created");
-  }
-
-  updateInterfaceMode();
-
-  // Clear views
-  if (m_viewport)
-    m_viewport->clearAll();
-  if (m_assemblyTree)
-    m_assemblyTree->updateTree();
-  updateFeatureList();
-}
-
 void MainWindow::setupMenus() {
   // File Menu
   auto *fileMenu = menuBar()->addMenu("&File");
 
-  auto *newAction = fileMenu->addAction("&New", this, &MainWindow::onNewFile);
+  auto *newAction =
+      fileMenu->addAction("&New Part", this, &MainWindow::onNewFile);
   newAction->setIcon(style()->standardIcon(QStyle::SP_FileIcon));
   newAction->setShortcut(QKeySequence::New);
+
+  auto *newAssemblyAction =
+      fileMenu->addAction("New &Assembly", this, &MainWindow::onNewAssembly);
+  newAssemblyAction->setIcon(style()->standardIcon(QStyle::SP_DirIcon));
+  // Ctrl+Shift+N for New Assembly
+  newAssemblyAction->setShortcut(Qt::CTRL | Qt::SHIFT | Qt::Key_N);
+
   auto *openAction =
       fileMenu->addAction("&Open...", this, &MainWindow::onOpenFile);
   openAction->setShortcut(QKeySequence::Open);
@@ -692,6 +661,13 @@ void MainWindow::setupMenus() {
   selectionMenu->addAction("Select Face", this, [this]() {
     if (m_viewport) {
       m_viewport->enableFaceSelection(true);
+      statusBar()->showMessage("Face selection mode - click faces to select");
+    }
+  });
+
+  selectionMenu->addAction("Select Face", this, [this]() {
+    if (m_viewport) {
+      m_viewport->enableFaceSelection(true);
       statusBar()->showMessage("Face selection mode - click a face to select");
     }
   });
@@ -762,6 +738,16 @@ void MainWindow::setupMenus() {
       m_cqEditor->activateWindow();
     }
   });
+
+  // Geometry Linker (User requested)
+  toolsMenu->addAction("Geometry Linker", this,
+                       &MainWindow::onCopyGeometryToNewPart);
+
+  toolsMenu->addAction("Measure", this, [this]() {
+    if (m_viewport) {
+      statusBar()->showMessage("Measure mode not implemented yet");
+    }
+  });
   toolsMenu->addAction("AI Agent Chat", this, [this]() {
     if (m_aiChatPanel) {
       auto *dock = qobject_cast<QDockWidget *>(m_aiChatPanel->parentWidget());
@@ -793,99 +779,165 @@ void MainWindow::setupMenus() {
                           &MainWindow::onParametricMove);
   assemblyMenu->addAction("Rotate...", this, &MainWindow::onRotateComponent);
   assemblyMenu->addAction("Copy...", this, &MainWindow::onCopyComponent);
+  assemblyMenu->addAction("Copy to New Part...", this,
+                          &MainWindow::onCopyGeometryToNewPart);
   assemblyMenu->addAction("Move to Origin", this, &MainWindow::onMoveToOrigin);
 }
 
 void MainWindow::setupToolbars() {
   // Main toolbar
   auto *mainToolbar = addToolBar("Main");
-  mainToolbar->addAction("📄 New", this, &MainWindow::onNewFile);
-  mainToolbar->addAction("📂 Open", this, &MainWindow::onOpenFile);
-  mainToolbar->addAction("💾 Save", this, &MainWindow::onSaveFile);
+  mainToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  mainToolbar->setIconSize(QSize(24, 24));
+  mainToolbar->addAction(QIcon(":/icons/file.svg"), "New", this,
+                         &MainWindow::onNewFile);
+  mainToolbar->addAction(QIcon(":/icons/folder-open.svg"), "Open", this,
+                         &MainWindow::onOpenFile);
+  mainToolbar->addAction(QIcon(":/icons/device-floppy.svg"), "Save", this,
+                         &MainWindow::onSaveFile);
   mainToolbar->addSeparator();
-  mainToolbar->addAction("🔍 Fit", this, &MainWindow::onViewFit);
+  mainToolbar->addAction(QIcon(":/icons/maximize.svg"), "Fit", this,
+                         &MainWindow::onViewFit);
 
   // Sketch toolbar
   m_sketchToolbar = addToolBar("Sketch");
-  m_sketchToolbar->addAction("?? New Sketch", this, &MainWindow::onNewSketch);
-  m_sketchToolbar->addAction("? Finish", this, &MainWindow::onFinishSketch);
+  m_sketchToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  m_sketchToolbar->setIconSize(QSize(24, 24));
+  m_sketchToolbar->addAction(QIcon(":/icons/pencil.svg"), "New Sketch", this,
+                             &MainWindow::onNewSketch);
+  m_sketchToolbar->addAction(QIcon(":/icons/check.svg"), "Finish", this,
+                             &MainWindow::onFinishSketch);
   m_sketchToolbar->addSeparator();
-  m_sketchToolbar->addAction("📏 Line", this, &MainWindow::onSketchLine);
-  m_sketchToolbar->addAction("▭ Rect", this, &MainWindow::onSketchRectangle);
-  m_sketchToolbar->addAction("⭕ Circle", this, &MainWindow::onSketchCircle);
-  m_sketchToolbar->addAction("🌙 Arc", this, &MainWindow::onSketchArc);
-  m_sketchToolbar->addAction("📍 Point", this, &MainWindow::onSketchPoint);
-  m_sketchToolbar->addAction("〰️ Spline", this, &MainWindow::onSketchSpline);
-  m_sketchToolbar->addAction("🥚 Ellipse", this, &MainWindow::onSketchEllipse);
-  m_sketchToolbar->addAction("⬡ Polygon", this, &MainWindow::onSketchPolygon);
-  m_sketchToolbar->addAction("🎰 Slot", this, &MainWindow::onSketchSlot);
+  m_sketchToolbar->addAction(QIcon(":/icons/slash.svg"), "Line", this,
+                             &MainWindow::onSketchLine);
+  m_sketchToolbar->addAction(QIcon(":/icons/square.svg"), "Rect", this,
+                             &MainWindow::onSketchRectangle);
+  m_sketchToolbar->addAction(QIcon(":/icons/circle.svg"), "Circle", this,
+                             &MainWindow::onSketchCircle);
+  m_sketchToolbar->addAction(QIcon(":/icons/circle-dashed.svg"), "Arc", this,
+                             &MainWindow::onSketchArc);
+  m_sketchToolbar->addAction(QIcon(":/icons/point.svg"), "Point", this,
+                             &MainWindow::onSketchPoint);
+  m_sketchToolbar->addAction(QIcon(":/icons/scribble.svg"), "Spline", this,
+                             &MainWindow::onSketchSpline);
+  m_sketchToolbar->addAction(QIcon(":/icons/oval-vertical.svg"), "Ellipse",
+                             this, &MainWindow::onSketchEllipse);
+  m_sketchToolbar->addAction(QIcon(":/icons/hexagon.svg"), "Polygon", this,
+                             &MainWindow::onSketchPolygon);
+  m_sketchToolbar->addAction(QIcon(":/icons/pill.svg"), "Slot", this,
+                             &MainWindow::onSketchSlot);
+  m_sketchToolbar->addSeparator();
+  m_sketchToolbar->addAction(QIcon(":/icons/ruler-measure.svg"), "Dimension",
+                             this, &MainWindow::onSketchDimension);
+  m_sketchToolbar->addSeparator();
+  m_sketchToolbar->addAction(QIcon(":/icons/arrows-right.svg"), "Convert", this,
+                             &MainWindow::onConvertEntities);
 
   // Constraint toolbar
   m_constraintToolbar = addToolBar("Constraints");
-  m_constraintToolbar->addAction("↔️ H", this,
-                                 &MainWindow::onConstraintHorizontal);
-  m_constraintToolbar->addAction("↕️ V", this,
-                                 &MainWindow::onConstraintVertical);
-  m_constraintToolbar->addAction("?", this,
+  m_constraintToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  m_constraintToolbar->setIconSize(QSize(24, 24));
+  m_constraintToolbar->addAction(QIcon(":/icons/arrows-horizontal.svg"), "H",
+                                 this, &MainWindow::onConstraintHorizontal);
+  m_constraintToolbar->addAction(QIcon(":/icons/arrows-vertical.svg"), "V",
+                                 this, &MainWindow::onConstraintVertical);
+  m_constraintToolbar->addAction(QIcon(":/icons/math-perpendicular.svg"),
+                                 "Perp", this,
                                  &MainWindow::onConstraintPerpendicular);
-  m_constraintToolbar->addAction("?", this, &MainWindow::onConstraintParallel);
-  m_constraintToolbar->addAction("?", this,
-                                 &MainWindow::onConstraintCoincident);
-  m_constraintToolbar->addAction("📐 D", this,
+  m_constraintToolbar->addAction(QIcon(":/icons/math-equal.svg"), "Parallel",
+                                 this, &MainWindow::onConstraintParallel);
+  m_constraintToolbar->addAction(QIcon(":/icons/focus-2.svg"), "Coincident",
+                                 this, &MainWindow::onConstraintCoincident);
+  m_constraintToolbar->addAction(QIcon(":/icons/ruler-measure.svg"), "D", this,
                                  &MainWindow::onConstraintDistance);
-  m_constraintToolbar->addAction("⭕ R", this, &MainWindow::onConstraintRadius);
-  m_constraintToolbar->addAction("?", this, &MainWindow::onConstraintAngle);
+  m_constraintToolbar->addAction(QIcon(":/icons/radius.svg"), "R", this,
+                                 &MainWindow::onConstraintRadius);
+  m_constraintToolbar->addAction(QIcon(":/icons/angle.svg"), "Angle", this,
+                                 &MainWindow::onConstraintAngle);
 
   // Feature toolbar
   m_featureToolbar = addToolBar("Features");
-  m_featureToolbar->addAction("⬆️ Extrude", this, &MainWindow::onExtrude);
-  m_featureToolbar->addAction("🔄 Revolve", this, &MainWindow::onRevolve);
-  m_featureToolbar->addAction("🔘 Fillet", this, &MainWindow::onFillet);
-  m_featureToolbar->addAction("✂️ Chamfer", this, &MainWindow::onChamfer);
+  m_featureToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  m_featureToolbar->setIconSize(QSize(24, 24));
+  m_featureToolbar->addAction(QIcon(":/icons/box-margin.svg"), "Extrude", this,
+                              &MainWindow::onExtrude);
+  m_featureToolbar->addAction(QIcon(":/icons/3d-rotate.svg"), "Revolve", this,
+                              &MainWindow::onRevolve);
+  m_featureToolbar->addAction(QIcon(":/icons/border-radius.svg"), "Fillet",
+                              this, &MainWindow::onFillet);
+  m_featureToolbar->addAction(QIcon(":/icons/cut.svg"), "Chamfer", this,
+                              &MainWindow::onChamfer);
+  m_featureToolbar->addAction(QIcon(":/icons/target.svg"), "Hole", this,
+                              &MainWindow::onHoleWizard);
 
   // Primitives toolbar
   auto *primToolbar = addToolBar("Primitives");
-  primToolbar->addAction("📦 Box", this, &MainWindow::onCreateBox);
-  primToolbar->addAction("🛢️ Cylinder", this, &MainWindow::onCreateCylinder);
-  primToolbar->addAction("🌐 Sphere", this, &MainWindow::onCreateSphere);
+  primToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  primToolbar->setIconSize(QSize(24, 24));
+  primToolbar->addAction(QIcon(":/icons/box.svg"), "Box", this,
+                         &MainWindow::onCreateBox);
+  primToolbar->addAction(QIcon(":/icons/cylinder.svg"), "Cylinder", this,
+                         &MainWindow::onCreateCylinder);
+  primToolbar->addAction(QIcon(":/icons/sphere.svg"), "Sphere", this,
+                         &MainWindow::onCreateSphere);
 
-  primToolbar->addAction("🔺 Cone", this, &MainWindow::onCreateCone);
-  primToolbar->addAction("⚙️ Gear", this, &MainWindow::onGear);
+  primToolbar->addAction(QIcon(":/icons/cone.svg"), "Cone", this,
+                         &MainWindow::onCreateCone);
+  primToolbar->addAction(QIcon(":/icons/settings.svg"), "Gear", this,
+                         &MainWindow::onGear);
 
   // Boolean toolbar
   auto *boolToolbar = addToolBar("Boolean");
-  boolToolbar->addAction("➕ Fuse", this, &MainWindow::onBooleanFuse);
-  boolToolbar->addAction("➖ Cut", this, &MainWindow::onBooleanCut);
-  boolToolbar->addAction("⚡ Common", this, &MainWindow::onBooleanCommon);
+  boolToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  boolToolbar->setIconSize(QSize(24, 24));
+  boolToolbar->addAction(QIcon(":/icons/plus.svg"), "Fuse", this,
+                         &MainWindow::onBooleanFuse);
+  boolToolbar->addAction(QIcon(":/icons/minus.svg"), "Cut", this,
+                         &MainWindow::onBooleanCut);
+  boolToolbar->addAction(QIcon(":/icons/math-symbols.svg"), "Common", this,
+                         &MainWindow::onBooleanCommon);
 
   // Selection mode toolbar
   auto *selectToolbar = addToolBar("Selection");
-  selectToolbar->addAction("?? Shape", this, &MainWindow::onSelectShape);
-  selectToolbar->addAction("? Face", this, &MainWindow::onSelectFace);
-  selectToolbar->addAction(" Edge", this, &MainWindow::onSelectEdge);
-  selectToolbar->addAction(" Vertex", this, &MainWindow::onSelectVertex);
+  selectToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  selectToolbar->setIconSize(QSize(24, 24));
+  selectToolbar->addAction(QIcon(":/icons/box-model.svg"), "Shape", this,
+                           &MainWindow::onSelectShape);
+  selectToolbar->addAction(QIcon(":/icons/square.svg"), "Face", this,
+                           &MainWindow::onSelectFace);
+  selectToolbar->addAction(QIcon(":/icons/minus.svg"), "Edge", this,
+                           &MainWindow::onSelectEdge);
+  selectToolbar->addAction(QIcon(":/icons/point.svg"), "Vertex", this,
+                           &MainWindow::onSelectVertex);
 
   // Assembly toolbar
   m_assemblyToolbar = addToolBar("Assembly");
-  m_assemblyToolbar->addAction("📄 Asm", this, &MainWindow::onNewAssembly);
-  m_assemblyToolbar->addAction("📥 Insert", this,
+  m_assemblyToolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  m_assemblyToolbar->setIconSize(QSize(24, 24));
+  m_assemblyToolbar->addAction(QIcon(":/icons/layout-board.svg"), "Asm", this,
+                               &MainWindow::onNewAssembly);
+  m_assemblyToolbar->addAction(QIcon(":/icons/file-import.svg"), "Insert", this,
                                &MainWindow::onInsertComponent);
-  m_assemblyToolbar->addAction("✋ Move", this, &MainWindow::onMoveComponent);
-  m_assemblyToolbar->addAction("🔗 Mate", this,
+  m_assemblyToolbar->addAction(QIcon(":/icons/hand-grab.svg"), "Move", this,
+                               &MainWindow::onMoveComponent);
+  m_assemblyToolbar->addAction(QIcon(":/icons/link.svg"), "Mate", this,
                                &MainWindow::onAssemblyConstraint);
-  m_assemblyToolbar->addAction("⚙️ Solve", this,
+  m_assemblyToolbar->addAction(QIcon(":/icons/calculator.svg"), "Solve", this,
                                &MainWindow::onSolveConstraints);
-  m_assemblyToolbar->addAction("↔️ Multi-Move", this,
+  m_assemblyToolbar->addAction(QIcon(":/icons/arrows-maximize.svg"),
+                               "Multi-Move", this,
                                &MainWindow::onMoveMultipleComponents);
-  m_assemblyToolbar->addAction("📁 Group", this,
+  m_assemblyToolbar->addAction(QIcon(":/icons/folder.svg"), "Group", this,
                                &MainWindow::onGroupSelectedComponents);
   m_assemblyToolbar->addSeparator();
-  m_assemblyToolbar->addAction("📐 Precise", this,
+  m_assemblyToolbar->addAction(QIcon(":/icons/crosshair.svg"), "Precise", this,
                                &MainWindow::onParametricMove);
-  m_assemblyToolbar->addAction("🔄 Rotate", this,
+  m_assemblyToolbar->addAction(QIcon(":/icons/rotate.svg"), "Rotate", this,
                                &MainWindow::onRotateComponent);
-  m_assemblyToolbar->addAction("📋 Copy", this, &MainWindow::onCopyComponent);
-  m_assemblyToolbar->addAction("🎯 Origin", this, &MainWindow::onMoveToOrigin);
+  m_assemblyToolbar->addAction(QIcon(":/icons/copy.svg"), "Copy", this,
+                               &MainWindow::onCopyComponent);
+  m_assemblyToolbar->addAction(QIcon(":/icons/target.svg"), "Origin", this,
+                               &MainWindow::onMoveToOrigin);
 
   // Initially disable sketch tools (until sketch is created)
   updateSketchToolsEnabled(false);
@@ -893,18 +945,24 @@ void MainWindow::setupToolbars() {
 }
 
 void MainWindow::setupDockWidgets() {
+  qDebug() << "setupDockWidgets: Start";
   // Feature Tree (left)
   m_featureTreeDock = new QDockWidget("Feature Tree", this);
   m_treeStack = new QStackedWidget(m_featureTreeDock);
   m_featureTreeDock->setWidget(m_treeStack);
 
+  qDebug() << "setupDockWidgets: Feature Tree Created";
+
   // 1. Part Feature List
   m_featureList = new QListWidget(m_treeStack);
   m_treeStack->addWidget(m_featureList);
 
+  qDebug() << "setupDockWidgets: Feature List Created";
+
   // 2. Assembly Tree Widget
   m_assemblyTree = new AssemblyTreeWidget(m_treeStack);
-  m_assemblyTree->setAssembly(m_document->assembly());
+  qDebug() << "setupDockWidgets: AssemblyTreeWidget Created";
+  // moved to onTabChanged
   m_treeStack->addWidget(m_assemblyTree);
 
   connect(m_assemblyTree, &AssemblyTreeWidget::componentSelected, this,
@@ -918,7 +976,7 @@ void MainWindow::setupDockWidgets() {
 
   addDockWidget(Qt::LeftDockWidgetArea, m_featureTreeDock);
 
-  addDockWidget(Qt::LeftDockWidgetArea, m_featureTreeDock);
+  qDebug() << "setupDockWidgets: FeatureTreeDock Added";
 
   // Add default items
   m_featureList->addItem("?? Origin");
@@ -933,14 +991,18 @@ void MainWindow::setupDockWidgets() {
   m_propertiesDock->setMinimumWidth(220);
   addDockWidget(Qt::RightDockWidgetArea, m_propertiesDock);
 
+  qDebug() << "setupDockWidgets: PropertiesDock Added";
+
   // Parameter Editor (left, below Feature Tree) - use Document's
   // ParameterManager
   m_parameterDock = new QDockWidget("Parameters", this);
   m_parameterEditor = new ParameterEditor(m_parameterDock);
-  m_parameterEditor->setParameterManager(m_document->parameterManager());
+  // moved to onTabChanged
   m_parameterDock->setWidget(m_parameterEditor);
   m_parameterDock->setMinimumWidth(280);
   addDockWidget(Qt::LeftDockWidgetArea, m_parameterDock);
+
+  qDebug() << "setupDockWidgets: ParameterDock Added";
 
   // Sketch Editor (bottom/right)
   m_sketchDock = new QDockWidget("Sketch Editor", this);
@@ -949,6 +1011,8 @@ void MainWindow::setupDockWidgets() {
   m_sketchDock->setMinimumSize(500, 400);
   addDockWidget(Qt::RightDockWidgetArea, m_sketchDock);
   m_sketchDock->hide(); // Initially hidden
+
+  qDebug() << "setupDockWidgets: SketchDock Added";
 
   // Install event filter on sketch view only (not globally) to handle ESC
   if (m_sketchView) {
@@ -963,14 +1027,18 @@ void MainWindow::setupDockWidgets() {
   m_toolSettingsDock->setMinimumWidth(200);
   addDockWidget(Qt::LeftDockWidgetArea, m_toolSettingsDock);
 
-  // Profile Selection Panel (floating, shown when Extrude/Cut activated)
+  qDebug() << "setupDockWidgets: ToolSettingsDock Added";
+
+  // Profile Selection Panel (docked below Tool Settings, shown when Extrude/Cut
+  // activated)
   m_profileSelectionDock = new QDockWidget("Profile Selection", this);
   m_profileSelectionPanel = new ProfileSelectionPanel(m_profileSelectionDock);
   m_profileSelectionDock->setWidget(m_profileSelectionPanel);
   m_profileSelectionDock->setMinimumWidth(280);
-  m_profileSelectionDock->setFloating(true);
-  m_profileSelectionDock->resize(300, 200);
+  addDockWidget(Qt::LeftDockWidgetArea, m_profileSelectionDock);
   m_profileSelectionDock->hide(); // Initially hidden
+
+  qDebug() << "setupDockWidgets: ProfileSelectionDock Added";
 
   // Connect ProfileSelectionPanel signals
   connect(m_profileSelectionPanel, &ProfileSelectionPanel::applyClicked, this,
@@ -1037,6 +1105,8 @@ void MainWindow::setupDockWidgets() {
                 m_toolSettingsPanel->showCutSettings();
               } else if (m_activePartTool == ActivePartTool::Revolve) {
                 m_toolSettingsPanel->showRevolveSettings();
+              } else if (m_activePartTool == ActivePartTool::Sweep) {
+                m_toolSettingsPanel->showSweepSettings();
               }
             }
             statusBar()->showMessage(
@@ -1052,6 +1122,8 @@ void MainWindow::setupDockWidgets() {
   // ToolSettingsPanel connections
   connect(m_toolSettingsPanel, &ToolSettingsPanel::applyClicked, this,
           &MainWindow::onToolApply);
+  connect(m_toolSettingsPanel, &ToolSettingsPanel::settingsChanged, this,
+          &MainWindow::updateExtrudePreview);
 
   // Feature tree connections
   m_featureList->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -1066,15 +1138,61 @@ void MainWindow::setupDockWidgets() {
   connect(m_featureList->model(), &QAbstractItemModel::rowsMoved, this,
           &MainWindow::onFeatureReordered);
 
-  // Connect document signals to update feature list
-  connect(m_document->featureTree(), &core::FeatureTree::featureAdded, this,
-          &MainWindow::updateFeatureList);
-  connect(m_document->featureTree(), &core::FeatureTree::featureRemoved, this,
-          &MainWindow::updateFeatureList);
-  connect(m_document->featureTree(), &core::FeatureTree::featureModified, this,
-          &MainWindow::updateFeatureList);
-  connect(m_document->featureTree(), &core::FeatureTree::treeStructureChanged,
-          this, &MainWindow::updateFeatureList);
+  // moved to onTabChanged
+
+  // Connect sketch entity selection for tools (e.g. Revolve Axis, Hole Wizard)
+  connect(
+      m_sketchView, &SketchView2D::entitySelected, this,
+      [this](sketch::SketchEntity *entity) {
+        // Auto-select "Selected Line" as Revolve Axis if a line is selected
+        if (m_activePartTool == ActivePartTool::Revolve &&
+            m_toolSettingsPanel) {
+          auto *line = dynamic_cast<sketch::SketchLine *>(entity);
+          if (line) {
+            // Set Revolve Axis Combo to "Selected Line" (Index 3)
+            m_toolSettingsPanel->setRevolveAxis(3);
+            statusBar()->showMessage(
+                "Revolve Axis set to selected line. Click Apply to Finish.");
+          }
+        }
+      });
+
+  // Handle Hole Wizard Sketch Point selection via PointSelect tool
+  connect(
+      m_sketchView, &SketchView2D::pointSelected, this,
+      [this](double x, double y) {
+        if (m_activePartTool == ActivePartTool::HoleWizard) {
+          // Convert 2D sketch point to 3D world coordinates
+          gp_Pnt p3d = m_currentSketch->plane().to3D(gp_Pnt2d(x, y));
+
+          // Toggle selection: Search if this point is already selected (with
+          // small tolerance)
+          bool removed = false;
+          for (auto it = m_holePoints.begin(); it != m_holePoints.end(); ++it) {
+            if (it->Distance(p3d) < 1e-6) {
+              m_holePoints.erase(it);
+              removed = true;
+              break;
+            }
+          }
+
+          if (!removed) {
+            m_holePoints.push_back(p3d);
+          }
+
+          // Update sketch view's preview points
+          std::vector<gp_Pnt2d> previewPoints;
+          for (const auto &p : m_holePoints) {
+            previewPoints.push_back(m_currentSketch->plane().to2D(p));
+          }
+          m_sketchView->setPreviewPoints(previewPoints);
+
+          statusBar()->showMessage(
+              QString(
+                  "Hole Wizard: %1 point(s) selected. Click Apply when done.")
+                  .arg(m_holePoints.size()));
+        }
+      });
 }
 
 void MainWindow::showSketchEditor() {
@@ -1191,190 +1309,6 @@ void MainWindow::updateWindowTitle() {
 
 // File menu slots
 // onNewFile moved to line 311
-
-void MainWindow::onOpenFile() {
-  QString filter =
-      "Supported Files (*.step *.stp *.stl *.igs *.iges *.brep *.rle *.occ);;"
-      "STEP Files (*.step *.stp);;"
-      "STL Files (*.stl);;"
-      "IGES Files (*.igs *.iges);;"
-      "BREP Files (*.brep *.rle *.occ);;"
-      "SolidWorks Files (*.sldprt *.sldasm);;"
-      "Parasolid Files (*.x_t *.x_b);;"
-      "All Files (*.*)";
-
-  QString filename =
-      QFileDialog::getOpenFileName(this, "Open File", QString(), filter);
-
-  if (!filename.isEmpty()) {
-    QFileInfo fileInfo(filename);
-    QString suffix = fileInfo.suffix().toLower();
-
-    // Clear existing shapes before opening new ones
-    // TODO: Maybe ask if user wants to append or replace?
-    clearShapes();
-
-    if (suffix == "stl") {
-      TopoDS_Shape shape = io::StlReader::readFile(filename);
-      if (!shape.IsNull()) {
-        addShape(shape);
-        m_currentFile = filename;
-        m_modified = false;
-        updateWindowTitle();
-
-        if (m_viewport) {
-          m_viewport->fitAll();
-        }
-        statusBar()->showMessage("Opened (STL): " + filename);
-      } else {
-        QMessageBox::warning(this, "Error",
-                             "Failed to open STL file: " + filename);
-      }
-    } else if (suffix == "igs" || suffix == "iges") {
-      io::IgesReader reader;
-      if (reader.read(filename.toStdString())) {
-        auto shapes = reader.getAllShapes();
-        for (const auto &shape : shapes) {
-          addShape(shape.occShape());
-        }
-        m_currentFile = filename;
-        m_modified = false;
-        updateWindowTitle();
-        if (m_viewport)
-          m_viewport->fitAll();
-        statusBar()->showMessage("Opened (IGES): " + filename);
-      } else {
-        QMessageBox::warning(this, "Error",
-                             "Failed to open IGES file: " + filename + "\n" +
-                                 QString::fromStdString(reader.errorMessage()));
-      }
-    } else if (suffix == "brep" || suffix == "rle" || suffix == "occ") {
-      core::Shape shape = io::BRepReader::readFile(filename.toStdString());
-      if (shape.isValid()) {
-        addShape(shape.occShape());
-        m_currentFile = filename;
-        m_modified = false;
-        updateWindowTitle();
-        if (m_viewport)
-          m_viewport->fitAll();
-        statusBar()->showMessage("Opened (BREP): " + filename);
-      } else {
-        QMessageBox::warning(this, "Error",
-                             "Failed to open BREP file: " + filename);
-      }
-    } else if (suffix == "x_t" || suffix == "x_b") {
-      m_progressBar->setVisible(true);
-      m_progressBar->setValue(0);
-      statusBar()->showMessage("Importing Parasolid file...");
-      QCoreApplication::processEvents();
-
-      io::ParasolidReader reader;
-      if (reader.read(filename.toStdString())) {
-        auto shapes = reader.getAllShapes();
-        for (const auto &shape : shapes) {
-          addShape(shape.occShape());
-        }
-        m_currentFile = filename;
-        m_modified = false;
-        updateWindowTitle();
-        if (m_viewport)
-          m_viewport->fitAll();
-        statusBar()->showMessage("Opened (Parasolid): " + filename);
-      } else {
-        QMessageBox::warning(this, "Import Failed",
-                             "Failed to parse Parasolid file.\n" +
-                                 QString::fromStdString(reader.errorMessage()));
-        statusBar()->showMessage("Import failed.");
-      }
-      m_progressBar->setVisible(false);
-
-    } else if (suffix == "sldprt" || suffix == "sldasm") {
-      // DIRECT BACKGROUND CONVERSION (User Requested)
-      m_progressBar->setVisible(true);
-      m_progressBar->setRange(0, 0);
-      statusBar()->showMessage(
-          "Starting background conversion (SolidWorks)...");
-      QCoreApplication::processEvents();
-
-      io::SolidWorksConverter converter;
-      std::string stepFile;
-
-      if (converter.convertToStep(filename.toStdString(), stepFile)) {
-        statusBar()->showMessage(
-            "Conversion successful. Importing STEP data...");
-        m_progressBar->setValue(75);
-        QCoreApplication::processEvents();
-
-        io::StepReader stepReader;
-        if (stepReader.read(stepFile)) {
-          auto shapes = stepReader.getAllShapes();
-          for (const auto &shape : shapes) {
-            addShape(shape.occShape());
-          }
-          if (m_viewport)
-            m_viewport->fitAll();
-          statusBar()->showMessage("Imported via SolidWorks Conversion: " +
-                                   filename);
-          m_currentFile = filename;
-          m_modified = false;
-          updateWindowTitle();
-
-          // Cleanup temp file
-          try {
-            std::filesystem::remove(stepFile);
-          } catch (...) {
-          }
-        } else {
-          QMessageBox::critical(
-              this, "Import Failed",
-              "Converted to STEP but failed to read result.\n" +
-                  QString::fromStdString(stepReader.errorMessage()));
-        }
-      } else {
-        // Conversion failed
-        QMessageBox::warning(
-            this, "Import Failed",
-            "Background Conversion failed.\n\nError: " +
-                QString::fromStdString(converter.errorMessage()));
-        statusBar()->showMessage("Import failed.");
-      }
-      m_progressBar->setVisible(false);
-      m_progressBar->setRange(0, 100); // Reset range
-    } else {
-      // Default to STEP for now
-      io::StepReader reader;
-      std::string path = filename.toStdString();
-
-      if (reader.read(path)) {
-        auto shapes = reader.getAllShapes();
-        if (shapes.empty()) {
-          auto shape = reader.getShape();
-          if (shape.isValid()) {
-            addShape(shape.occShape());
-          }
-        } else {
-          for (const auto &shape : shapes) {
-            addShape(shape.occShape());
-          }
-        }
-
-        m_currentFile = filename;
-        m_modified = false;
-        updateWindowTitle();
-
-        if (m_viewport) {
-          m_viewport->fitAll();
-        }
-
-        statusBar()->showMessage("Opened: " + filename);
-      } else {
-        QMessageBox::warning(this, "Error",
-                             "Failed to open file: " + filename + "\n" +
-                                 QString::fromStdString(reader.errorMessage()));
-      }
-    }
-  }
-}
 
 void MainWindow::onSaveFile() {
   if (m_currentFile.isEmpty()) {
@@ -1716,9 +1650,6 @@ void MainWindow::onBooleanFuse() {
                              core::Shape(m_document->getAllShapes()[1]));
 
   if (result.isValid()) {
-    // Save state for undo
-    saveUndoState("Boolean Fuse");
-
     // Remove original shapes, add result
     if (m_document->temporaryShapes().size() >= 2) {
       m_document->temporaryShapes().erase(
@@ -1727,6 +1658,9 @@ void MainWindow::onBooleanFuse() {
       m_document->temporaryShapes().insert(
           m_document->temporaryShapes().begin(), result.occShape());
     }
+
+    // Save state for undo AFTER modification
+    saveUndoState("Boolean Fuse");
 
     displayAllShapes();
     m_modified = true;
@@ -1751,9 +1685,6 @@ void MainWindow::onBooleanCut() {
                             core::Shape(m_document->getAllShapes()[1]));
 
   if (result.isValid()) {
-    // Save state for undo
-    saveUndoState("Boolean Cut");
-
     // Remove original shapes, add result
     if (m_document->temporaryShapes().size() >= 2) {
       m_document->temporaryShapes().erase(
@@ -1762,6 +1693,9 @@ void MainWindow::onBooleanCut() {
       m_document->temporaryShapes().insert(
           m_document->temporaryShapes().begin(), result.occShape());
     }
+
+    // Save state for undo AFTER modification
+    saveUndoState("Boolean Cut");
 
     displayAllShapes();
     m_modified = true;
@@ -1786,9 +1720,6 @@ void MainWindow::onBooleanCommon() {
                                core::Shape(m_document->getAllShapes()[1]));
 
   if (result.isValid()) {
-    // Save state for undo
-    saveUndoState("Boolean Common");
-
     // Remove original shapes, add result
     if (m_document->temporaryShapes().size() >= 2) {
       m_document->temporaryShapes().erase(
@@ -1797,6 +1728,9 @@ void MainWindow::onBooleanCommon() {
       m_document->temporaryShapes().insert(
           m_document->temporaryShapes().begin(), result.occShape());
     }
+
+    // Save state for undo AFTER modification
+    saveUndoState("Boolean Common");
 
     displayAllShapes();
     m_modified = true;
@@ -1871,6 +1805,8 @@ void MainWindow::onSketchOnFace() {
 
   // Enable face selection mode
   if (m_viewport) {
+    m_pendingFaceOperation =
+        PendingFaceOperation::SketchOnFace; // Enable sketch on face mode
     m_viewport->enableFaceSelection(true);
     statusBar()->showMessage("Click on a face to create sketch...");
   }
@@ -1893,23 +1829,30 @@ void MainWindow::onFaceSelected() {
       return;
     }
 
-    // Disable face selection mode
-    m_viewport->enableFaceSelection(false);
-
     try {
+      TopoDS_Shape baseShape;
+      if (!m_document->temporaryShapes().empty()) {
+        baseShape = m_document->temporaryShapes().back();
+      } else {
+        baseShape = m_document->getAllShapes().back();
+      }
+
       switch (m_pendingFaceOperation) {
       case PendingFaceOperation::Dome: {
-        saveUndoState("Dome");
-
         part::DomeFeature dome;
-        TopoDS_Shape result = dome.execute(m_document->getAllShapes().back(),
-                                           selectedFace, m_pendingDomeHeight);
+        TopoDS_Shape result =
+            dome.execute(baseShape, selectedFace, m_pendingDomeHeight);
 
         if (!result.IsNull()) {
-          m_document->getAllShapes().back() = result;
+          if (!m_document->temporaryShapes().empty()) {
+            m_document->temporaryShapes().back() = result;
+          } else {
+            m_document->addTemporaryShape(result);
+          }
+          saveUndoState("Dome");
           displayAllShapes();
           m_featureList->addItem(
-              QString("?? Dome (H=%1mm)").arg(m_pendingDomeHeight));
+              QString("Dome (H=%1mm)").arg(m_pendingDomeHeight));
           statusBar()->showMessage(
               QString("Dome added: H=%1mm").arg(m_pendingDomeHeight), 3000);
         } else {
@@ -1921,21 +1864,21 @@ void MainWindow::onFaceSelected() {
       }
 
       case PendingFaceOperation::Shell: {
-        saveUndoState("Shell");
-
-        std::vector<TopoDS_Face> facesToRemove = {selectedFace};
-        double thickness = m_pendingShellOutward ? -m_pendingShellThickness
-                                                 : m_pendingShellThickness;
-
         part::ShellFeature shell;
-        TopoDS_Shape result = shell.execute(m_document->getAllShapes().back(),
-                                            facesToRemove, thickness);
+        std::vector<TopoDS_Face> facesToRemove = {selectedFace};
+        TopoDS_Shape result =
+            shell.execute(baseShape, facesToRemove, m_pendingShellThickness);
 
         if (!result.IsNull()) {
-          m_document->getAllShapes().back() = result;
+          if (!m_document->temporaryShapes().empty()) {
+            m_document->temporaryShapes().back() = result;
+          } else {
+            m_document->addTemporaryShape(result);
+          }
+          saveUndoState("Shell");
           displayAllShapes();
           m_featureList->addItem(
-              QString("?? Shell (T=%1mm)").arg(m_pendingShellThickness));
+              QString("Shell (T=%1mm)").arg(m_pendingShellThickness));
           statusBar()->showMessage(
               QString("Shell created: T=%1mm").arg(m_pendingShellThickness),
               3000);
@@ -1948,27 +1891,27 @@ void MainWindow::onFaceSelected() {
       }
 
       case PendingFaceOperation::Draft: {
-        saveUndoState("Draft");
-
-        // Draft needs a neutral plane and direction - using Z axis for
-        // simplicity
-        gp_Dir pullDir(0, 0, 1);
-        gp_Pln neutralPlane(gp_Pnt(0, 0, 0), pullDir);
-
-        std::vector<TopoDS_Face> facesToDraft = {selectedFace};
-
         part::DraftFeature draft;
+        std::vector<TopoDS_Face> draftFaces = {selectedFace};
+        gp_Dir pullDir(0, 0, 1);
+        part::DraftParams params;
+        params.angle = m_pendingDraftAngle;
+
         TopoDS_Shape result =
-            draft.execute(m_document->getAllShapes().back(), facesToDraft,
-                          neutralPlane, pullDir, m_pendingDraftAngle);
+            draft.execute(baseShape, draftFaces, pullDir, params);
 
         if (!result.IsNull()) {
-          m_document->getAllShapes().back() = result;
+          if (!m_document->temporaryShapes().empty()) {
+            m_document->temporaryShapes().back() = result;
+          } else {
+            m_document->addTemporaryShape(result);
+          }
+          saveUndoState("Draft");
           displayAllShapes();
           m_featureList->addItem(
-              QString("?? Draft (%1�)").arg(m_pendingDraftAngle));
+              QString("Draft (%1°)").arg(m_pendingDraftAngle));
           statusBar()->showMessage(
-              QString("Draft applied: %1�").arg(m_pendingDraftAngle), 3000);
+              QString("Draft applied: %1°").arg(m_pendingDraftAngle), 3000);
         } else {
           QMessageBox::warning(
               this, "Draft",
@@ -1978,16 +1921,15 @@ void MainWindow::onFaceSelected() {
       }
 
       case PendingFaceOperation::Thicken: {
-        saveUndoState("Thicken");
-
         part::ThickenFeature thicken;
         TopoDS_Shape result =
             thicken.execute(selectedFace, m_pendingThickenValue);
 
         if (!result.IsNull()) {
-          // TODO: Convert to Feature
-          // TODO: Convert to Feature-based system
-          //       // m_shapes.push_back(result);
+          // Add the thickened solid to the document
+          m_document->addTemporaryShape(result);
+          saveUndoState("Thicken");
+
           displayAllShapes();
           m_featureList->addItem(
               QString("?? Thicken (%1mm)").arg(m_pendingThickenValue));
@@ -2003,16 +1945,15 @@ void MainWindow::onFaceSelected() {
       }
 
       case PendingFaceOperation::OffsetSurface: {
-        saveUndoState("Offset Surface");
-
         part::OffsetSurfaceFeature offsetSurf;
         TopoDS_Shape result =
             offsetSurf.execute(selectedFace, m_pendingOffsetValue);
 
         if (!result.IsNull()) {
-          // TODO: Convert to Feature
-          // TODO: Convert to Feature-based system
-          //       // m_shapes.push_back(result);
+          // Add the offset surface to the document
+          m_document->addTemporaryShape(result);
+          saveUndoState("Offset Surface");
+
           displayAllShapes();
           m_featureList->addItem(
               QString("?? Offset Surface (%1mm)").arg(m_pendingOffsetValue));
@@ -2028,10 +1969,68 @@ void MainWindow::onFaceSelected() {
         break;
       }
 
-      default:
+      case PendingFaceOperation::SketchOnFace: {
+        // Sketch-on-face behavior with optional offset and angle
+        gp_Pln plane;
+        bool hasPlane = m_viewport->getSelectedFacePlane(plane);
+
+        if (hasPlane) {
+          if (m_pendingOffsetSketchDistance != 0.0) {
+            gp_Vec offsetVec(plane.Axis().Direction());
+            offsetVec *= m_pendingOffsetSketchDistance;
+            plane.Translate(offsetVec);
+          }
+          if (m_pendingSketchAngle != 0.0) {
+            double angleRad = m_pendingSketchAngle * M_PI / 180.0;
+            // Rotate around its own local X axis
+            plane.Rotate(plane.XAxis(), angleRad);
+          }
+          m_pendingOffsetSketchDistance = 0.0; // Reset for next use
+          m_pendingSketchAngle = 0.0;
+
+          // Create SketchPlane from the face's plane
+          sketch::SketchPlane sketchPlane(plane);
+
+          // Create new sketch with the face's plane
+          m_currentSketch = std::make_shared<sketch::Sketch>(sketchPlane);
+          m_currentSketch->setName("Sketch" +
+                                   std::to_string(m_featureList->count() + 1));
+          m_document->addSketch(m_currentSketch);
+
+          m_sketchMode = true;
+          updateSketchToolsEnabled(true);
+
+          if (m_featureList) {
+            m_featureList->addItem(
+                "?? " + QString::fromStdString(m_currentSketch->name()));
+          }
+
+          showSketchEditor();
+          // Switch to sketch view (normal to plane)
+          if (m_viewport) {
+            // Align camera to plane normal
+            // This functionality might need to be exposed in Viewport3D
+            // m_viewport->alignToPlane(plane);
+          }
+
+          if (m_sketchView) {
+            m_sketchView->setTool(SketchToolType::Line);
+          }
+
+          statusBar()->showMessage("Sketch on face created");
+          m_modified = true;
+          updateWindowTitle();
+        } else {
+          QMessageBox::warning(
+              this, "Non-Planar Face",
+              "Selected face is not planar. Please select a flat face.");
+        }
         break;
       }
 
+      default:
+        break;
+      }
     } catch (const Standard_Failure &e) {
       QMessageBox::warning(this, "Operation Failed",
                            QString("Error: %1").arg(e.GetMessageString()));
@@ -2039,47 +2038,12 @@ void MainWindow::onFaceSelected() {
       QMessageBox::warning(this, "Operation Failed", "Unknown error occurred.");
     }
 
+    // Disable face selection mode AFTER the operation
+    // (must be after getSelectedFacePlane() which reads m_selectedFace)
+    m_viewport->enableFaceSelection(false);
+
     m_pendingFaceOperation = PendingFaceOperation::None;
     return;
-  }
-
-  // Original sketch-on-face behavior
-  gp_Pln plane;
-  bool hasPlane = m_viewport->getSelectedFacePlane(plane);
-
-  // Now disable face selection mode
-  m_viewport->enableFaceSelection(false);
-
-  if (hasPlane) {
-    // Create SketchPlane from the face's plane
-    sketch::SketchPlane sketchPlane(plane);
-
-    // Create new sketch with the face's plane
-    m_currentSketch = std::make_shared<sketch::Sketch>(sketchPlane);
-    m_currentSketch->setName("Sketch" + std::to_string(m_featureList->count()));
-    m_document->addSketch(m_currentSketch);
-
-    m_sketchMode = true;
-    updateSketchToolsEnabled(true);
-
-    if (m_featureList) {
-      m_featureList->addItem("?? " +
-                             QString::fromStdString(m_currentSketch->name()) +
-                             " (on face)");
-    }
-
-    showSketchEditor();
-    if (m_sketchView) {
-      m_sketchView->setTool(SketchToolType::Line);
-    }
-
-    statusBar()->showMessage("Sketch on face: Use L=Line, R=Rect, C=Circle");
-    m_modified = true;
-    updateWindowTitle();
-  } else {
-    QMessageBox::warning(
-        this, "Non-Planar Face",
-        "Selected face is not planar. Please select a flat face.");
   }
 }
 
@@ -2208,6 +2172,19 @@ void MainWindow::onSketchEllipse() {
   }
 }
 
+void MainWindow::onSketchDimension() {
+  // Auto-activate sketch mode if not already active
+  if (!m_sketchMode) {
+    m_sketchMode = true;
+    updateSketchToolsEnabled(true);
+  }
+  if (m_sketchView) {
+    m_sketchView->setTool(SketchToolType::Dimension);
+    statusBar()->showMessage(
+        "Smart Dimension: Click an entity to add a dimension constraint");
+  }
+}
+
 void MainWindow::onSketchPolygon() {
   // Auto-activate sketch mode if not already active
   if (!m_sketchMode) {
@@ -2234,123 +2211,63 @@ void MainWindow::onSketchSlot() {
   }
 }
 
-void MainWindow::onConvertEntities() {
-  if (!m_sketchMode) {
-    QMessageBox::information(this, "Convert Entities",
-                             "Start a new sketch first");
+void MainWindow::onSketchProject() {
+  if (!m_sketchMode || !m_currentSketch) {
+    statusBar()->showMessage("Create or edit a sketch to use Project.");
     return;
   }
 
-  if (!m_currentSketch) {
-    QMessageBox::warning(this, "Convert Entities", "No active sketch");
-    return;
-  }
+  // Check if there are already selected edges/faces
+  if (m_viewport) {
+    auto edges = m_viewport->getSelectedEdges();
+    if (!edges.empty()) {
+      // Confirmation Dialog
+      auto reply =
+          QMessageBox::question(this, "Convert Entities",
+                                QString("Do you want to project %1 selected "
+                                        "edges onto the sketch plane?")
+                                    .arg(edges.size()),
+                                QMessageBox::Yes | QMessageBox::No);
 
-  if (m_document->getAllShapes().empty()) {
-    QMessageBox::information(this, "Convert Entities",
-                             "No 3D geometry to convert."
-                             "Create a solid first.");
-    return;
-  }
+      if (reply == QMessageBox::No) {
+        return;
+      }
 
-  // Get sketch plane for projection
-  gp_Pln plane = m_currentSketch->plane().plane();
-  gp_Dir planeNormal = plane.Axis().Direction();
-
-  int addedCount = 0;
-
-  // Extract all edges from shapes and project onto sketch plane
-  for (const auto &shape : m_document->getAllShapes()) {
-    TopExp_Explorer edgeExp(shape, TopAbs_EDGE);
-    for (; edgeExp.More(); edgeExp.Next()) {
-      TopoDS_Edge edge = TopoDS::Edge(edgeExp.Current());
-
-      try {
-        Standard_Real first, last;
-        Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
-
-        if (curve.IsNull())
-          continue;
-
-        // Check curve type and project accordingly
-        if (curve->IsKind(STANDARD_TYPE(Geom_Line))) {
-          // Project line endpoints
-          gp_Pnt p1 = curve->Value(first);
-          gp_Pnt p2 = curve->Value(last);
-
-          gp_Pnt2d pt1_2d = m_currentSketch->plane().to2D(p1);
-          gp_Pnt2d pt2_2d = m_currentSketch->plane().to2D(p2);
-
-          // Only add if line has significant length
-          if (pt1_2d.Distance(pt2_2d) > 0.01) {
-            if (pt1_2d.Distance(pt2_2d) > 0.01) {
-              auto line = std::make_shared<sketch::SketchLine>(pt1_2d, pt2_2d);
-              line->setConstruction(true);
-              m_currentSketch->addEntity(line);
-            }
-          }
-        } else if (curve->IsKind(STANDARD_TYPE(Geom_Circle))) {
-          Handle(Geom_Circle) gc = Handle(Geom_Circle)::DownCast(curve);
-          gp_Pnt center3d = gc->Location();
-
-          // Check if circle is parallel to sketch plane
-          gp_Dir circleNormal = gc->Axis().Direction();
-          if (std::abs(circleNormal.Dot(planeNormal)) > 0.99) {
-            // Project center onto plane
-            gp_Pnt2d center2d = m_currentSketch->plane().to2D(center3d);
-            double radius = gc->Radius();
-
-            auto circle =
-                std::make_shared<sketch::SketchCircle>(center2d, radius);
-            circle->setConstruction(true);
-            m_currentSketch->addEntity(circle);
-            addedCount++;
-          }
-        } else {
-          // For other curves, approximate with line segments
-          const int numSamples = 20;
-          for (int i = 0; i < numSamples; ++i) {
-            double t1 = first + (last - first) * i / numSamples;
-            double t2 = first + (last - first) * (i + 1) / numSamples;
-            gp_Pnt p1 = curve->Value(t1);
-            gp_Pnt p2 = curve->Value(t2);
-
-            gp_Pnt2d pt1_2d = m_currentSketch->plane().to2D(p1);
-            gp_Pnt2d pt2_2d = m_currentSketch->plane().to2D(p2);
-
-            if (pt1_2d.Distance(pt2_2d) > 0.01) {
-              auto line = std::make_shared<sketch::SketchLine>(pt1_2d, pt2_2d);
-              line->setConstruction(true);
-              m_currentSketch->addEntity(line);
-              addedCount++;
-            }
-          }
+      int count = 0;
+      for (const auto &edge : edges) {
+        auto entities = m_currentSketch->addProjectedEntity(edge);
+        if (!entities.empty()) {
+          count += entities.size();
         }
-      } catch (...) {
-        // Continue with other edges if one fails
+      }
+
+      if (count > 0) {
+        statusBar()->showMessage(QString("Projected %1 entities").arg(count));
+        // Refresh view
+        if (m_sketchView) {
+          m_sketchView->setSketch(m_currentSketch);
+        }
+        // Update 3D view
+        TopoDS_Compound compound = m_currentSketch->buildCompound();
+        if (!compound.IsNull()) {
+          m_viewport->displaySketchWire(compound);
+        }
+        return; // Done using selection
       }
     }
   }
 
-  if (addedCount == 0) {
-    QMessageBox::information(this, "Convert Entities",
-                             "No edges could be converted to sketch entities.");
-    return;
+  m_activePartTool = ActivePartTool::Project;
+
+  if (m_viewport) {
+    // Enable edge and vertex selection
+    m_viewport->enableEdgeSelection(true);
+    statusBar()->showMessage(
+        "Select an edge to project onto the sketch plane.");
   }
-
-  // Refresh sketch view
-  if (m_sketchView) {
-    m_sketchView->update();
-  }
-
-  statusBar()->showMessage(
-      QString("Convert Entities: Added %1 construction entities")
-          .arg(addedCount),
-      3000);
-
-  m_modified = true;
-  updateWindowTitle();
 }
+
+void MainWindow::onConvertEntities() { onSketchProject(); }
 
 void MainWindow::onIntersectionCurve() {
   if (!m_sketchMode) {
@@ -2526,6 +2443,7 @@ void MainWindow::onConstraintHorizontal() {
           if (linePtr) {
             m_currentSketch->addHorizontal(linePtr);
             m_currentSketch->solve();
+            m_currentSketch->saveCheckpoint("Horizontal Constraint");
             m_sketchView->update();
             statusBar()->showMessage("Horizontal constraint added");
             return;
@@ -2558,6 +2476,7 @@ void MainWindow::onConstraintVertical() {
           if (linePtr) {
             m_currentSketch->addVertical(linePtr);
             m_currentSketch->solve();
+            m_currentSketch->saveCheckpoint("Vertical Constraint");
             m_sketchView->update();
             statusBar()->showMessage("Vertical constraint added");
             return;
@@ -2628,17 +2547,10 @@ void MainWindow::onExtrude() {
   // DEBUG: Use QMessageBox to confirm function is called
   qDebug() << "=== onExtrude() CALLED ===";
 
-  // Show Extrude settings panel immediately - AGGRESSIVE SHOW
+  // Show Extrude settings panel
   if (m_toolSettingsDock) {
-    m_toolSettingsDock->setFloating(true); // Make it a separate window
-    m_toolSettingsDock->resize(300, 400);  // Ensure visible size
-    m_toolSettingsDock->move(100, 100);    // Position on screen
     m_toolSettingsDock->show();
     m_toolSettingsDock->raise();
-    m_toolSettingsDock->activateWindow();
-    qDebug() << "Tool Settings Dock: floating="
-             << m_toolSettingsDock->isFloating()
-             << "visible=" << m_toolSettingsDock->isVisible();
   }
   if (m_toolSettingsPanel) {
     m_toolSettingsPanel->showExtrudeSettings();
@@ -2655,15 +2567,14 @@ void MainWindow::onExtrude() {
     return;
   }
 
-  // Detect all closed profiles in sketch
-  auto closedProfiles = m_currentSketch->detectClosedProfiles();
-  qDebug() << "Detected closed profiles:" << closedProfiles.size();
+  // Detect all closed regions (faces) in sketch
+  auto profileFaces = m_currentSketch->buildProfileFaces();
+  qDebug() << "Detected profile regions:" << profileFaces.size();
 
-  if (closedProfiles.empty()) {
-    QMessageBox::information(
-        this, "Extrude",
-        "No closed profiles found in sketch.\n"
-        "Draw closed shapes (circles, rectangles, or connected lines).");
+  if (profileFaces.empty()) {
+    QMessageBox::information(this, "Extrude",
+                             "No closed regions found in sketch.\n"
+                             "Ensure sketch curves form closed loops.");
     return;
   }
 
@@ -2674,17 +2585,19 @@ void MainWindow::onExtrude() {
   // Update profile list in ProfileSelectionPanel
   if (m_profileSelectionPanel) {
     QStringList profileNames;
-    for (size_t i = 0; i < closedProfiles.size(); ++i) {
-      profileNames << QString("Profile %1").arg(i + 1);
+    for (size_t i = 0; i < profileFaces.size(); ++i) {
+      profileNames << QString("Region %1").arg(i + 1);
     }
     m_profileSelectionPanel->updateProfileList(profileNames);
     m_profileSelectionPanel->setOperationTitle("Extrude");
     // Automatically select first profile so Apply works immediately
-    if (!closedProfiles.empty()) {
+    if (!profileFaces.empty()) {
       m_profileSelectionPanel->setProfileIndex(0);
       m_selectedProfileIndex = 0;
-      qDebug() << "Extrude: Auto-selected Profile 1";
+      qDebug() << "Extrude: Auto-selected Region 1";
     }
+    m_profileSelectionDock->show();
+    m_profileSelectionDock->raise();
   }
 
   // Enable visual profile selection (SolidWorks-style)
@@ -2703,9 +2616,9 @@ void MainWindow::onExtrude() {
   }
 
   statusBar()->showMessage(
-      QString("Click profile to select (%1 "
+      QString("Click region to select (%1 "
               "available), adjust settings in panel, then click Apply")
-          .arg(closedProfiles.size()));
+          .arg(profileFaces.size()));
 }
 
 void MainWindow::onRevolve() {
@@ -2720,34 +2633,49 @@ void MainWindow::onRevolve() {
   // Reset selected profile
   m_selectedProfileIndex = -1;
 
-  if (!m_currentSketch || m_currentSketch->entities().empty()) {
+  // Use current sketch if available, otherwise try to find the last created
+  // sketch
+  std::shared_ptr<sketch::Sketch> sketchToUse = m_currentSketch;
+  if (!sketchToUse && m_document && !m_document->sketches().empty()) {
+    // Use the last sketch
+    sketchToUse = m_document->sketches().back();
+    m_currentSketch = sketchToUse; // Set it as current for this operation
+  }
+
+  if (!sketchToUse || sketchToUse->entities().empty()) {
     QMessageBox::information(this, "Revolve", "Create a sketch profile first.");
     return;
   }
 
-  // Check for closed profile
-  auto closedProfiles = m_currentSketch->detectClosedProfiles();
-  if (closedProfiles.empty()) {
+  // Check for closed regions
+  auto profileFaces = sketchToUse->buildProfileFaces();
+  if (profileFaces.empty()) {
     QMessageBox::warning(
         this, "Revolve",
-        "No closed profiles found. Draw a closed shape first.");
+        "No closed regions found. Ensure sketch has closed loops.");
     return;
   }
 
   // Set active tool
-  m_pendingOperation = PendingOperation::None; // Revolve uses Apply directly
+  m_pendingOperation = PendingOperation::Revolve;
   m_activePartTool = ActivePartTool::Revolve;
 
   // Update profile list in ProfileSelectionPanel
   if (m_profileSelectionPanel) {
     QStringList profileNames;
-    for (size_t i = 0; i < closedProfiles.size(); ++i) {
-      profileNames << QString("Profile %1").arg(i + 1);
+    for (size_t i = 0; i < profileFaces.size(); ++i) {
+      profileNames << QString("Region %1").arg(i + 1);
     }
     m_profileSelectionPanel->updateProfileList(profileNames);
     m_profileSelectionPanel->setOperationTitle("Revolve");
     // Auto-select first profile
-    m_selectedProfileIndex = 0;
+    if (!profileFaces.empty()) {
+      m_profileSelectionPanel->setProfileIndex(0);
+      m_selectedProfileIndex = 0;
+      qDebug() << "Revolve: Auto-selected Region 1";
+    }
+    m_profileSelectionDock->show();
+    m_profileSelectionDock->raise();
   }
 
   if (m_sketchView) {
@@ -2776,9 +2704,9 @@ void MainWindow::onCut() {
     return;
   }
 
-  auto closedProfiles = m_currentSketch->detectClosedProfiles();
-  if (closedProfiles.empty()) {
-    QMessageBox::warning(this, "Cut", "No closed profiles found.");
+  auto profileFaces = m_currentSketch->buildProfileFaces();
+  if (profileFaces.empty()) {
+    QMessageBox::warning(this, "Cut", "No closed regions found.");
     return;
   }
 
@@ -2787,17 +2715,19 @@ void MainWindow::onCut() {
 
   if (m_profileSelectionPanel) {
     QStringList profileNames;
-    for (size_t i = 0; i < closedProfiles.size(); ++i) {
-      profileNames << QString("Profile %1").arg(i + 1);
+    for (size_t i = 0; i < profileFaces.size(); ++i) {
+      profileNames << QString("Region %1").arg(i + 1);
     }
     m_profileSelectionPanel->updateProfileList(profileNames);
     m_profileSelectionPanel->setOperationTitle("Cut");
     // Automatically select first profile so Apply works immediately
-    if (!closedProfiles.empty()) {
+    if (!profileFaces.empty()) {
       m_profileSelectionPanel->setProfileIndex(0);
       m_selectedProfileIndex = 0;
-      qDebug() << "Cut: Auto-selected Profile 1";
+      qDebug() << "Cut: Auto-selected Region 1";
     }
+    m_profileSelectionDock->show();
+    m_profileSelectionDock->raise();
   }
 
   if (m_sketchView) {
@@ -2883,15 +2813,85 @@ void MainWindow::onShell() {
 }
 
 void MainWindow::onSweep() {
+  // Show Sweep settings panel
   if (m_toolSettingsDock) {
     m_toolSettingsDock->show();
     m_toolSettingsDock->raise();
   }
-  if (m_toolSettingsPanel)
+  if (m_toolSettingsPanel) {
     m_toolSettingsPanel->showSweepSettings();
+    m_toolSettingsPanel->setSweepPathText("Path: Not selected");
 
+    // Populate the dropdown with sketches so the user can just select the full
+    // sketch as a path
+    QStringList sketchNames;
+    if (m_document) {
+      for (const auto &sketch : m_document->sketches()) {
+        sketchNames << QString::fromStdString(sketch->name());
+      }
+    }
+    m_toolSettingsPanel->populateSweepPathSketches(sketchNames);
+  }
+
+  // Reset selected profile
+  m_selectedProfileIndex = -1;
+
+  std::shared_ptr<sketch::Sketch> sketchToUse = m_currentSketch;
+  if (!sketchToUse && m_document && !m_document->sketches().empty()) {
+    sketchToUse = m_document->sketches().back();
+    m_currentSketch = sketchToUse;
+  }
+
+  if (!sketchToUse || sketchToUse->entities().empty()) {
+    QMessageBox::information(this, "Sweep", "Create a sketch profile first.");
+    return;
+  }
+
+  auto profiles = sketchToUse->extractProfiles(true); // Allow open wires
+  if (profiles.empty()) {
+    QMessageBox::warning(this, "Sweep",
+                         "No profiles found. Ensure sketch has geometry.");
+    return;
+  }
+
+  m_pendingOperation = PendingOperation::Sweep;
   m_activePartTool = ActivePartTool::Sweep;
-  statusBar()->showMessage("Sweep: Select profile and path, then Apply");
+
+  // Setup ProfileSelectionPanel
+  if (m_profileSelectionPanel) {
+    QStringList profileNames;
+    for (size_t i = 0; i < profiles.size(); ++i) {
+      profileNames << QString("Profile %1").arg(i + 1);
+    }
+    m_profileSelectionPanel->updateProfileList(profileNames);
+    m_profileSelectionPanel->setOperationTitle("Sweep");
+    if (!profiles.empty()) {
+      m_profileSelectionPanel->setProfileIndex(0);
+      m_selectedProfileIndex = 0;
+    }
+    m_profileSelectionDock->show();
+    m_profileSelectionDock->raise();
+  }
+
+  if (m_sketchView) {
+    m_sketchView->enterProfileSelectMode(true); // Allow open wires
+    m_sketchDock->show();
+    m_sketchDock->raise();
+  }
+
+  // IMPORTANT: Raise Tool Settings Panel after showing sketch dock
+  // so Apply button is visible
+  if (m_toolSettingsDock) {
+    m_toolSettingsDock->show();
+    m_toolSettingsDock->raise();
+  }
+
+  if (m_viewport) {
+    m_viewport->enableEdgeSelection(true); // For path selection
+  }
+
+  statusBar()->showMessage("Sweep: Select Profile, click Path 3D edge or use "
+                           "Sketch dropdown, then Apply");
 }
 
 void MainWindow::onLoft() {
@@ -2899,8 +2899,17 @@ void MainWindow::onLoft() {
     m_toolSettingsDock->show();
     m_toolSettingsDock->raise();
   }
-  if (m_toolSettingsPanel)
+  if (m_toolSettingsPanel) {
     m_toolSettingsPanel->showLoftSettings();
+
+    QStringList sketchNames;
+    if (m_document) {
+      for (const auto &sketch : m_document->sketches()) {
+        sketchNames << QString::fromStdString(sketch->name());
+      }
+    }
+    m_toolSettingsPanel->populateLoftSketches(sketchNames);
+  }
 
   m_activePartTool = ActivePartTool::Loft;
   statusBar()->showMessage("Loft: Select multiple profiles, then Apply");
@@ -2944,9 +2953,20 @@ void MainWindow::onLoftSurface() {
 
     if (!result.IsNull()) {
       saveUndoState("Loft Surface");
-      // TODO: Convert to Feature
-      // TODO: Convert to Feature-based system
-      //       // m_shapes.push_back(result);
+      if (m_document->temporaryShapes().empty()) {
+        m_document->addTemporaryShape(result);
+      } else {
+        try {
+          BRepAlgoAPI_Fuse fuseOp(m_document->temporaryShapes()[0], result);
+          if (fuseOp.IsDone()) {
+            m_document->temporaryShapes()[0] = fuseOp.Shape();
+          } else {
+            m_document->addTemporaryShape(result);
+          }
+        } catch (...) {
+          m_document->addTemporaryShape(result);
+        }
+      }
       displayAllShapes();
 
       if (m_featureList) {
@@ -3022,14 +3042,29 @@ void MainWindow::onSelectVertex() {
   }
 }
 
+void MainWindow::onViewportEdgeSelected() {
+  if (m_activePartTool == ActivePartTool::Sweep) {
+    int edgeCount = m_viewport ? m_viewport->getSelectedEdges().size() : 0;
+    if (m_toolSettingsPanel) {
+      if (edgeCount == 0) {
+        m_toolSettingsPanel->setSweepPathText("Path: Not selected");
+      } else {
+        m_toolSettingsPanel->setSweepPathText(
+            QString("Path: %1 edge(s) selected").arg(edgeCount));
+      }
+    }
+  }
+}
+
 void MainWindow::onProfileSelected(int profileIndex) {
   if (!m_currentSketch || m_pendingOperation == PendingOperation::None)
     return;
 
-  auto closedProfiles = m_currentSketch->detectClosedProfiles();
+  auto profileFaces =
+      m_sketchView ? m_sketchView->getProfiles() : std::vector<TopoDS_Shape>();
   if (profileIndex < 0 ||
-      profileIndex >= static_cast<int>(closedProfiles.size())) {
-    statusBar()->showMessage("Invalid profile index", 2000);
+      profileIndex >= static_cast<int>(profileFaces.size())) {
+    statusBar()->showMessage("Invalid region index", 2000);
     m_pendingOperation = PendingOperation::None;
     return;
   }
@@ -3043,8 +3078,7 @@ void MainWindow::onProfileSelected(int profileIndex) {
   }
 
   statusBar()->showMessage(
-      QString(
-          "Profile %1 selected. Adjust settings in panel, then click Apply.")
+      QString("Region %1 selected. Adjust settings in panel, then click Apply.")
           .arg(profileIndex + 1));
 }
 void MainWindow::onProfileSelectionCancelled() {
@@ -3195,120 +3229,14 @@ void MainWindow::onRingSelected(int outerProfileIndex, int innerProfileIndex) {
   m_pendingOperation = PendingOperation::None;
 }
 
-void MainWindow::onMultiProfilesConfirmed(
-    const std::vector<std::pair<int, int>> &selections) {
-  if (!m_currentSketch || m_pendingOperation == PendingOperation::None ||
-      selections.empty()) {
-    m_pendingOperation = PendingOperation::None;
-    return;
-  }
-
-  auto closedProfiles = m_currentSketch->detectClosedProfiles();
-
-  QString title = (m_pendingOperation == PendingOperation::Extrude)
-
-                      ? "Extrude Multi"
-                      : "Cut Multi";
-
-  // Get depth from ToolSettingsPanel instead of dialog
-  double depth =
-      m_toolSettingsPanel ? m_toolSettingsPanel->extrudeDepth() : 20.0;
-
-  gp_Dir dir = m_currentSketch->plane().normal();
-  gp_Vec vec(dir);
-
-  int successCount = 0;
-
-  for (const auto &sel : selections) {
-    int outerIdx = sel.first;
-    int innerIdx = sel.second; // -1 for solid profile
-
-    if (outerIdx < 0 || outerIdx >= static_cast<int>(closedProfiles.size()))
-      continue;
-
-    TopoDS_Face profileFace;
-
-    try {
-      TopoDS_Wire outerWire = closedProfiles[outerIdx];
-      BRepBuilderAPI_MakeFace faceBuilder(outerWire, true);
-
-      if (innerIdx >= 0 && innerIdx < static_cast<int>(closedProfiles.size())) {
-        // Ring profile
-        TopoDS_Wire innerWire = closedProfiles[innerIdx];
-        faceBuilder.Add(TopoDS::Wire(innerWire.Reversed()));
-      }
-
-      if (faceBuilder.IsDone()) {
-        profileFace = faceBuilder.Face();
-      }
-    } catch (...) {
-      continue;
-    }
-
-    if (profileFace.IsNull())
-      continue;
-
-    gp_Vec opVec = vec;
-    if (m_pendingOperation == PendingOperation::Extrude) {
-      opVec.Scale(depth);
-    } else {
-      opVec.Scale(-depth);
-    }
-
-    try {
-      BRepPrimAPI_MakePrism prism(profileFace, opVec);
-      if (prism.IsDone()) {
-        TopoDS_Shape resultShape = prism.Shape();
-
-        if (m_pendingOperation == PendingOperation::Extrude) {
-          if (m_document->getAllShapes().empty()) {
-            // TODO: Convert to Feature
-            // TODO: Convert to Feature-based system
-            //       // m_shapes.push_back(resultShape);
-          } else {
-            BRepAlgoAPI_Fuse fuseOp(m_document->getAllShapes()[0], resultShape);
-            if (fuseOp.IsDone()) {
-              m_document->getAllShapes()[0] = fuseOp.Shape();
-            } else {
-              // TODO: Convert to Feature
-              // TODO: Convert to Feature-based system
-              //       // m_shapes.push_back(resultShape);
-            }
-          }
-        } else {
-          // Cut
-          if (!m_document->getAllShapes().empty()) {
-            BRepAlgoAPI_Cut cutOp(m_document->getAllShapes()[0], resultShape);
-            if (cutOp.IsDone()) {
-              m_document->getAllShapes()[0] = cutOp.Shape();
-            }
-          }
-        }
-        successCount++;
-      }
-    } catch (...) {
-      continue;
-    }
-  }
-
-  if (successCount > 0) {
-    displayAllShapes();
-    QString opName =
-        (m_pendingOperation == PendingOperation::Extrude) ? "Extrude" : "Cut";
-    m_featureList->addItem(QString("%1 Multi (%2) [%3 items]")
-                               .arg(opName)
-                               .arg(depth)
-                               .arg(successCount));
-    statusBar()->showMessage(QString("%1 completed: %2 of %3 selections")
-                                 .arg(opName)
-                                 .arg(successCount)
-                                 .arg(selections.size()),
-                             3000);
+void MainWindow::onMultiProfilesConfirmed(const std::vector<int> &selections) {
+  if (selections.empty()) {
+    m_selectedProfileIndex = -1;
   } else {
-    QMessageBox::warning(this, title, "No valid profiles could be processed.");
+    m_selectedProfileIndex = selections[0]; // Use first for now
+    qDebug() << "MainWindow: Multi-profile confirmed. Count="
+             << selections.size() << "Using Index=" << m_selectedProfileIndex;
   }
-
-  m_pendingOperation = PendingOperation::None;
 }
 
 void MainWindow::saveUndoState(const std::string &description) {
@@ -3342,7 +3270,19 @@ void MainWindow::onScale() {
                                          transform, true);
 
     if (transformer.IsDone()) {
-      m_document->getAllShapes().back() = transformer.Shape();
+      TopoDS_Shape result = transformer.Shape();
+      // Fix persistence: Update using temporaryShapes
+      auto &temps = m_document->temporaryShapes();
+      if (!temps.empty()) {
+        temps.back() = result;
+      } else {
+        m_document->addTemporaryShape(result);
+        // Hide feature shapes
+        auto features = m_document->featureTree()->allFeatures();
+        for (auto *feat : features) {
+          feat->setVisible(false);
+        }
+      }
       displayAllShapes();
       saveUndoState("Scale " + std::to_string(scaleFactor));
       m_featureList->addItem(QString("Scale (%1x)").arg(scaleFactor));
@@ -3354,66 +3294,46 @@ void MainWindow::onScale() {
   }
 }
 
-void MainWindow::onHoleWizard() {
-  // Show settings in tool panel (no specific HoleWizard settings
-  // yet)
-  if (m_toolSettingsPanel)
-    m_toolSettingsPanel->showNoToolSettings();
+void MainWindow::clearHoleSelection() {
+  m_holePoints.clear();
+  if (m_sketchView) {
+    m_sketchView->clearPreviewPoints();
+  }
+}
 
+void MainWindow::onHoleWizard() {
+  qDebug() << "HoleWizard: Action activated";
   if (m_document->getAllShapes().empty()) {
     QMessageBox::warning(this, "Hole Wizard",
                          "No shapes available. Create a solid first.");
     return;
   }
 
-  // Simple hole creation - get diameter and depth
-  bool ok;
-  double diameter = QInputDialog::getDouble(
-      this, "Hole Wizard", "Hole Diameter:", 10.0, 0.1, 500.0, 2, &ok);
-  if (!ok)
-    return;
+  if (m_profileSelectionDock) {
+    m_profileSelectionDock->hide();
+  }
 
-  double depth = QInputDialog::getDouble(
-      this, "Hole Wizard", "Hole Depth:", 20.0, 0.1, 500.0, 2, &ok);
-  if (!ok)
-    return;
+  m_activePartTool = ActivePartTool::HoleWizard;
+  clearHoleSelection();
 
-  // Position input
-  double posX = QInputDialog::getDouble(this, "Hole Wizard", "Position X:", 0.0,
-                                        -1000.0, 1000.0, 2, &ok);
-  if (!ok)
-    return;
+  if (m_sketchMode && m_sketchView) {
+    m_sketchView->setTool(SketchToolType::PointSelect);
+    statusBar()->showMessage(
+        "Hole Wizard: Select points from the active sketch, then click Apply",
+        0);
+  } else if (m_viewport) {
+    m_viewport->enableVertexSelection(true);
+    statusBar()->showMessage(
+        "Hole Wizard: Select vertices to place the hole, then click Apply", 0);
+  }
 
-  double posY = QInputDialog::getDouble(this, "Hole Wizard", "Position Y:", 0.0,
-                                        -1000.0, 1000.0, 2, &ok);
-  if (!ok)
-    return;
-
-  double posZ = QInputDialog::getDouble(this, "Hole Wizard", "Start Z:", 50.0,
-                                        -1000.0, 1000.0, 2, &ok);
-  if (!ok)
-    return;
-
-  try {
-    // Create cylinder for hole
-    gp_Ax2 axis(gp_Pnt(posX, posY, posZ), gp_Dir(0, 0, -1));
-    BRepPrimAPI_MakeCylinder holeCyl(axis, diameter / 2.0, depth);
-
-    if (holeCyl.IsDone()) {
-      BRepAlgoAPI_Cut cutter(m_document->getAllShapes().back(),
-                             holeCyl.Shape());
-      if (cutter.IsDone()) {
-        m_document->getAllShapes().back() = cutter.Shape();
-        displayAllShapes();
-        saveUndoState("Hole D" + std::to_string(diameter));
-        m_featureList->addItem(
-            QString("Hole (D%1 x %2)").arg(diameter).arg(depth));
-        statusBar()->showMessage(
-            QString("Created hole D%1 x %2").arg(diameter).arg(depth), 3000);
-      }
-    }
-  } catch (...) {
-    QMessageBox::warning(this, "Hole Wizard", "Failed to create hole.");
+  if (m_toolSettingsDock) {
+    m_toolSettingsDock->show();
+    m_toolSettingsDock->raise();
+  }
+  if (m_toolSettingsPanel) {
+    qDebug() << "HoleWizard: Displaying Hole Settings Panel";
+    m_toolSettingsPanel->showHoleSettings();
   }
 }
 
@@ -3440,13 +3360,13 @@ void MainWindow::onDraft() {
 }
 
 void MainWindow::onRib() {
-  // Show settings in tool panel (no specific Rib settings yet)
+  // Show settings in tool panel
   if (m_toolSettingsDock) {
     m_toolSettingsDock->show();
     m_toolSettingsDock->raise();
   }
   if (m_toolSettingsPanel)
-    m_toolSettingsPanel->showNoToolSettings();
+    m_toolSettingsPanel->showRibSettings();
 
   if (m_document->getAllShapes().empty()) {
     QMessageBox::warning(this, "Rib",
@@ -3461,33 +3381,9 @@ void MainWindow::onRib() {
     return;
   }
 
-  bool ok;
-  double thickness = QInputDialog::getDouble(
-      this, "Rib", "Rib Thickness (mm):", 2.0, 0.1, 100.0, 2, &ok);
-  if (!ok)
-    return;
-
-  try {
-    saveUndoState("Rib");
-
-    part::RibFeature rib;
-    TopoDS_Shape result = rib.execute(
-        *m_currentSketch, m_document->getAllShapes().back(), thickness, true);
-
-    if (!result.IsNull()) {
-      m_document->getAllShapes().back() = result;
-      displayAllShapes();
-      m_featureList->addItem(QString("?? Rib (T=%1mm)").arg(thickness));
-      statusBar()->showMessage(QString("Rib created: T=%1mm").arg(thickness),
-                               3000);
-    } else {
-      QMessageBox::warning(this, "Rib",
-                           "Rib failed: " +
-                               QString::fromStdString(rib.errorMessage()));
-    }
-  } catch (...) {
-    QMessageBox::warning(this, "Rib", "Rib operation failed.");
-  }
+  m_activePartTool = ActivePartTool::Rib;
+  statusBar()->showMessage("Rib: Configure settings in panel, then click Apply",
+                           0);
 }
 
 void MainWindow::onThicken() {
@@ -3631,6 +3527,7 @@ void MainWindow::onSketchMirror() {
   auto result = mirror.mirrorVertical(*m_currentSketch, entities, 0.0);
 
   if (result.success) {
+    m_currentSketch->saveCheckpoint("Mirror");
     m_sketchView->clearSelection();
     m_sketchView->update();
     m_featureList->addItem(
@@ -3677,6 +3574,7 @@ void MainWindow::onSketchTrim() {
   auto result = trimTool.trim(*m_currentSketch, entity, clickPoint);
 
   if (result.success) {
+    m_currentSketch->saveCheckpoint("Trim");
     m_sketchView->clearSelection();
     m_sketchView->update();
     m_featureList->addItem("?? Trim");
@@ -3720,6 +3618,7 @@ void MainWindow::onSketchExtend() {
                                   1); // Extend end point
 
   if (result.success) {
+    m_currentSketch->saveCheckpoint("Extend");
     m_sketchView->clearSelection();
     m_sketchView->update();
     m_featureList->addItem("-? Extend");
@@ -3743,47 +3642,13 @@ void MainWindow::onSketchLinearPattern() {
   if (m_toolSettingsPanel)
     m_toolSettingsPanel->showPatternSettings();
 
-  const auto &selected = m_sketchView->m_selectedEntities;
-  if (selected.empty()) {
-    QMessageBox::information(
-        this, "Linear Pattern",
-        "Select entities to pattern, then click Linear Pattern.");
-    statusBar()->showMessage("Select entities for linear pattern", 5000);
-    return;
-  }
+  // Switch sketch to Select mode so user can pick entities
+  m_sketchView->setTool(SketchToolType::Select);
 
-  // Get count and spacing from ToolSettingsPanel
-  int count = m_toolSettingsPanel ? m_toolSettingsPanel->patternCount() : 3;
-  double spacing =
-      m_toolSettingsPanel ? m_toolSettingsPanel->patternSpacing() : 20.0;
-
-  // Convert to shared_ptr
-  std::vector<sketch::SketchEntity::Ptr> entities;
-  for (auto *rawPtr : selected) {
-    for (const auto &e : m_currentSketch->entities()) {
-      if (e.get() == rawPtr) {
-        entities.push_back(e);
-        break;
-      }
-    }
-  }
-
-  sketch::SketchPattern pattern;
-  auto result = pattern.linearPattern(*m_currentSketch, entities, 1.0, 0.0,
-                                      spacing, count);
-
-  if (result.success) {
-    m_sketchView->clearSelection();
-    m_sketchView->update();
-    m_featureList->addItem(QString("?? Linear Pattern (%1x)").arg(count));
-    statusBar()->showMessage(QString("Created %1 copies at %2mm spacing")
-                                 .arg(count - 1)
-                                 .arg(spacing),
-                             3000);
-  } else {
-    QMessageBox::warning(this, "Linear Pattern",
-                         QString::fromStdString(result.error));
-  }
+  // Set active tool — Apply will execute the pattern
+  m_activePartTool = ActivePartTool::SketchLinearPattern;
+  statusBar()->showMessage(
+      "Select entities for linear pattern, then click Apply", 0);
 }
 
 void MainWindow::onSketchCircularPattern() {
@@ -3800,43 +3665,13 @@ void MainWindow::onSketchCircularPattern() {
   if (m_toolSettingsPanel)
     m_toolSettingsPanel->showPatternSettings();
 
-  const auto &selected = m_sketchView->m_selectedEntities;
-  if (selected.empty()) {
-    QMessageBox::information(
-        this, "Circular Pattern",
-        "Select entities to pattern, then click Circular Pattern.");
-    statusBar()->showMessage("Select entities for circular pattern", 5000);
-    return;
-  }
+  // Switch sketch to Select mode so user can pick entities
+  m_sketchView->setTool(SketchToolType::Select);
 
-  // Get count from ToolSettingsPanel
-  int count = m_toolSettingsPanel ? m_toolSettingsPanel->patternCount() : 6;
-
-  // Convert to shared_ptr
-  std::vector<sketch::SketchEntity::Ptr> entities;
-  for (auto *rawPtr : selected) {
-    for (const auto &e : m_currentSketch->entities()) {
-      if (e.get() == rawPtr) {
-        entities.push_back(e);
-        break;
-      }
-    }
-  }
-
-  sketch::SketchPattern pattern;
-  auto result =
-      pattern.circularPattern(*m_currentSketch, entities, 0.0, 0.0, count);
-
-  if (result.success) {
-    m_sketchView->clearSelection();
-    m_sketchView->update();
-    m_featureList->addItem(QString("? Circular Pattern (%1x)").arg(count));
-    statusBar()->showMessage(
-        QString("Created %1 copies around origin").arg(count - 1), 3000);
-  } else {
-    QMessageBox::warning(this, "Circular Pattern",
-                         QString::fromStdString(result.error));
-  }
+  // Set active tool — Apply will execute the pattern
+  m_activePartTool = ActivePartTool::SketchCircularPattern;
+  statusBar()->showMessage(
+      "Select entities for circular pattern, then click Apply", 0);
 }
 
 // ==================== ADDITIONAL CONSTRAINTS ====================
@@ -3902,6 +3737,7 @@ void MainWindow::onConstraintTangent() {
 
   m_currentSketch->addConstraint(constraint);
   m_currentSketch->solve(); // Solve to update geometry
+  m_currentSketch->saveCheckpoint("Tangent Constraint");
   m_sketchView->clearSelection();
   m_sketchView->update();
   m_featureList->addItem("?? Tangent Constraint");
@@ -3960,6 +3796,7 @@ void MainWindow::onConstraintEqual() {
 
   m_currentSketch->addConstraint(constraint);
   m_currentSketch->solve();
+  m_currentSketch->saveCheckpoint("Equal Constraint");
   m_sketchView->clearSelection();
   m_sketchView->update();
   m_featureList->addItem("?? Equal Constraint");
@@ -4013,6 +3850,7 @@ void MainWindow::onConstraintFix() {
 
   m_currentSketch->addConstraint(constraint);
   m_currentSketch->solve();
+  m_currentSketch->saveCheckpoint("Fix Constraint");
   m_sketchView->clearSelection();
   m_sketchView->update();
   m_featureList->addItem("?? Fix Constraint");
@@ -4071,14 +3909,119 @@ void MainWindow::onConstraintConcentric() {
 
   m_currentSketch->addConstraint(constraint);
   m_currentSketch->solve();
+  m_currentSketch->saveCheckpoint("Concentric Constraint");
   m_sketchView->clearSelection();
   m_sketchView->update();
   m_featureList->addItem("? Concentric Constraint");
   statusBar()->showMessage("Concentric constraint applied", 3000);
 }
 
+void MainWindow::updateExtrudePreview() {
+  if (m_pendingOperation == PendingOperation::None ||
+      m_activePartTool != ActivePartTool::Extrude) {
+    if (!m_previewShape.IsNull() && m_viewport) {
+      m_viewport->context()->Remove(m_previewShape, Standard_True);
+      m_previewShape.Nullify();
+    }
+    return;
+  }
+
+  if (!m_currentSketch || !m_sketchView || !m_viewport)
+    return;
+
+  int profileIndex = m_profileSelectionPanel
+                         ? m_profileSelectionPanel->selectedProfile()
+                         : m_selectedProfileIndex;
+
+  if (profileIndex < 0)
+    return;
+
+  auto profileFaces = m_sketchView->getProfiles();
+  if (profileIndex >= static_cast<int>(profileFaces.size()))
+    return;
+
+  TopoDS_Shape shape = profileFaces[profileIndex];
+  if (shape.ShapeType() != TopAbs_FACE)
+    return;
+  TopoDS_Face profileFace = TopoDS::Face(shape);
+  if (profileFace.IsNull())
+    return;
+
+  profileFace = enforceFaceHoles(profileFace);
+
+  double depth =
+      m_toolSettingsPanel ? m_toolSettingsPanel->extrudeDepth() : 20.0;
+  bool symmetric =
+      m_toolSettingsPanel ? m_toolSettingsPanel->extrudeSymmetric() : false;
+  double draftAngle =
+      m_toolSettingsPanel ? m_toolSettingsPanel->extrudeDraftAngle() : 0.0;
+
+  gp_Dir dir = m_currentSketch->plane().normal();
+  gp_Vec vec(dir);
+  vec.Scale(depth);
+
+  TopoDS_Shape previewShape;
+  try {
+    if (symmetric) {
+      gp_Vec halfVec = vec;
+      halfVec.Scale(0.5);
+      gp_Vec backVec = halfVec.Reversed();
+      gp_Trsf moveBack;
+      moveBack.SetTranslation(backVec);
+      BRepBuilderAPI_Transform transform(profileFace, moveBack, true);
+      TopoDS_Face movedFace = TopoDS::Face(transform.Shape());
+      BRepPrimAPI_MakePrism prism(movedFace, vec);
+      if (prism.IsDone())
+        previewShape = prism.Shape();
+    } else {
+      BRepPrimAPI_MakePrism prism(profileFace, vec);
+      if (prism.IsDone())
+        previewShape = prism.Shape();
+    }
+
+    if (!previewShape.IsNull() && std::abs(draftAngle) > 0.001) {
+      double angleRad = draftAngle * M_PI / 180.0;
+      gp_Dir draftDir = dir;
+      gp_Pln neutralPlane = m_currentSketch->plane().plane();
+
+      BRepOffsetAPI_DraftAngle draftOp(previewShape);
+      TopExp_Explorer explorer(previewShape, TopAbs_FACE);
+      while (explorer.More()) {
+        TopoDS_Face face = TopoDS::Face(explorer.Current());
+        try {
+          draftOp.Add(face, draftDir, angleRad, neutralPlane);
+        } catch (...) {
+        }
+        explorer.Next();
+      }
+      draftOp.Build();
+      if (draftOp.IsDone()) {
+        previewShape = draftOp.Shape();
+      }
+    }
+  } catch (...) {
+  }
+
+  if (!previewShape.IsNull()) {
+    if (!m_previewShape.IsNull()) {
+      m_viewport->context()->Remove(m_previewShape, Standard_False);
+    }
+    m_previewShape = new AIS_Shape(previewShape);
+    m_previewShape->SetColor(Quantity_NOC_YELLOW);
+    m_previewShape->SetTransparency(0.4);
+    m_viewport->context()->Display(m_previewShape, Standard_False);
+    m_viewport->update();
+  }
+}
+
 void MainWindow::onToolApply() {
   qDebug() << "=== onToolApply() called ===";
+
+  // Clear preview before apply
+  if (!m_previewShape.IsNull() && m_viewport) {
+    m_viewport->context()->Remove(m_previewShape, Standard_True);
+    m_previewShape.Nullify();
+  }
   qDebug() << "m_activePartTool:" << static_cast<int>(m_activePartTool);
 
   // Handle Apply button click based on active Part tool
@@ -4102,8 +4045,9 @@ void MainWindow::onToolApply() {
       return;
     }
 
-    auto closedProfiles = m_currentSketch->detectClosedProfiles();
-    if (profileIndex >= static_cast<int>(closedProfiles.size())) {
+    auto profileFaces = m_sketchView ? m_sketchView->getProfiles()
+                                     : std::vector<TopoDS_Shape>();
+    if (profileIndex >= static_cast<int>(profileFaces.size())) {
       QMessageBox::warning(this, "Extrude", "Invalid profile selection.");
       return;
     }
@@ -4117,13 +4061,58 @@ void MainWindow::onToolApply() {
         m_toolSettingsPanel ? m_toolSettingsPanel->extrudeDraftAngle() : 0.0;
 
     // Build face from selected profile
-    TopoDS_Wire selectedWire = closedProfiles[profileIndex];
     TopoDS_Face profileFace;
+    if (profileIndex >= 0 &&
+        profileIndex < static_cast<int>(profileFaces.size())) {
+      TopoDS_Shape shape = profileFaces[profileIndex];
+      if (shape.ShapeType() == TopAbs_FACE) {
+        profileFace = TopoDS::Face(shape);
+      }
+    }
+
+    // Verify face properties (Debug)
+    if (!profileFace.IsNull()) {
+      GProp_GProps props;
+      BRepGProp::SurfaceProperties(profileFace, props);
+      qDebug() << "Extrude: Selected Face Area:" << props.Mass();
+
+      int wireCount = 0;
+      TopExp_Explorer exp(profileFace, TopAbs_WIRE);
+      while (exp.More()) {
+        wireCount++;
+        exp.Next();
+      }
+      qDebug() << "Extrude: Selected Face Wires:" << wireCount;
+
+      try {
+        FILE *f = fopen(
+            "C:\\Projects\\opencadandsimulation\\opencad\\debug_topo.txt", "w");
+        if (f) {
+          fprintf(f, "AREA: %f\n", props.Mass());
+          fprintf(f, "WIRES: %d\n", wireCount);
+          TopExp_Explorer wexp(profileFace, TopAbs_WIRE);
+          while (wexp.More()) {
+            TopoDS_Wire w = TopoDS::Wire(wexp.Current());
+            fprintf(f, "  WIRE ORIENTATION: %d\n", (int)w.Orientation());
+            TopExp_Explorer eexp(w, TopAbs_EDGE);
+            int edges = 0;
+            while (eexp.More()) {
+              edges++;
+              eexp.Next();
+            }
+            fprintf(f, "  EDGES: %d\n", edges);
+            wexp.Next();
+          }
+          fclose(f);
+        }
+      } catch (...) {
+      }
+    }
+
+    profileFace = enforceFaceHoles(profileFace);
 
     try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
-      if (faceBuilder.IsDone()) {
-        profileFace = faceBuilder.Face();
+      if (!profileFace.IsNull()) {
         qDebug() << "Extrude: Profile face created successfully";
       } else {
         qDebug() << "Extrude: BRepBuilderAPI_MakeFace failed";
@@ -4327,6 +4316,131 @@ void MainWindow::onToolApply() {
     m_activePartTool = ActivePartTool::None;
   } break;
 
+  case ActivePartTool::HoleWizard: {
+    qDebug() << "HoleWizard: Entering case with" << m_holePoints.size()
+             << "points";
+    if (m_holePoints.empty()) {
+      QMessageBox::warning(this, "Hole Wizard",
+                           "Please select at least one point to place a hole.");
+      return;
+    }
+    if (m_document->getAllShapes().empty()) {
+      QMessageBox::warning(this, "Hole Wizard", "No solid to cut.");
+      return;
+    }
+
+    double diameter =
+        m_toolSettingsPanel ? m_toolSettingsPanel->holeDiameter() : 10.0;
+    double depthInput =
+        m_toolSettingsPanel ? m_toolSettingsPanel->holeDepth() : 20.0;
+    bool flipDirection =
+        m_toolSettingsPanel ? m_toolSettingsPanel->holeFlipDirection() : false;
+    // int holeType = m_toolSettingsPanel ? m_toolSettingsPanel->holeType() : 0;
+    // // Unused for now
+
+    TopoDS_Shape currentSolid = m_document->getAllShapes().back();
+    bool holeCreated = false;
+
+    for (const gp_Pnt &p3d : m_holePoints) {
+      gp_Dir normal(0, 0, -1);
+      if (m_sketchMode && m_currentSketch) {
+        normal = m_currentSketch->plane().normal().Reversed();
+      }
+
+      double depth = std::abs(depthInput);
+      if (depthInput < 0.0 || flipDirection) {
+        normal.Reverse();
+      }
+
+      try {
+        qDebug() << "HoleWizard: Processing point at (" << p3d.X() << ","
+                 << p3d.Y() << "," << p3d.Z() << ")";
+        qDebug() << "HoleWizard: Normal vector: (" << normal.X() << ","
+                 << normal.Y() << "," << normal.Z() << ")";
+        qDebug() << "HoleWizard: Diameter:" << diameter << "Depth:" << depth;
+        // Offset the point slightly backwards against the normal to avoid
+        // coplanar face issues in Boolean cut
+        gp_Vec offsetVec(normal);
+        offsetVec.Reverse();
+        offsetVec.Multiply(1.0); // Offset by 1mm
+        gp_Pnt startPnt = p3d.Translated(offsetVec);
+
+        qDebug() << "HoleWizard: offset startPnt at (" << startPnt.X() << ","
+                 << startPnt.Y() << "," << startPnt.Z() << ")";
+
+        gp_Ax2 axis(startPnt, normal);
+        qDebug() << "HoleWizard: axis direction(" << axis.Direction().X() << ","
+                 << axis.Direction().Y() << "," << axis.Direction().Z() << ")";
+
+        BRepPrimAPI_MakeCylinder holeCyl(axis, diameter / 2.0, depth + 1.0);
+
+        TopoDS_Shape cylShape = holeCyl.Shape();
+        qDebug() << "HoleWizard: Cylinder tool built successfully";
+
+        BRepAlgoAPI_Cut cutter(currentSolid, cylShape);
+        if (cutter.IsDone()) {
+          currentSolid = cutter.Shape();
+          holeCreated = true;
+          qDebug() << "HoleWizard: Boolean cut successful";
+        } else {
+          qDebug() << "HoleWizard: ERROR - Boolean cut failed";
+        }
+      } catch (const Standard_Failure &sf) {
+        qDebug() << "HoleWizard: OCC Exception evaluating point:"
+                 << sf.GetMessageString();
+      } catch (const std::exception &e) {
+        qDebug() << "HoleWizard: C++ Exception evaluating point:" << e.what();
+      } catch (...) {
+        qDebug() << "HoleWizard: Failed to cut hole at a point due to unknown "
+                    "exception";
+      }
+    }
+
+    if (holeCreated) {
+      // Like Boolean Cut, remove the old solid and replace it with the new one
+      // Since HoleWizard operates on m_document->getAllShapes().back() which is
+      // likely in temporaryShapes
+      m_document->clearTemporaryShapes();
+      m_document->addTemporaryShape(currentSolid);
+
+      // Hide all features just in case
+      auto features = m_document->featureTree()->allFeatures();
+      for (auto *feat : features) {
+        feat->setVisible(false);
+      }
+
+      displayAllShapes();
+
+      if (m_viewport) {
+        m_viewport->update();
+      }
+
+      saveUndoState("Hole Wizard D" + std::to_string(diameter));
+      m_featureList->addItem(QString("Hole Wizard (D%1 x %2) [%3]")
+                                 .arg(diameter)
+                                 .arg(depthInput)
+                                 .arg(m_holePoints.size()));
+      statusBar()->showMessage(
+          QString("Created %1 hole(s)").arg(m_holePoints.size()), 3000);
+      m_modified = true;
+      updateWindowTitle();
+    } else {
+      QMessageBox::warning(this, "Hole Wizard", "Failed to create holes.");
+    }
+
+    // Reset state
+    clearHoleSelection();
+    if (m_sketchMode && m_sketchView) {
+      m_sketchView->setTool(SketchToolType::Select);
+      m_sketchView->clearSelection();
+      onFinishSketch();
+    } else if (m_viewport) {
+      m_viewport->setSelectionMode(SelectionMode::Shape);
+      m_viewport->clearSelection();
+    }
+    m_activePartTool = ActivePartTool::None;
+  } break;
+
   case ActivePartTool::Fillet: {
     if (m_document->getAllShapes().empty()) {
       QMessageBox::warning(this, "Fillet", "No solid body available.");
@@ -4467,16 +4581,140 @@ void MainWindow::onToolApply() {
         QString("Draft: Click face to apply %1� angle").arg(angle), 0);
   } break;
 
+  case ActivePartTool::Sweep: {
+    std::shared_ptr<sketch::Sketch> sketchToUse = m_currentSketch;
+    if (!sketchToUse && m_document && !m_document->sketches().empty()) {
+      sketchToUse = m_document->sketches().back();
+    }
+
+    if (!sketchToUse) {
+      QMessageBox::warning(this, "Sweep", "No sketch found for profile.");
+      return;
+    }
+
+    auto profileFaces = sketchToUse->extractProfiles(true);
+    int profileIndex = m_profileSelectionPanel
+                           ? m_profileSelectionPanel->selectedProfile()
+                           : m_selectedProfileIndex;
+
+    if (profileIndex < 0 ||
+        profileIndex >= static_cast<int>(profileFaces.size())) {
+      QMessageBox::warning(this, "Sweep", "Please select a Profile region.");
+      return;
+    }
+
+    TopoDS_Shape profileShape = profileFaces[profileIndex];
+    TopoDS_Wire pathWire;
+
+    // Check if user selected a Path sketch via ComboBox instead of 3D edge
+    // clicks
+    int pathIndex =
+        m_toolSettingsPanel ? m_toolSettingsPanel->sweepPathSketchIndex() : -1;
+    if (pathIndex >= 0 && m_document &&
+        pathIndex < static_cast<int>(m_document->sketches().size())) {
+      pathWire = m_document->sketches()[pathIndex]->buildWire();
+    } else if (m_viewport) {
+      // Check for manually selected 3D edges
+      auto edges = m_viewport->getSelectedEdges();
+      if (!edges.empty()) {
+        BRepBuilderAPI_MakeWire wireBuilder;
+        for (const auto &edge : edges) {
+          wireBuilder.Add(edge);
+        }
+        if (wireBuilder.IsDone()) {
+          pathWire = wireBuilder.Wire();
+        }
+      }
+    }
+
+    if (pathWire.IsNull()) {
+      QMessageBox::warning(
+          this, "Sweep",
+          "You must select a Path for the Sweep operation.\n\n"
+          "1. Go to the Tool Settings panel (usually on the right).\n"
+          "2. Use the 'Path' dropdown to select the sketch containing your "
+          "path.\n"
+          "Note: The profile and path must be in different sketches.");
+      return;
+    }
+
+    bool createSolid =
+        m_toolSettingsPanel ? m_toolSettingsPanel->sweepSolid() : true;
+
+    try {
+      part::SweepFeature sweep;
+      bool isClosed = pathWire.Closed();
+      TopoDS_Shape sweptShape = sweep.execute(profileShape, pathWire, isClosed);
+
+      if (sweptShape.IsNull()) {
+        QMessageBox::warning(this, "Sweep Failed",
+                             QString::fromStdString(sweep.errorMessage()));
+        return;
+      }
+
+      saveUndoState("Sweep");
+
+      if (m_document->temporaryShapes().empty()) {
+        m_document->addTemporaryShape(sweptShape);
+      } else {
+        try {
+          BRepAlgoAPI_Fuse fuseOp(m_document->temporaryShapes()[0], sweptShape);
+          if (fuseOp.IsDone()) {
+            m_document->temporaryShapes()[0] = fuseOp.Shape();
+          } else {
+            m_document->addTemporaryShape(sweptShape);
+          }
+        } catch (...) {
+          m_document->addTemporaryShape(sweptShape);
+        }
+      }
+
+      // Hide the consumed sketch
+      if (m_currentSketch) {
+        m_currentSketch->setVisible(false);
+      }
+
+      displayAllShapes();
+
+      if (m_viewport) {
+        m_viewport->enableEdgeSelection(false);
+        m_viewport->clearSelectedEdges();
+        m_viewport->update();
+      }
+
+      if (m_featureList) {
+        m_featureList->addItem("✅ Sweep");
+      }
+      statusBar()->showMessage("Sweep completed", 3000);
+      m_modified = true;
+      updateWindowTitle();
+
+    } catch (...) {
+      QMessageBox::warning(this, "Sweep Failed", "Exception during sweep.");
+      return;
+    }
+
+    // Reset state
+    m_selectedProfileIndex = -1;
+    m_pendingOperation = PendingOperation::None;
+    m_activePartTool = ActivePartTool::None;
+  } break;
+
   case ActivePartTool::Revolve: {
+    int profileIndex = m_profileSelectionPanel
+                           ? m_profileSelectionPanel->selectedProfile()
+                           : m_selectedProfileIndex;
+
     // Revolve the selected profile with panel settings
-    if (m_selectedProfileIndex < 0 || !m_currentSketch) {
+    if (profileIndex < 0 || !m_currentSketch) {
       QMessageBox::warning(this, "Revolve",
                            "No profile selected. Select a profile first.");
       return;
     }
 
-    auto closedProfiles = m_currentSketch->detectClosedProfiles();
-    if (m_selectedProfileIndex >= static_cast<int>(closedProfiles.size())) {
+    auto profileFaces = m_sketchView ? m_sketchView->getProfiles()
+                                     : std::vector<TopoDS_Shape>();
+    if (profileIndex >= static_cast<int>(profileFaces.size())) {
       QMessageBox::warning(this, "Revolve", "Invalid profile selection.");
       return;
     }
@@ -4488,28 +4726,38 @@ void MainWindow::onToolApply() {
         m_toolSettingsPanel ? m_toolSettingsPanel->revolveAxis() : 1;
 
     // Build face from selected profile
-    TopoDS_Wire selectedWire = closedProfiles[m_selectedProfileIndex];
-    TopoDS_Face profileFace;
+    qDebug() << "Revolve: Profile Index =" << profileIndex << "of"
+             << profileFaces.size() << "profiles";
+    qDebug() << "Revolve: Axis Index =" << axisIndex << ", Angle =" << angle;
 
-    try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
-      if (faceBuilder.IsDone()) {
-        profileFace = faceBuilder.Face();
+    TopoDS_Face profileFace;
+    if (profileIndex >= 0 &&
+        profileIndex < static_cast<int>(profileFaces.size())) {
+      TopoDS_Shape shape = profileFaces[profileIndex];
+      if (shape.ShapeType() == TopAbs_FACE) {
+        profileFace = TopoDS::Face(shape);
       }
-    } catch (...) {
-      QMessageBox::warning(this, "Revolve",
-                           "Could not create face from profile.");
-      return;
     }
+
+    // try-catch removed as face building is done in buildProfileFaces
 
     if (profileFace.IsNull()) {
       QMessageBox::warning(this, "Revolve", "Invalid profile face.");
       return;
     }
 
+    profileFace = enforceFaceHoles(profileFace);
+
     // Set up axis based on selection
+    if (!profileFace.IsNull()) {
+      qDebug() << "Revolve: Using unmodified profileFace.";
+    }
+
     gp_Ax1 axis;
     QString axisName;
+    Bnd_Box m_bndBox;
+    qDebug() << "Revolve Debug: Axis Index =" << axisIndex;
+
     switch (axisIndex) {
     case 0:
       axis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0));
@@ -4519,11 +4767,81 @@ void MainWindow::onToolApply() {
       axis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 1, 0));
       axisName = "Y";
       break;
-    default:
+    case 2:
       axis = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
       axisName = "Z";
       break;
+    case 3: { // Selected Line
+      // Try to get selected line from sketch view
+      auto *selectedEntity =
+          m_sketchView ? m_sketchView->selectedEntity() : nullptr;
+      auto *lineEntity = dynamic_cast<sketch::SketchLine *>(selectedEntity);
+
+      if (lineEntity && m_currentSketch) {
+        // Convert 2D points to 3D
+        gp_Pnt2d p1_2d = lineEntity->startPoint();
+        gp_Pnt2d p2_2d = lineEntity->endPoint();
+        gp_Pnt p1 = m_currentSketch->plane().to3D(p1_2d);
+        gp_Pnt p2 = m_currentSketch->plane().to3D(p2_2d);
+
+        if (p1.Distance(p2) > 1e-6) {
+          gp_Vec dirVec(p1, p2);
+          axis = gp_Ax1(p1, gp_Dir(dirVec));
+          axisName = "Selected Line";
+
+          qDebug() << "Revolve Debug: Custom Axis";
+          qDebug() << "  P1 (3D):" << p1.X() << p1.Y() << p1.Z();
+          qDebug() << "  P2 (3D):" << p2.X() << p2.Y() << p2.Z();
+          qDebug() << "  Dir:" << axis.Direction().X() << axis.Direction().Y()
+                   << axis.Direction().Z();
+        } else {
+          QMessageBox::warning(this, "Revolve", "Selected line is too short.");
+          return;
+        }
+      } else {
+        QMessageBox::warning(
+            this, "Revolve",
+            "Please select a Line entity in the sketch to use as axis.");
+        return;
+      }
+      break;
     }
+    }
+
+    // Debug: Check Profile Bounding Box
+    BRepBndLib::Add(profileFace, m_bndBox);
+    m_bndBox.SetGap(0.0);
+    double xmin, ymin, zmin, xmax, ymax, zmax;
+    m_bndBox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+    qDebug() << "Revolve Debug: Profile Bounding Box";
+    qDebug() << "  X: " << xmin << " to " << xmax;
+    qDebug() << "  Y: " << ymin << " to " << ymax;
+    qDebug() << "  Z: " << zmin << " to " << zmax;
+    qDebug() << "  Axis Point: " << axis.Location().X() << axis.Location().Y()
+             << axis.Location().Z();
+    qDebug() << "  Axis Dir:   " << axis.Direction().X() << axis.Direction().Y()
+             << axis.Direction().Z();
+
+    // Check if axis intersects profile bounding box (debug info)
+    bool axisIntersects = false;
+    if (std::abs(axis.Direction().Y()) > 0.99) {
+      // Y-axis: check X range
+      double axisX = axis.Location().X();
+      if (axisX > xmin && axisX < xmax)
+        axisIntersects = true;
+    } else if (std::abs(axis.Direction().Z()) > 0.99) {
+      // Z-axis: check XY range
+      double axisX = axis.Location().X();
+      double axisY = axis.Location().Y();
+      if (axisX > xmin && axisX < xmax && axisY > ymin && axisY < ymax)
+        axisIntersects = true;
+    } else if (std::abs(axis.Direction().X()) > 0.99) {
+      // X-axis: check Y range
+      double axisY = axis.Location().Y();
+      if (axisY > ymin && axisY < ymax)
+        axisIntersects = true;
+    }
+    qDebug() << "Revolve: Axis intersects profile bbox?" << axisIntersects;
 
     try {
       part::RevolveFeature revolve;
@@ -4531,33 +4849,35 @@ void MainWindow::onToolApply() {
           revolve.executeFace(profileFace, axis, angle);
 
       if (revolvedShape.IsNull()) {
-        QMessageBox::warning(this, "Revolve",
-                             "Revolve failed: " + QString::fromStdString(
-                                                      revolve.errorMessage()));
+        QString errMsg =
+            QString("Revolve failed (Profile %1, Axis %2): %3")
+                .arg(profileIndex)
+                .arg(axisName)
+                .arg(QString::fromStdString(revolve.errorMessage()));
+        qDebug() << errMsg;
+        QMessageBox::warning(this, "Revolve", errMsg);
         return;
       }
 
       saveUndoState("Revolve");
 
-      if (m_document->getAllShapes().empty()) {
-        // TODO: Convert to Feature
-        // TODO: Convert to Feature-based system
-        //       // m_shapes.push_back(revolvedShape);
+      if (m_document->temporaryShapes().empty()) {
+        m_document->addTemporaryShape(revolvedShape);
       } else {
         try {
+          // If there are existing shapes, try to fuse (boolean union) with
+          // the first one This is a simplification; in a real Part Design, we
+          // might want New Body vs Add For now, we'll try to fuse if
+          // possible, or just add as a separate solid
           BRepAlgoAPI_Fuse fuseOp(m_document->temporaryShapes()[0],
                                   revolvedShape);
           if (fuseOp.IsDone()) {
             m_document->temporaryShapes()[0] = fuseOp.Shape();
           } else {
-            // TODO: Convert to Feature
-            // TODO: Convert to Feature-based system
-            //       // m_shapes.push_back(revolvedShape);
+            m_document->addTemporaryShape(revolvedShape);
           }
         } catch (...) {
-          // TODO: Convert to Feature
-          // TODO: Convert to Feature-based system
-          //       // m_shapes.push_back(revolvedShape);
+          m_document->addTemporaryShape(revolvedShape);
         }
       }
 
@@ -4570,7 +4890,7 @@ void MainWindow::onToolApply() {
       m_featureList->addItem(
           QString("?? Revolve (%1� around %2)").arg(angle).arg(axisName));
       statusBar()->showMessage(QString("Revolved Profile %1 around %2 axis")
-                                   .arg(m_selectedProfileIndex + 1)
+                                   .arg(profileIndex + 1)
                                    .arg(axisName),
                                3000);
       m_modified = true;
@@ -4586,8 +4906,12 @@ void MainWindow::onToolApply() {
   } break;
 
   case ActivePartTool::Cut: {
+    int profileIndex = m_profileSelectionPanel
+                           ? m_profileSelectionPanel->selectedProfile()
+                           : m_selectedProfileIndex;
+
     // Cut logic similar to Extrude but with cut direction
-    if (m_selectedProfileIndex < 0 || !m_currentSketch) {
+    if (profileIndex < 0 || !m_currentSketch) {
       QMessageBox::warning(this, "Cut", "No profile selected.");
       return;
     }
@@ -4597,14 +4921,29 @@ void MainWindow::onToolApply() {
       return;
     }
 
-    auto closedProfiles = m_currentSketch->detectClosedProfiles();
+    auto profileFaces = m_sketchView ? m_sketchView->getProfiles()
+                                     : std::vector<TopoDS_Shape>();
     double depth = m_toolSettingsPanel ? m_toolSettingsPanel->cutDepth() : 20.0;
-    TopoDS_Wire selectedWire = closedProfiles[m_selectedProfileIndex];
+
+    if (profileIndex < 0 ||
+        profileIndex >= static_cast<int>(profileFaces.size())) {
+      QMessageBox::warning(this, "Cut", "Invalid profile selection.");
+      return;
+    }
+
+    TopoDS_Face profileFace;
+    TopoDS_Shape shape = profileFaces[profileIndex];
+    if (shape.ShapeType() == TopAbs_FACE) {
+      profileFace = TopoDS::Face(shape);
+    }
+
+    if (!profileFace.IsNull()) {
+      profileFace = enforceFaceHoles(profileFace);
+      qDebug() << "Cut: Using manually enforced profileFace.";
+    }
 
     try {
-      BRepBuilderAPI_MakeFace faceBuilder(selectedWire, true);
-      if (faceBuilder.IsDone()) {
-        TopoDS_Face profileFace = faceBuilder.Face();
+      if (!profileFace.IsNull()) {
         gp_Dir cutDir = m_currentSketch->plane().normal();
         gp_Vec cutVec(cutDir);
         cutVec.Scale(-depth);
@@ -4691,11 +5030,65 @@ void MainWindow::onToolApply() {
                            "No shapes selected or panel missing.");
       return;
     }
+
     int count = m_toolSettingsPanel->patternCount();
     double spacing = m_toolSettingsPanel->patternSpacing();
-    // Simplified pattern logic for demo (actually need full implementation)
-    m_featureList->addItem(QString("?? Pattern (%1 instances)").arg(count));
-    statusBar()->showMessage("Pattern applied", 3000);
+    bool isLinear = m_toolSettingsPanel->patternIsLinear();
+
+    try {
+      saveUndoState("Pattern");
+      part::PatternFeature patternOp;
+      TopoDS_Shape result;
+
+      TopoDS_Shape baseShape;
+      if (!m_document->temporaryShapes().empty()) {
+        baseShape = m_document->temporaryShapes().back();
+      } else {
+        baseShape = m_document->getAllShapes().back();
+      }
+
+      if (isLinear) {
+        // Linear pattern along X direction
+        gp_Dir dir(1, 0, 0);
+        result = patternOp.linearPattern(baseShape, dir, count, spacing);
+      } else {
+        // Circular pattern around Z axis
+        double angle = m_toolSettingsPanel->patternAngle();
+        gp_Ax1 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        result = patternOp.circularPattern(baseShape, axis, count, angle, true);
+      }
+
+      if (!result.IsNull()) {
+        if (!m_document->temporaryShapes().empty()) {
+          m_document->temporaryShapes().back() = result;
+        } else {
+          m_document->addTemporaryShape(result);
+        }
+        displayAllShapes();
+        if (isLinear) {
+          m_featureList->addItem(
+              QString("🔢 Linear Pattern (%1x, %2mm)").arg(count).arg(spacing));
+        } else {
+          m_featureList->addItem(
+              QString("🔢 Circular Pattern (%1x)").arg(count));
+        }
+        statusBar()->showMessage("Pattern applied", 3000);
+        m_modified = true;
+        updateWindowTitle();
+      } else {
+        QMessageBox::warning(
+            this, "Pattern",
+            "Pattern failed: " +
+                QString::fromStdString(patternOp.errorMessage()));
+      }
+    } catch (const std::exception &e) {
+      QMessageBox::warning(this, "Pattern Failed",
+                           QString("Exception: %1").arg(e.what()));
+    } catch (...) {
+      QMessageBox::warning(this, "Pattern Failed",
+                           "Unknown error during pattern operation.");
+    }
+
     m_activePartTool = ActivePartTool::None;
   } break;
 
@@ -4790,17 +5183,68 @@ void MainWindow::onToolApply() {
                            "No shapes selected or panel missing.");
       return;
     }
+
+    TopoDS_Shape baseShape;
+    if (!m_document->temporaryShapes().empty()) {
+      baseShape = m_document->temporaryShapes().back();
+    } else {
+      baseShape = m_document->getAllShapes().back();
+    }
+
     int axisIndex = m_toolSettingsPanel->mirrorAxis();
-    QString planeName =
-        (axisIndex == 0) ? "XY" : (axisIndex == 1 ? "XZ" : "YZ");
-    m_featureList->addItem(QString("- Mirror (%1)").arg(planeName));
-    statusBar()->showMessage("Mirror applied", 3000);
+    gp_Ax2 mirrorPlane;
+    QString planeName;
+
+    // Default axes
+    if (axisIndex == 0) { // XY
+      mirrorPlane = gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+      planeName = "XY";
+    } else if (axisIndex == 1) { // XZ
+      mirrorPlane = gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 1, 0));
+      planeName = "XZ";
+    } else { // YZ
+      mirrorPlane = gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0));
+      planeName = "YZ";
+    }
+
+    try {
+      part::MirrorFeature mirrorOp;
+      TopoDS_Shape result = mirrorOp.executeAxis(baseShape, mirrorPlane, true);
+
+      if (!result.IsNull()) {
+        saveUndoState("Mirror");
+        if (!m_document->temporaryShapes().empty()) {
+          m_document->temporaryShapes().back() = result;
+        } else {
+          m_document->addTemporaryShape(result);
+        }
+        displayAllShapes();
+        m_featureList->addItem(QString("🪞 Mirror (%1)").arg(planeName));
+        statusBar()->showMessage("Mirror applied", 3000);
+        m_modified = true;
+        updateWindowTitle();
+      } else {
+        QMessageBox::warning(
+            this, "Mirror Failed",
+            "Could not apply mirror: " +
+                QString::fromStdString(mirrorOp.errorMessage()));
+      }
+    } catch (...) {
+      QMessageBox::warning(this, "Mirror Failed",
+                           "Exception during mirror operation.");
+    }
+
     m_activePartTool = ActivePartTool::None;
   } break;
 
   case ActivePartTool::NewSketch: {
     int type = m_toolSettingsPanel->sketchPlaneType();
+    double offset = m_toolSettingsPanel->sketchPlaneOffsetDistance();
+    double angle = m_toolSettingsPanel->sketchPlaneAngle();
+
     if (type == 4) { // Face
+      m_pendingOffsetSketchDistance = offset;
+      m_pendingSketchAngle = angle;
       onSketchOnFace();
       m_activePartTool = ActivePartTool::None;
       return;
@@ -4823,6 +5267,19 @@ void MainWindow::onToolApply() {
       return;
     }
 
+    // Apply offset and angle to the base plane
+    gp_Pln basePlane = sketchPlane.plane();
+    if (offset != 0.0) {
+      gp_Vec offsetVec(basePlane.Axis().Direction());
+      offsetVec *= offset;
+      basePlane.Translate(offsetVec);
+    }
+    if (angle != 0.0) {
+      double angleRad = angle * M_PI / 180.0;
+      basePlane.Rotate(basePlane.XAxis(), angleRad);
+    }
+    sketchPlane = sketch::SketchPlane(basePlane);
+
     m_currentSketch = std::make_shared<sketch::Sketch>(sketchPlane);
     m_currentSketch->setName("Sketch" + std::to_string(m_featureList->count()));
     m_document->addSketch(m_currentSketch);
@@ -4838,6 +5295,264 @@ void MainWindow::onToolApply() {
                            " (" + planeName + ")");
     statusBar()->showMessage("New Sketch created on " + planeName, 3000);
     m_activePartTool = ActivePartTool::None;
+  } break;
+
+  case ActivePartTool::Loft: {
+    if (!m_toolSettingsPanel || !m_document) {
+      QMessageBox::warning(this, "Loft", "Invalid state for loft operation.");
+      return;
+    }
+
+    std::vector<int> selectedIndices =
+        m_toolSettingsPanel->loftSelectedSketches();
+    if (selectedIndices.size() < 2) {
+      QMessageBox::warning(
+          this, "Loft",
+          "Please select at least 2 sketches from the Profiles list.");
+      return;
+    }
+
+    bool createSolid = m_toolSettingsPanel->loftSolid();
+    bool ruledSurface = m_toolSettingsPanel->loftRuled();
+
+    std::vector<TopoDS_Wire> loftWires;
+    const auto &sketches = m_document->sketches();
+
+    for (int idx : selectedIndices) {
+      if (idx >= 0 && idx < static_cast<int>(sketches.size())) {
+        TopoDS_Wire wire = sketches[idx]->buildWire();
+        if (wire.IsNull()) {
+          QMessageBox::warning(
+              this, "Loft",
+              QString("Sketch '%1' does not form a valid closed profile.")
+                  .arg(QString::fromStdString(sketches[idx]->name())));
+          return;
+        }
+        loftWires.push_back(wire);
+      }
+    }
+
+    try {
+      part::LoftFeature loft;
+      TopoDS_Shape result = loft.execute(loftWires, createSolid, ruledSurface);
+
+      if (!result.IsNull()) {
+        saveUndoState("Loft");
+
+        if (m_document->temporaryShapes().empty()) {
+          m_document->addTemporaryShape(result);
+        } else {
+          try {
+            BRepAlgoAPI_Fuse fuseOp(m_document->temporaryShapes()[0], result);
+            if (fuseOp.IsDone()) {
+              m_document->temporaryShapes()[0] = fuseOp.Shape();
+            } else {
+              m_document->addTemporaryShape(result);
+            }
+          } catch (...) {
+            m_document->addTemporaryShape(result);
+          }
+        }
+
+        displayAllShapes();
+        if (m_featureList) {
+          m_featureList->addItem("✅ Loft");
+        }
+        statusBar()->showMessage("Loft created successfully", 3000);
+        m_modified = true;
+        updateWindowTitle();
+      } else {
+        QMessageBox::warning(this, "Loft Failed",
+                             QString::fromStdString(loft.errorMessage()));
+      }
+    } catch (const std::exception &e) {
+      QMessageBox::critical(this, "Loft Error",
+                            QString("Exception: %1").arg(e.what()));
+    } catch (...) {
+      QMessageBox::critical(this, "Loft Error", "Unknown error occurred.");
+    }
+
+    // In many CAD tools, the tool stays active, but we can reset it here
+    m_activePartTool = ActivePartTool::None;
+  } break;
+
+  case ActivePartTool::SketchLinearPattern: {
+    if (!m_sketchMode || !m_currentSketch || !m_sketchView) {
+      QMessageBox::warning(this, "Linear Pattern", "No active sketch.");
+      m_activePartTool = ActivePartTool::None;
+      return;
+    }
+
+    const auto &linSelected = m_sketchView->m_selectedEntities;
+    if (linSelected.empty()) {
+      QMessageBox::information(
+          this, "Linear Pattern",
+          "Please select entities in the sketch first, then click Apply.");
+      return;
+    }
+
+    int count = m_toolSettingsPanel ? m_toolSettingsPanel->patternCount() : 3;
+    double spacing =
+        m_toolSettingsPanel ? m_toolSettingsPanel->patternSpacing() : 20.0;
+
+    std::vector<sketch::SketchEntity::Ptr> entities;
+    for (auto *rawPtr : linSelected) {
+      for (const auto &e : m_currentSketch->entities()) {
+        if (e.get() == rawPtr) {
+          entities.push_back(e);
+          break;
+        }
+      }
+    }
+
+    sketch::SketchPattern patternTool;
+    auto linResult = patternTool.linearPattern(*m_currentSketch, entities, 1.0,
+                                               0.0, spacing, count);
+
+    if (linResult.success) {
+      m_currentSketch->saveCheckpoint("Linear Pattern");
+      m_sketchView->clearSelection();
+      m_sketchView->update();
+      m_featureList->addItem(
+          QString("\U0001f522 Linear Pattern (%1x)").arg(count));
+      statusBar()->showMessage(QString("Created %1 copies at %2mm spacing")
+                                   .arg(count - 1)
+                                   .arg(spacing),
+                               3000);
+    } else {
+      QMessageBox::warning(this, "Linear Pattern",
+                           QString::fromStdString(linResult.error));
+    }
+    m_activePartTool = ActivePartTool::None;
+  } break;
+
+  case ActivePartTool::SketchCircularPattern: {
+    if (!m_sketchMode || !m_currentSketch || !m_sketchView) {
+      QMessageBox::warning(this, "Circular Pattern", "No active sketch.");
+      m_activePartTool = ActivePartTool::None;
+      return;
+    }
+
+    const auto &circSelected = m_sketchView->m_selectedEntities;
+    if (circSelected.empty()) {
+      QMessageBox::information(
+          this, "Circular Pattern",
+          "Please select entities in the sketch first, then click Apply.");
+      return;
+    }
+
+    int circCount =
+        m_toolSettingsPanel ? m_toolSettingsPanel->patternCount() : 6;
+    double totalAngle =
+        m_toolSettingsPanel ? m_toolSettingsPanel->patternAngle() : 360.0;
+
+    std::vector<sketch::SketchEntity::Ptr> circEntities;
+    for (auto *rawPtr : circSelected) {
+      for (const auto &e : m_currentSketch->entities()) {
+        if (e.get() == rawPtr) {
+          circEntities.push_back(e);
+          break;
+        }
+      }
+    }
+
+    sketch::SketchPattern circPatternTool;
+    sketch::CircularPatternParams circParams;
+    circParams.centerX = 0.0;
+    circParams.centerY = 0.0;
+    circParams.count = circCount;
+    circParams.totalAngle = totalAngle;
+    circParams.equalSpacing = true;
+    auto circResult = circPatternTool.circularPattern(*m_currentSketch,
+                                                      circEntities, circParams);
+
+    if (circResult.success) {
+      m_currentSketch->saveCheckpoint("Circular Pattern");
+      m_sketchView->clearSelection();
+      m_sketchView->update();
+      m_featureList->addItem(
+          QString("\U0001f504 Circular Pattern (%1x)").arg(circCount));
+      statusBar()->showMessage(
+          QString("Created %1 copies around origin").arg(circCount - 1), 3000);
+    } else {
+      QMessageBox::warning(this, "Circular Pattern",
+                           QString::fromStdString(circResult.error));
+    }
+    m_activePartTool = ActivePartTool::None;
+  } break;
+
+  case ActivePartTool::Rib: {
+    if (m_document->getAllShapes().empty()) {
+      QMessageBox::warning(this, "Rib", "No solid body available.");
+      return;
+    }
+    if (!m_currentSketch) {
+      QMessageBox::warning(this, "Rib", "No active sketch.");
+      return;
+    }
+
+    // Get parameters
+    double thickness = m_toolSettingsPanel->ribThickness();
+    int typeIdx = m_toolSettingsPanel->ribType();
+    bool symmetric = m_toolSettingsPanel->ribSymmetric();
+    double angle = m_toolSettingsPanel->ribAngle();
+    bool flip = m_toolSettingsPanel->ribFlipDirection();
+    double draft = m_toolSettingsPanel->ribDraftAngle();
+
+    part::RibParams params;
+    params.thickness = thickness;
+    params.symmetric = symmetric;
+    params.angle = angle;
+    params.flipDirection = flip;
+    params.draftAngle = draft;
+
+    // Map type index to enum
+    switch (typeIdx) {
+    case 0:
+      params.type = part::RibType::Parallel;
+      break;
+    case 1:
+      params.type = part::RibType::Normal;
+      break;
+    case 2:
+      params.type = part::RibType::AtAngle;
+      break;
+    default:
+      params.type = part::RibType::Parallel;
+      break;
+    }
+
+    try {
+      saveUndoState("Rib");
+      part::RibFeature rib;
+      TopoDS_Shape result = rib.execute(
+          *m_currentSketch, m_document->getAllShapes().back(), params);
+
+      if (!result.IsNull()) {
+        // Fix persistence
+        auto &temps = m_document->temporaryShapes();
+        if (!temps.empty()) {
+          temps.back() = result;
+        } else {
+          m_document->addTemporaryShape(result);
+          // Hide feature shapes to prevent overlap
+          auto features = m_document->featureTree()->allFeatures();
+          for (auto *feat : features) {
+            feat->setVisible(false);
+          }
+        }
+        displayAllShapes();
+        m_featureList->addItem(QString("🦴 Rib (T=%1mm)").arg(thickness));
+        statusBar()->showMessage(QString("Rib created: T=%1mm").arg(thickness),
+                                 3000);
+        m_activePartTool = ActivePartTool::None;
+      } else {
+        QMessageBox::warning(this, "Rib Failed",
+                             QString::fromStdString(rib.errorMessage()));
+      }
+    } catch (...) {
+      QMessageBox::warning(this, "Rib Error", "Rib operation failed.");
+    }
   } break;
 
   default:
@@ -5000,18 +5715,14 @@ void MainWindow::onFeatureReordered() {
 }
 
 void MainWindow::onNewAssembly() {
-  if (!close()) {
-    return;
+  createNewTab("Assembly 1");
+
+  if (m_document) {
+    m_document->setType(core::Document::Type::Assembly);
+    // Force UI update since we just changed the type
+    updateInterfaceMode();
   }
 
-  m_document->newDocument();
-  m_assemblyMode = true;
-  if (m_treeStack)
-    m_treeStack->setCurrentIndex(1); // Switch to Assembly Tree
-  if (m_assemblyTree)
-    m_assemblyTree->updateTree(); // Clear/refresh
-
-  updateWindowTitle();
   statusBar()->showMessage("New Assembly created");
 }
 
@@ -5047,22 +5758,6 @@ void MainWindow::onInsertComponent() {
 
   displayAllShapes();
   statusBar()->showMessage("Component inserted");
-}
-
-void MainWindow::onSketchProject() {
-  if (!m_sketchMode || !m_currentSketch) {
-    statusBar()->showMessage("Create or edit a sketch to use Project.");
-    return;
-  }
-
-  m_activePartTool = ActivePartTool::Project;
-
-  if (m_viewport) {
-    // Enable edge and vertex selection
-    m_viewport->enableEdgeSelection(true);
-    statusBar()->showMessage(
-        "Select an edge to project onto the sketch plane.");
-  }
 }
 
 void MainWindow::onMoveComponent() {
@@ -5378,10 +6073,18 @@ void MainWindow::onGeometrySelected(const QString &type) {
   if (!m_viewport)
     return;
 
+  // Handle Hole Wizard generic message
+  if (m_activePartTool == ActivePartTool::HoleWizard) {
+    statusBar()->showMessage(
+        QString("Selected: %1. Proceeding with hole wizard...").arg(type));
+    // Implementation is in onShapeSelected
+    return;
+  }
+
   // Handle Project Tool Selection (Linked Geometry)
   if (m_activePartTool == ActivePartTool::Project && m_currentSketch) {
     TopoDS_Shape selectedShape;
-    if (type == "Edge") {
+    if (type.startsWith("Edge")) {
       auto edges = m_viewport->getSelectedEdges();
       if (!edges.empty()) {
         selectedShape = edges[0];
@@ -5503,34 +6206,31 @@ void MainWindow::onGeometrySelected(const QString &type) {
         auto constraint = dialog.getConstraint();
         if (constraint) {
           m_document->assembly()->addConstraint(constraint);
-
-          // Trigger solver
           bool solved = m_document->assembly()->solve();
           if (solved) {
             statusBar()->showMessage("Constraint added and solved");
           } else {
-            statusBar()->showMessage(
-                "Constraint added but solver failed to converge");
+            QMessageBox::warning(this, "Solver",
+                                 "Constraint added but solver failed");
           }
-
-          m_assemblyTree->updateTree(); // Refresh tree
+          displayAllShapes();
         }
       } else {
-        // Cancel logic
-        if (m_document && m_document->assembly()) {
-          if (previewConstraint) {
-            m_document->assembly()->removeConstraint(previewConstraint);
-          }
-          for (const auto &pair : initialTransforms) {
-            pair.first->setPlacement(pair.second);
-          }
-          updateAssemblyVisuals();
+        // Cancelled - undo preview
+        if (previewConstraint && m_document && m_document->assembly()) {
+          m_document->assembly()->removeConstraint(previewConstraint);
         }
+        // Restore positions
+        for (const auto &pair : initialTransforms) {
+          pair.first->setPlacement(pair.second);
+        }
+        updateAssemblyVisuals();
+        statusBar()->showMessage("Constraint cancelled");
       }
 
       // Reset
-      m_currentAssemblyAction = AssemblyAction::None;
       m_selectedComponents.clear();
+      m_currentAssemblyAction = AssemblyAction::None;
       m_viewport->enableShapeSelection(false);
     }
   }
@@ -5582,9 +6282,9 @@ void MainWindow::onAssemblyTreeSelection(
     // m_viewport->selectShape(component->getTransformedShape());
 
     // Actually, Viewport3D typically uses AIS_InteractiveContext::SetSelected
-    // We might need to expose a method in Viewport3D to select by TopoDS_Shape
-    // For this MVP, we'll just log it to status bar if viewport support is
-    // missing
+    // We might need to expose a method in Viewport3D to select by
+    // TopoDS_Shape For this MVP, we'll just log it to status bar if viewport
+    // support is missing
     statusBar()->showMessage("Selected component: " +
                              QString::fromStdString(component->getName()));
   } else {
@@ -5594,6 +6294,23 @@ void MainWindow::onAssemblyTreeSelection(
 
 void MainWindow::onShapeSelected(const TopoDS_Shape &shape,
                                  Handle(AIS_InteractiveObject) object) {
+  // Handle Hole Wizard point selection explicitly here where shape is provided
+  if (m_activePartTool == ActivePartTool::HoleWizard) {
+    if (shape.ShapeType() == TopAbs_VERTEX) {
+      TopoDS_Vertex vertex = TopoDS::Vertex(shape);
+      gp_Pnt pnt = BRep_Tool::Pnt(vertex);
+
+      m_holePoints.push_back(pnt);
+      statusBar()->showMessage(
+          QString("Hole Wizard: %1 vertex selected. Click Apply when done.")
+              .arg(m_holePoints.size()));
+    } else {
+      statusBar()->showMessage("Hole Wizard: Please select a Vertex (point)",
+                               3000);
+    }
+    return;
+  }
+
   auto it = m_visualMap.find(object);
   std::shared_ptr<assembly::Component> comp;
 
@@ -5840,6 +6557,265 @@ result = cq.Workplane("XY").circle(10).extrude(50)
   } else {
     QApplication::restoreOverrideCursor();
     QMessageBox::critical(this, "Error", "LLM Chat Client not initialized.");
+  }
+}
+
+// ============================================================================
+// Multi-Document Support
+// ============================================================================
+
+std::shared_ptr<core::Document> MainWindow::createNewTab(const QString &title) {
+
+  // Create viewport
+
+  auto viewport = new Viewport3D(this);
+
+  // Create document
+
+  auto doc = std::make_shared<core::Document>(this);
+  doc->setName(title);
+  doc->newDocument(); // Initialize
+
+  // Map viewport to document
+  m_documentMap[viewport] = doc;
+
+  // Add tab
+
+  int index = m_tabWidget->addTab(viewport, title);
+  m_tabWidget->setCurrentIndex(index);
+
+  // Connect viewport signals
+
+  connect(viewport, &Viewport3D::faceSelected, this,
+          &MainWindow::onFaceSelected);
+  connect(viewport, &Viewport3D::geometrySelected, this,
+          &MainWindow::onGeometrySelected);
+  connect(viewport, &Viewport3D::shapeSelected, this,
+          &MainWindow::onShapeSelected);
+  connect(viewport, &Viewport3D::edgeSelected, this,
+          &MainWindow::onViewportEdgeSelected);
+
+  // Connect component drag signal
+  connect(
+      viewport, &Viewport3D::componentDragEnded, this,
+      [this, viewport](Handle(AIS_InteractiveObject) aisObj, gp_Pnt dropPoint) {
+        if (!m_assemblyMode || !m_document || !m_document->assembly())
+          return;
+
+        // Find the component from the AIS object
+        auto it = m_visualMap.find(aisObj);
+        if (it != m_visualMap.end()) {
+          auto compWeak = it->second;
+          if (auto comp = compWeak.lock()) {
+            // Calculate translation from original position
+            gp_Trsf currentPlacement = comp->getPlacement();
+            gp_Trsf newPlacement;
+            newPlacement.SetTranslation(gp_Vec(gp_Pnt(0, 0, 0), dropPoint));
+            comp->setPlacement(newPlacement);
+
+            displayAllShapes();
+            statusBar()->showMessage(
+                QString("Moved component '%1'")
+                    .arg(QString::fromStdString(comp->getName())));
+          }
+        }
+
+        // Disable drag mode after drop
+        viewport->enableComponentDragMode(false);
+        m_currentAssemblyAction = AssemblyAction::None;
+      });
+
+  // Connect document signals
+  connect(doc.get(), &core::Document::featureAdded, this,
+          [this](core::Feature *f) {
+            updateFeatureList();
+            displayAllShapes();
+          });
+
+  // Initial checkpoint (must be after valid document is active)
+  doc->checkpoint("Initial");
+
+  return doc;
+}
+
+void MainWindow::onTabChanged(int index) {
+  if (index < 0) {
+    m_document = nullptr;
+    m_viewport = nullptr;
+    return;
+  }
+
+  QWidget *widget = m_tabWidget->widget(index);
+  m_viewport = qobject_cast<Viewport3D *>(widget);
+
+  if (m_documentMap.count(widget)) {
+    m_document = m_documentMap[widget];
+    m_currentFile = m_document->filePath();
+    m_modified = m_document->isModified();
+  } else {
+    m_document = nullptr;
+  }
+
+  // Update UI components
+  if (m_assemblyTree && m_document) {
+    m_assemblyTree->setAssembly(m_document->assembly());
+  }
+
+  if (m_parameterEditor && m_document) {
+    m_parameterEditor->setParameterManager(m_document->parameterManager());
+  }
+
+  // Connect document signals (disconnect outdated ones automatically handled
+  // by object life but better to be safe if persistent) Actually, unique
+  // connections or tracking connection might be needed. For now, simple
+  // connect.
+  if (m_document) {
+    connect(m_document->featureTree(), &core::FeatureTree::featureAdded, this,
+            &MainWindow::updateFeatureList, Qt::UniqueConnection);
+    connect(m_document->featureTree(), &core::FeatureTree::featureRemoved, this,
+            &MainWindow::updateFeatureList, Qt::UniqueConnection);
+    connect(m_document->featureTree(), &core::FeatureTree::featureModified,
+            this, &MainWindow::updateFeatureList, Qt::UniqueConnection);
+    connect(m_document->featureTree(), &core::FeatureTree::treeStructureChanged,
+            this, &MainWindow::updateFeatureList, Qt::UniqueConnection);
+  }
+
+  updateFeatureList();
+  updateWindowTitle();
+
+  // Determine mode from document type
+  if (m_document) {
+    m_assemblyMode = (m_document->type() == core::Document::Type::Assembly);
+  } else {
+    m_assemblyMode = false;
+  }
+
+  updateInterfaceMode();
+}
+
+void MainWindow::onCloseTab(int index) {
+  QWidget *widget = m_tabWidget->widget(index);
+
+  if (m_documentMap.count(widget) && m_documentMap[widget]->isModified()) {
+    QMessageBox::StandardButton ret;
+    ret = QMessageBox::warning(this, "Application",
+                               "The document has been modified.\n"
+                               "Do you want to save your changes?",
+                               QMessageBox::Save | QMessageBox::Discard |
+                                   QMessageBox::Cancel);
+    if (ret == QMessageBox::Save) {
+      m_tabWidget->setCurrentIndex(index);
+      onSaveFile();
+    } else if (ret == QMessageBox::Cancel) {
+      return;
+    }
+  }
+
+  m_documentMap.erase(widget);
+  m_tabWidget->removeTab(index);
+  widget->deleteLater();
+
+  if (m_tabWidget->count() == 0) {
+    createNewTab("Untitled");
+  }
+}
+
+void MainWindow::onNewFile() { createNewTab("Untitled"); }
+
+void MainWindow::onOpenFile() {
+  QString fileName = QFileDialog::getOpenFileName(
+      this, "Open File", "",
+      "OpenCAD Files (*.ocad);;STEP Files (*.step *.stp);;All Files (*.*)");
+
+  if (fileName.isEmpty())
+    return;
+
+  QFileInfo fileInfo(fileName);
+  createNewTab(fileInfo.fileName());
+
+  if (m_document) {
+    if (m_document->load(fileName)) {
+      statusBar()->showMessage("File loaded", 2000);
+      displayAllShapes();
+      onViewFit();
+    } else {
+      statusBar()->showMessage("Failed to load file");
+      onCloseTab(m_tabWidget->currentIndex());
+    }
+  }
+}
+
+void MainWindow::onCopyGeometryToNewPart() {
+  qDebug() << "Debug: onCopyGeometryToNewPart called";
+  if (!m_viewport) {
+    qDebug() << "Debug: No viewport!";
+    return;
+  }
+
+  std::vector<TopoDS_Shape> shapesToCopy;
+
+  // Check for selected faces (Multi-select)
+  // Check for selected faces
+  auto faces = m_viewport->getSelectedFaces();
+  auto edges = m_viewport->getSelectedEdges();
+
+  QMessageBox::information(this, "Debug Copy",
+                           QString("Faces Selected: %1\nEdges Selected: %2")
+                               .arg(faces.size())
+                               .arg(edges.size()));
+
+  qDebug() << "Debug: Viewport reports" << faces.size() << "faces selected.";
+
+  // Also check single selected face just in case (compatibility)
+  if (faces.empty()) {
+    TopoDS_Face face = m_viewport->selectedFace();
+    if (!face.IsNull()) {
+      shapesToCopy.push_back(face);
+      qDebug() << "Debug: Fallback to single face selected.";
+    }
+  } else {
+    for (const auto &face : faces) {
+      shapesToCopy.push_back(face);
+    }
+  }
+
+  // Check for selected edges
+  // auto edges = m_viewport->getSelectedEdges(); // Use existing variable
+  qDebug() << "Debug: Viewport reports" << edges.size() << "edges selected.";
+  for (const auto &edge : edges) {
+    shapesToCopy.push_back(edge);
+  }
+
+  if (shapesToCopy.empty()) {
+    QMessageBox::information(this, "Geometry Linker",
+                             QString("Please select faces or edges to "
+                                     "copy.\nDebug: Faces=%1, Edges=%2")
+                                 .arg(faces.size())
+                                 .arg(edges.size()));
+    return;
+  }
+
+  // Create New Tab
+  auto targetDoc = createNewTab("Copied Part");
+
+  // Force update logic if onTabChanged didn't fire synchronously
+  if (m_document != targetDoc) {
+    qDebug() << "Debug: m_document was stale. Forcing update.";
+    m_document = targetDoc;
+    if (m_tabWidget) {
+      m_viewport = qobject_cast<Viewport3D *>(m_tabWidget->currentWidget());
+    }
+  }
+
+  // Add shapes to new document
+  if (targetDoc) {
+    for (const auto &shape : shapesToCopy) {
+      targetDoc->addTemporaryShape(shape);
+    }
+    displayAllShapes();
+    onViewFit();
+    statusBar()->showMessage(
+        QString("Copied %1 entities to new part").arg(shapesToCopy.size()));
   }
 }
 

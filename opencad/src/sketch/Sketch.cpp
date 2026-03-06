@@ -8,17 +8,32 @@
 #include "constraints/DimensionConstraint.h"
 #include "constraints/HorizontalConstraint.h"
 #include "constraints/VerticalConstraint.h"
+#include <algorithm>
 
 #include "constraints/FixConstraint.h"
+#include <BRepAlgoAPI_Cut.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepAlgoAPI_Splitter.hxx>
+#include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeEdge2d.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <BRepClass_FaceClassifier.hxx>
+#include <BRepGProp.hxx>
+#include <BRepOffsetAPI_MakeOffset.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
+#include <Bnd_Box.hxx>
 #include <ElSLib.hxx>
 #include <GC_MakeArcOfCircle.hxx>
+#include <GProp_GProps.hxx>
 #include <Geom2dAdaptor_Curve.hxx>
 #include <Geom2d_Curve.hxx>
 #include <GeomProjLib.hxx>
@@ -32,6 +47,7 @@
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Edge.hxx>
@@ -691,6 +707,72 @@ TopoDS_Compound Sketch::buildCompound() const {
         }
         break;
       }
+      case EntityType::Polygon: {
+        auto *polygon = static_cast<const SketchPolygon *>(entity.get());
+        const auto vertices = polygon->getVertices();
+        if (vertices.size() >= 3) {
+          for (size_t i = 0; i < vertices.size(); ++i) {
+            size_t nextIdx = (i + 1) % vertices.size();
+            gp_Pnt p1 = m_plane.to3D(vertices[i].X(), vertices[i].Y());
+            gp_Pnt p2 =
+                m_plane.to3D(vertices[nextIdx].X(), vertices[nextIdx].Y());
+            if (p1.Distance(p2) > 1e-6) {
+              BRepBuilderAPI_MakeEdge edgeBuilder(p1, p2);
+              if (edgeBuilder.IsDone()) {
+                builder.Add(compound, edgeBuilder.Edge());
+              }
+            }
+          }
+        }
+        break;
+      }
+      case EntityType::Slot: {
+        auto *slot = static_cast<const SketchSlot *>(entity.get());
+        gp_Pnt2d c1_2d = slot->center1();
+        gp_Pnt2d c2_2d = slot->center2();
+        double halfWidth = slot->width() / 2.0;
+
+        gp_Vec2d dir2d(c2_2d.X() - c1_2d.X(), c2_2d.Y() - c1_2d.Y());
+        if (dir2d.Magnitude() > 1e-6) {
+          dir2d.Normalize();
+          gp_Vec2d perpDir2d(-dir2d.Y(), dir2d.X());
+          perpDir2d.Scale(halfWidth);
+
+          gp_Pnt2d p1_2d(c1_2d.X() + perpDir2d.X(), c1_2d.Y() + perpDir2d.Y());
+          gp_Pnt2d p2_2d(c1_2d.X() - perpDir2d.X(), c1_2d.Y() - perpDir2d.Y());
+          gp_Pnt2d p3_2d(c2_2d.X() - perpDir2d.X(), c2_2d.Y() - perpDir2d.Y());
+          gp_Pnt2d p4_2d(c2_2d.X() + perpDir2d.X(), c2_2d.Y() + perpDir2d.Y());
+
+          gp_Pnt c1 = m_plane.to3D(c1_2d.X(), c1_2d.Y());
+          gp_Pnt c2 = m_plane.to3D(c2_2d.X(), c2_2d.Y());
+          gp_Pnt p1 = m_plane.to3D(p1_2d.X(), p1_2d.Y());
+          gp_Pnt p2 = m_plane.to3D(p2_2d.X(), p2_2d.Y());
+          gp_Pnt p3 = m_plane.to3D(p3_2d.X(), p3_2d.Y());
+          gp_Pnt p4 = m_plane.to3D(p4_2d.X(), p4_2d.Y());
+
+          try {
+            gp_Circ circ1(gp_Ax2(c1, planeNormal), halfWidth);
+            TopoDS_Edge edge1 = BRepBuilderAPI_MakeEdge(circ1, p1, p2);
+            if (!edge1.IsNull())
+              builder.Add(compound, edge1);
+
+            BRepBuilderAPI_MakeEdge edge2(p2, p3);
+            if (edge2.IsDone())
+              builder.Add(compound, edge2.Edge());
+
+            gp_Circ circ2(gp_Ax2(c2, planeNormal), halfWidth);
+            TopoDS_Edge edge3 = BRepBuilderAPI_MakeEdge(circ2, p3, p4);
+            if (!edge3.IsNull())
+              builder.Add(compound, edge3);
+
+            BRepBuilderAPI_MakeEdge edge4(p4, p1);
+            if (edge4.IsDone())
+              builder.Add(compound, edge4.Edge());
+          } catch (...) {
+          }
+        }
+        break;
+      }
       default:
         break;
       }
@@ -706,417 +788,219 @@ TopoDS_Compound Sketch::buildCompound() const {
 
 std::vector<TopoDS_Wire> Sketch::detectClosedProfiles() const {
   std::vector<TopoDS_Wire> closedWires;
-  gp_Dir planeNormal = m_plane.normal();
 
-  // Step 1: Collect all edges from all entities (except construction)
-  TopTools_ListOfShape allEdges;
-  std::set<uint64_t> processedEntities; // Track which entities we've processed
+  // Use the robust face builder which handles all intersections and entity
+  // types
+  std::vector<TopoDS_Face> faces = buildProfileFaces();
 
-  for (const auto &entity : m_entities) {
-    if (entity->isConstruction())
-      continue;
-
-    try {
-      // Handle single-entity closed profiles first (Circle, Ellipse, Rectangle)
-      if (entity->type() == EntityType::Circle) {
-        auto *circle = static_cast<const SketchCircle *>(entity.get());
-        gp_Pnt center =
-            m_plane.to3D(circle->center().X(), circle->center().Y());
-        gp_Ax2 ax(center, planeNormal);
-        gp_Circ circ(ax, circle->radius());
-        BRepBuilderAPI_MakeEdge edgeBuilder(circ);
-        if (edgeBuilder.IsDone()) {
-          BRepBuilderAPI_MakeWire wireBuilder(edgeBuilder.Edge());
-          if (wireBuilder.IsDone() && wireBuilder.Wire().Closed()) {
-            closedWires.push_back(wireBuilder.Wire());
-            processedEntities.insert(entity->id());
-            continue; // Skip adding to allEdges
-          }
-        }
-      } else if (entity->type() == EntityType::Ellipse) {
-        auto *ellipse = static_cast<const SketchEllipse *>(entity.get());
-        gp_Pnt center =
-            m_plane.to3D(ellipse->center().X(), ellipse->center().Y());
-        gp_Ax2 ax(center, planeNormal);
-        gp_Elips elips(ax, ellipse->majorRadius(), ellipse->minorRadius());
-        BRepBuilderAPI_MakeEdge edgeBuilder(elips);
-        if (edgeBuilder.IsDone()) {
-          BRepBuilderAPI_MakeWire wireBuilder(edgeBuilder.Edge());
-          if (wireBuilder.IsDone() && wireBuilder.Wire().Closed()) {
-            closedWires.push_back(wireBuilder.Wire());
-            processedEntities.insert(entity->id());
-            continue; // Skip adding to allEdges
-          }
-        }
-      } else if (entity->type() == EntityType::Rectangle) {
-        auto *rect = static_cast<const SketchRectangle *>(entity.get());
-        gp_Pnt c1 = m_plane.to3D(rect->corner1().X(), rect->corner1().Y());
-        gp_Pnt c2 = m_plane.to3D(rect->corner2().X(), rect->corner1().Y());
-        gp_Pnt c3 = m_plane.to3D(rect->corner2().X(), rect->corner2().Y());
-        gp_Pnt c4 = m_plane.to3D(rect->corner1().X(), rect->corner2().Y());
-
-        BRepBuilderAPI_MakeWire wireBuilder;
-        BRepBuilderAPI_MakeEdge e1(c1, c2);
-        BRepBuilderAPI_MakeEdge e2(c2, c3);
-        BRepBuilderAPI_MakeEdge e3(c3, c4);
-        BRepBuilderAPI_MakeEdge e4(c4, c1);
-
-        if (e1.IsDone())
-          wireBuilder.Add(e1.Edge());
-        if (e2.IsDone())
-          wireBuilder.Add(e2.Edge());
-        if (e3.IsDone())
-          wireBuilder.Add(e3.Edge());
-        if (e4.IsDone())
-          wireBuilder.Add(e4.Edge());
-
-        if (wireBuilder.IsDone() && wireBuilder.Wire().Closed()) {
-          closedWires.push_back(wireBuilder.Wire());
-          processedEntities.insert(entity->id());
-          continue; // Skip adding to allEdges
-        }
-      } else if (entity->type() == EntityType::Polygon) {
-        // Handle Polygon as a closed profile
-        auto *polygon = static_cast<const SketchPolygon *>(entity.get());
-        const auto vertices = polygon->getVertices();
-
-        if (vertices.size() >= 3) {
-          try {
-            BRepBuilderAPI_MakeWire wireBuilder;
-
-            // Create edges between consecutive vertices
-            for (size_t i = 0; i < vertices.size(); ++i) {
-              size_t nextIdx = (i + 1) % vertices.size();
-              gp_Pnt p1 = m_plane.to3D(vertices[i].X(), vertices[i].Y());
-              gp_Pnt p2 =
-                  m_plane.to3D(vertices[nextIdx].X(), vertices[nextIdx].Y());
-
-              TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(p1, p2);
-              wireBuilder.Add(edge);
-            }
-
-            if (wireBuilder.IsDone() && wireBuilder.Wire().Closed()) {
-              closedWires.push_back(wireBuilder.Wire());
-              processedEntities.insert(entity->id());
-              continue; // Skip adding to allEdges
-            }
-          } catch (...) {
-            // Fall through to edge-based detection
-          }
-        }
-      } else if (entity->type() == EntityType::Slot) {
-        // Handle Slot as a closed profile (elongated hole with rounded ends)
-        auto *slot = static_cast<const SketchSlot *>(entity.get());
-        gp_Pnt2d c1_2d = slot->center1();
-        gp_Pnt2d c2_2d = slot->center2();
-        double width = slot->width();
-        double halfWidth = width / 2.0;
-
-        qDebug() << "Slot profile detection: width =" << width;
-
-        try {
-          // Calculate perpendicular in 2D first
-          gp_Vec2d dir2d(c2_2d.X() - c1_2d.X(), c2_2d.Y() - c1_2d.Y());
-          double length = dir2d.Magnitude();
-
-          if (length > 1e-6) {
-            dir2d.Normalize();
-
-            // Perpendicular vector in 2D (rotate 90 degrees)
-            gp_Vec2d perpDir2d(-dir2d.Y(), dir2d.X());
-            perpDir2d.Scale(halfWidth);
-
-            // Calculate corner points in 2D
-            gp_Pnt2d p1_2d(c1_2d.X() + perpDir2d.X(),
-                           c1_2d.Y() + perpDir2d.Y());
-            gp_Pnt2d p2_2d(c1_2d.X() - perpDir2d.X(),
-                           c1_2d.Y() - perpDir2d.Y());
-            gp_Pnt2d p3_2d(c2_2d.X() - perpDir2d.X(),
-                           c2_2d.Y() - perpDir2d.Y());
-            gp_Pnt2d p4_2d(c2_2d.X() + perpDir2d.X(),
-                           c2_2d.Y() + perpDir2d.Y());
-
-            // Convert to 3D using sketch plane
-            gp_Pnt c1 = m_plane.to3D(c1_2d.X(), c1_2d.Y());
-            gp_Pnt c2 = m_plane.to3D(c2_2d.X(), c2_2d.Y());
-            gp_Pnt p1 = m_plane.to3D(p1_2d.X(), p1_2d.Y());
-            gp_Pnt p2 = m_plane.to3D(p2_2d.X(), p2_2d.Y());
-            gp_Pnt p3 = m_plane.to3D(p3_2d.X(), p3_2d.Y());
-            gp_Pnt p4 = m_plane.to3D(p4_2d.X(), p4_2d.Y());
-
-            BRepBuilderAPI_MakeWire wireBuilder;
-
-            // Build wire with OUTER arcs (convex, facing outward)
-            // Path: p1 -> (outer arc) -> p2 -> p3 -> (outer arc) -> p4 -> p1
-            try {
-              // Arc at c1 (from p1 to p2) - OUTER semicircle (convex)
-              gp_Circ circ1(gp_Ax2(c1, planeNormal), halfWidth);
-              TopoDS_Edge edge1 =
-                  BRepBuilderAPI_MakeEdge(circ1, p1, p2); // p1->p2 (outer)
-              wireBuilder.Add(edge1);
-
-              // Line 1: p2 to p3
-              TopoDS_Edge edge2 = BRepBuilderAPI_MakeEdge(p2, p3);
-              wireBuilder.Add(edge2);
-
-              // Arc at c2 (from p3 to p4) - OUTER semicircle (convex)
-              gp_Circ circ2(gp_Ax2(c2, planeNormal), halfWidth);
-              TopoDS_Edge edge3 =
-                  BRepBuilderAPI_MakeEdge(circ2, p3, p4); // p3->p4 (outer)
-              wireBuilder.Add(edge3);
-
-              // Line 2: p4 to p1
-              TopoDS_Edge edge4 = BRepBuilderAPI_MakeEdge(p4, p1);
-              wireBuilder.Add(edge4);
-
-              qDebug() << "  Wire builder done:" << wireBuilder.IsDone();
-              if (wireBuilder.IsDone()) {
-                TopoDS_Wire wire = wireBuilder.Wire();
-                bool isClosed = wire.Closed();
-
-                qDebug() << "  Wire closed (built-in):" << isClosed;
-
-                // Manual closure check if not closed
-                if (!isClosed) {
-                  try {
-                    TopExp_Explorer vertexExp(wire, TopAbs_VERTEX);
-                    if (vertexExp.More()) {
-                      TopoDS_Vertex firstVertex =
-                          static_cast<const TopoDS_Vertex &>(
-                              vertexExp.Current());
-                      TopoDS_Vertex lastVertex = firstVertex;
-
-                      while (vertexExp.More()) {
-                        lastVertex = static_cast<const TopoDS_Vertex &>(
-                            vertexExp.Current());
-                        vertexExp.Next();
-                      }
-
-                      gp_Pnt firstPt = BRep_Tool::Pnt(firstVertex);
-                      gp_Pnt lastPt = BRep_Tool::Pnt(lastVertex);
-                      double distance = firstPt.Distance(lastPt);
-
-                      qDebug() << "  Manual endpoint distance:" << distance;
-
-                      if (distance < 1e-3) {
-                        isClosed = true;
-                        qDebug() << "  -> Manually detected as closed!";
-                      }
-                    }
-                  } catch (...) {
-                    qDebug() << "  -> Failed to check endpoints manually";
-                  }
-                }
-
-                if (isClosed) {
-                  closedWires.push_back(wire);
-                  processedEntities.insert(entity->id());
-                  qDebug() << "  -> Slot added as closed profile!";
-                  continue; // Skip adding to allEdges
-                } else {
-                  qDebug() << "  -> Slot wire is NOT closed, skipping";
-                }
-              } else {
-                qDebug() << "  -> Wire builder failed for slot";
-              }
-            } catch (const std::exception &e) {
-              qDebug() << "  -> Slot edge building failed:" << e.what();
-            }
-          }
-        } catch (const std::exception &e) {
-          qDebug() << "  Slot wire building failed:" << e.what();
-        } catch (...) {
-          qDebug() << "  Slot wire building failed with unknown error";
-        }
-      } else if (entity->type() == EntityType::Spline) {
-        // Handle closed Spline as a closed profile
-        auto *spline = static_cast<const SketchSpline *>(entity.get());
-
-        if (spline->isClosed()) {
-          try {
-            Handle(Geom2d_Curve) curve2d = spline->curve();
-            if (!curve2d.IsNull()) {
-              // Convert 2D curve to 3D using sketch plane
-              gp_Pln plane = m_plane.plane();
-              Handle(Geom_Surface) planeSurf = new Geom_Plane(plane);
-
-              // Create 3D edge from 2D curve on the plane
-              BRepBuilderAPI_MakeEdge edgeBuilder(curve2d, planeSurf);
-              if (edgeBuilder.IsDone()) {
-                BRepBuilderAPI_MakeWire wireBuilder(edgeBuilder.Edge());
-                if (wireBuilder.IsDone() && wireBuilder.Wire().Closed()) {
-                  closedWires.push_back(wireBuilder.Wire());
-                  processedEntities.insert(entity->id());
-                  continue; // Skip adding to allEdges
-                }
-              }
-            }
-          } catch (...) {
-            // Fall through to edge-based detection
-          }
-        }
+  for (const auto &face : faces) {
+    TopExp_Explorer wireExp(face, TopAbs_WIRE);
+    // Usually the first wire is the outer bounding wire of the face
+    if (wireExp.More()) {
+      TopoDS_Wire wire = TopoDS::Wire(wireExp.Current());
+      if (wire.Closed()) {
+        closedWires.push_back(wire);
       }
-
-      // For other entities (Line, Arc, Spline), add their edges to the pool
-      if (processedEntities.find(entity->id()) == processedEntities.end()) {
-        switch (entity->type()) {
-        case EntityType::Line: {
-          auto *line = static_cast<const SketchLine *>(entity.get());
-          gp_Pnt p1 =
-              m_plane.to3D(line->startPoint().X(), line->startPoint().Y());
-          gp_Pnt p2 = m_plane.to3D(line->endPoint().X(), line->endPoint().Y());
-          if (p1.Distance(p2) > 1e-6) {
-            BRepBuilderAPI_MakeEdge edgeBuilder(p1, p2);
-            if (edgeBuilder.IsDone()) {
-              allEdges.Append(edgeBuilder.Edge());
-            }
-          }
-          break;
-        }
-        case EntityType::Arc: {
-          auto *arc = static_cast<const SketchArc *>(entity.get());
-          if (arc->hasThreePointData()) {
-            gp_Pnt pStart =
-                m_plane.to3D(arc->arcStart().X(), arc->arcStart().Y());
-            gp_Pnt pThrough =
-                m_plane.to3D(arc->arcThrough().X(), arc->arcThrough().Y());
-            gp_Pnt pEnd = m_plane.to3D(arc->arcEnd().X(), arc->arcEnd().Y());
-            TopoDS_Edge arcEdge = CreateArc3Points(pStart, pThrough, pEnd);
-            if (!arcEdge.IsNull()) {
-              allEdges.Append(arcEdge);
-            }
-          } else {
-            gp_Pnt p1 =
-                m_plane.to3D(arc->startPoint().X(), arc->startPoint().Y());
-            gp_Pnt p2 = m_plane.to3D(arc->midPoint().X(), arc->midPoint().Y());
-            gp_Pnt p3 = m_plane.to3D(arc->endPoint().X(), arc->endPoint().Y());
-            TopoDS_Edge arcEdge = CreateArc3Points(p1, p2, p3);
-            if (!arcEdge.IsNull()) {
-              allEdges.Append(arcEdge);
-            }
-          }
-          break;
-        }
-        case EntityType::Spline: {
-          Handle(Geom2d_Curve) curve2d = entity->curve();
-          if (!curve2d.IsNull()) {
-            BRepBuilderAPI_MakeEdge2d edgeBuilder(curve2d);
-            if (edgeBuilder.IsDone()) {
-              allEdges.Append(edgeBuilder.Edge());
-            }
-          }
-          break;
-        }
-        default:
-          break;
-        }
-      }
-    } catch (...) {
-      continue;
-    }
-  }
-
-  // Step 2: Try to build a wire from all edges using BRepBuilderAPI_MakeWire
-  // This will automatically connect edges if they share endpoints
-  if (!allEdges.IsEmpty()) {
-    qDebug() << "detectClosedProfiles: Found" << allEdges.Extent()
-             << "edges from Line/Arc/Spline";
-
-    try {
-      BRepBuilderAPI_MakeWire wireBuilder;
-
-      // Add all edges to the wire builder
-      for (TopTools_ListIteratorOfListOfShape it(allEdges); it.More();
-           it.Next()) {
-        const TopoDS_Shape &shape = it.Value();
-        if (shape.ShapeType() == TopAbs_EDGE) {
-          TopoDS_Edge edge = static_cast<const TopoDS_Edge &>(shape);
-          wireBuilder.Add(edge);
-        }
-      }
-
-      if (wireBuilder.IsDone()) {
-        TopoDS_Wire wire = wireBuilder.Wire();
-
-        // Check if wire is closed - use both built-in check and manual endpoint
-        // check
-        bool isClosed = wire.Closed();
-
-        qDebug() << "BRepBuilderAPI_MakeWire: Built-in Closed:" << isClosed;
-
-        // Manual check: compare first and last vertex positions
-        if (!isClosed) {
-          try {
-            TopExp_Explorer vertexExp(wire, TopAbs_VERTEX);
-            if (vertexExp.More()) {
-              TopoDS_Vertex firstVertex =
-                  static_cast<const TopoDS_Vertex &>(vertexExp.Current());
-              TopoDS_Vertex lastVertex = firstVertex;
-
-              // Find last vertex
-              while (vertexExp.More()) {
-                lastVertex =
-                    static_cast<const TopoDS_Vertex &>(vertexExp.Current());
-                vertexExp.Next();
-              }
-
-              gp_Pnt firstPt = BRep_Tool::Pnt(firstVertex);
-              gp_Pnt lastPt = BRep_Tool::Pnt(lastVertex);
-              double distance = firstPt.Distance(lastPt);
-
-              qDebug() << "  Manual endpoint distance:" << distance;
-
-              // Consider closed if endpoints are within tolerance
-              if (distance < 1e-3) { // 0.001 units tolerance
-                isClosed = true;
-                qDebug() << "  -> Manually detected as closed!";
-              }
-            }
-          } catch (...) {
-            qDebug() << "  -> Failed to check endpoints manually";
-          }
-        }
-
-        if (isClosed) {
-          closedWires.push_back(wire);
-          qDebug() << "  -> Added to closed profiles!";
-        }
-      } else {
-        qDebug()
-            << "BRepBuilderAPI_MakeWire failed - edges might not be connected";
-      }
-    } catch (const std::exception &e) {
-      qDebug() << "Wire building failed:" << e.what();
-    } catch (...) {
-      qDebug() << "Wire building failed with unknown error";
     }
   }
 
   qDebug() << "detectClosedProfiles: Returning" << closedWires.size()
-           << "closed profiles";
+           << "closed profiles from faces";
   return closedWires;
 }
 
 std::vector<TopoDS_Face> Sketch::buildProfileFaces() const {
-  std::vector<TopoDS_Face> faces;
+  std::vector<TopoDS_Face> finalFaces;
 
-  auto closedWires = detectClosedProfiles();
-  for (const auto &wire : closedWires) {
-    try {
-      BRepBuilderAPI_MakeFace faceBuilder(wire, true);
-      if (faceBuilder.IsDone()) {
-        faces.push_back(faceBuilder.Face());
-      }
-    } catch (...) {
+  // 1. Get all valid edges from sketch compound
+  TopTools_ListOfShape sketchEdges;
+  bool hasEdges = false;
+
+  TopoDS_Compound compound = buildCompound();
+  TopExp_Explorer edgeExp(compound, TopAbs_EDGE);
+  while (edgeExp.More()) {
+    sketchEdges.Append(edgeExp.Current());
+    hasEdges = true;
+    edgeExp.Next();
+  }
+
+  if (!hasEdges)
+    return finalFaces;
+
+  // 2. Create a Substrate face to split
+  double minX = std::numeric_limits<double>::max();
+  double minY = std::numeric_limits<double>::max();
+  double maxX = std::numeric_limits<double>::lowest();
+  double maxY = std::numeric_limits<double>::lowest();
+  bool hasBounds = false;
+
+  for (const auto &entity : m_entities) {
+    if (entity->isConstruction() || entity->type() == EntityType::Point)
       continue;
+
+    try {
+      gp_Pnt2d p1 = entity->startPoint();
+      gp_Pnt2d p2 = entity->endPoint();
+      gp_Pnt2d p3 = entity->midPoint();
+      minX = std::min({minX, p1.X(), p2.X(), p3.X()});
+      minY = std::min({minY, p1.Y(), p2.Y(), p3.Y()});
+      maxX = std::max({maxX, p1.X(), p2.X(), p3.X()});
+      maxY = std::max({maxY, p1.Y(), p2.Y(), p3.Y()});
+      hasBounds = true;
+    } catch (...) {
     }
   }
 
-  return faces;
+  if (!hasBounds) {
+    minX = -100;
+    minY = -100;
+    maxX = 100;
+    maxY = 100;
+  }
+
+  // Large margin to ensure entire sketch fits safely inside substrate
+  double margin = std::max({maxX - minX, maxY - minY, 100.0}) * 10.0;
+  double subWidth = (maxX + margin) - (minX - margin);
+  double subHeight = (maxY + margin) - (minY - margin);
+  double subArea = subWidth * subHeight;
+
+  gp_Pnt p1 = m_plane.to3D(minX - margin, minY - margin);
+  gp_Pnt p2 = m_plane.to3D(maxX + margin, minY - margin);
+  gp_Pnt p3 = m_plane.to3D(maxX + margin, maxY + margin);
+  gp_Pnt p4 = m_plane.to3D(minX - margin, maxY + margin);
+
+  TopoDS_Wire substrateWire =
+      BRepBuilderAPI_MakePolygon(p1, p2, p3, p4, true).Wire();
+  TopoDS_Face substrateFace = BRepBuilderAPI_MakeFace(substrateWire).Face();
+
+  // 3. Run Splitter
+  BRepAlgoAPI_Splitter splitter;
+  TopTools_ListOfShape arguments;
+  arguments.Append(substrateFace);
+  splitter.SetArguments(arguments);
+  splitter.SetTools(sketchEdges);
+  splitter.Build();
+
+  if (!splitter.IsDone())
+    return finalFaces;
+
+  // 4. Filter faces
+  const TopoDS_Shape &result = splitter.Shape();
+  TopExp_Explorer faceExp(result, TopAbs_FACE);
+
+  while (faceExp.More()) {
+    TopoDS_Face face = TopoDS::Face(faceExp.Current());
+
+    GProp_GProps props;
+    try {
+      BRepGProp::SurfaceProperties(face, props);
+      double faceArea = props.Mass();
+
+      // If the face area is massive (approaching the substrate size), it's the
+      // outer cutaway piece
+      if (faceArea > subArea * 0.9) {
+        faceExp.Next();
+        continue;
+      }
+    } catch (...) {
+    }
+
+    finalFaces.push_back(face);
+    faceExp.Next();
+  }
+
+  // 5. Sort deterministically
+  struct FaceProps {
+    TopoDS_Face face;
+    gp_Pnt center;
+    double area;
+  };
+
+  std::vector<FaceProps> propsList;
+  propsList.reserve(finalFaces.size());
+
+  for (const auto &face : finalFaces) {
+    GProp_GProps props;
+    try {
+      BRepGProp::SurfaceProperties(face, props);
+      propsList.push_back({face, props.CentreOfMass(), props.Mass()});
+    } catch (...) {
+      propsList.push_back({face, gp_Pnt(0, 0, 0), 0.0});
+    }
+  }
+
+  std::sort(propsList.begin(), propsList.end(),
+            [](const FaceProps &a, const FaceProps &b) {
+              if (std::abs(a.center.X() - b.center.X()) > 1e-6)
+                return a.center.X() < b.center.X();
+              if (std::abs(a.center.Y() - b.center.Y()) > 1e-6)
+                return a.center.Y() < b.center.Y();
+              return a.area < b.area;
+            });
+
+  finalFaces.clear();
+  for (const auto &p : propsList) {
+    finalFaces.push_back(p.face);
+  }
+
+  qDebug() << "Sketch::buildProfileFaces: Generated" << finalFaces.size()
+           << "topologically perfect disjoint faces.";
+  return finalFaces;
 }
 
 int Sketch::closedProfileCount() const {
   return static_cast<int>(detectClosedProfiles().size());
+}
+
+std::vector<TopoDS_Shape> Sketch::extractProfiles(bool includeOpenWires) const {
+  std::vector<TopoDS_Shape> result;
+
+  // 1. Always get closed profile faces
+  auto faces = buildProfileFaces();
+  for (const auto &f : faces) {
+    result.push_back(f);
+  }
+
+  // 2. If requested, extract open wires
+  if (includeOpenWires) {
+    // If the sketch hasn't formed any closed faces but has entities,
+    // we try to build a continuous wire out of it.
+    // For Sweep, you usually just have a single open wire or multiple
+    // disconnected ones. For simplicity, we can use detectClosedProfiles logic
+    // or buildAllWires. Actually, we'll try to build the main wire.
+    TopoDS_Wire mainWire = buildWire();
+    if (!mainWire.IsNull() && !mainWire.Closed()) {
+      // It's an open wire! Add it to profiles.
+      result.push_back(mainWire);
+    } else if (faces.empty()) {
+      // If buildWire failed or was closed but didn't form a face (rare),
+      // let's just expose every non-construction entity as an individual
+      // wire/edge so the user can at least select them.
+      TopExp_Explorer wireExp(mainWire, TopAbs_EDGE);
+      if (!wireExp.More()) { // If mainWire was null/empty
+        for (const auto &entity : m_entities) {
+          if (entity->isConstruction() || entity->type() == EntityType::Point)
+            continue;
+          try {
+            // We use the same compound logic to get edges
+            TopoDS_Compound comp = buildCompound();
+            TopExp_Explorer compExp(comp, TopAbs_EDGE);
+            while (compExp.More()) {
+              BRepBuilderAPI_MakeWire mkWire(TopoDS::Edge(compExp.Current()));
+              if (mkWire.IsDone()) {
+                result.push_back(mkWire.Wire());
+              }
+              compExp.Next();
+            }
+            break; // We extracted all edges from the compound
+          } catch (...) {
+          }
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 // === Selection ===

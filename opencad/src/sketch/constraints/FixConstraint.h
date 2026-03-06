@@ -10,7 +10,6 @@
 #include "../entities/SketchPoint.h"
 #include "Constraint.h"
 
-
 namespace opencad {
 namespace sketch {
 
@@ -47,9 +46,9 @@ public:
   int dofRemoved() const override;
 
   /**
-   * @brief Compute constraint error
-   * @return Sum of squared position errors
+   * @brief Compute constraint error vector
    */
+  std::vector<double> errorVector() const override;
   double error() const override;
 
   /**

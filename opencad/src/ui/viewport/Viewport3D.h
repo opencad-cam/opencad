@@ -13,7 +13,7 @@
 #include <AIS_Shape.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <OpenGl_GraphicDriver.hxx>
-#include <QOpenGLWidget>
+#include <QWidget>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
@@ -41,7 +41,7 @@ enum class SelectionMode {
  * @class Viewport3D
  * @brief OpenGL widget for 3D CAD visualization
  */
-class Viewport3D : public QOpenGLWidget {
+class Viewport3D : public QWidget {
   Q_OBJECT
 
 public:
@@ -126,9 +126,19 @@ public:
   void enableEdgeSelection(bool enable);
 
   /**
-   * @brief Get selected face (if any)
+   * @brief Enable/disable vertex selection
+   */
+  void enableVertexSelection(bool enable);
+
+  /**
+   * @brief Get selected face (returns the last selected one for compatibility)
    */
   TopoDS_Face selectedFace() const { return m_selectedFace; }
+
+  /**
+   * @brief Get all selected faces
+   */
+  std::vector<TopoDS_Face> getSelectedFaces() const { return m_selectedFaces; }
 
   /**
    * @brief Get selected edges
@@ -141,6 +151,11 @@ public:
   void clearSelectedEdges() { m_selectedEdges.clear(); }
 
   /**
+   * @brief Clear all selections
+   */
+  void clearSelection();
+
+  /**
    * @brief Get plane of selected face
    */
   bool getSelectedFacePlane(gp_Pln &plane) const;
@@ -149,6 +164,12 @@ public:
    * @brief Get selected shape (any, used for Assembly)
    */
   TopoDS_Shape getSelectedShape() const { return m_selectedShape; }
+
+  /**
+   * @brief Get the parent shape of the current selection (the visualized
+   * object)
+   */
+  TopoDS_Shape getSelectedParentShape();
 
   /**
    * @brief Enable/disable shape selection
@@ -182,9 +203,10 @@ public:
   bool isComponentDragMode() const { return m_componentDragMode; }
 
 protected:
-  void initializeGL() override;
-  void paintGL() override;
-  void resizeGL(int w, int h) override;
+  QPaintEngine *paintEngine() const override { return nullptr; }
+
+  void paintEvent(QPaintEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
   void mousePressEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
@@ -208,6 +230,7 @@ private:
   // Selection
   SelectionMode m_selectionMode = SelectionMode::Shape;
   TopoDS_Face m_selectedFace;
+  std::vector<TopoDS_Face> m_selectedFaces;
   TopoDS_Shape m_selectedShape;
   std::vector<TopoDS_Edge> m_selectedEdges;
   bool m_faceSelectionEnabled = false;

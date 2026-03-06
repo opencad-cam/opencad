@@ -31,6 +31,7 @@ set(UI_SOURCES
     dialogs/ComponentPropertiesDialog.cpp
     dialogs/CadQueryEditorDialog.cpp
     AssemblyTreeWidget.cpp
+    resources.qrc
 )
 
 set(UI_HEADERS

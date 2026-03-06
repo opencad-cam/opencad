@@ -100,6 +100,10 @@ double ConcentricConstraint::errorY() const {
   return c1.Y() - c2.Y();
 }
 
+std::vector<double> ConcentricConstraint::errorVector() const {
+  return {errorX(), errorY()};
+}
+
 double ConcentricConstraint::error() const {
   double ex = errorX();
   double ey = errorY();
@@ -109,63 +113,71 @@ double ConcentricConstraint::error() const {
 std::vector<double> ConcentricConstraint::jacobian() const {
   std::vector<double> jac;
 
-  // For concentric, we have 2 error equations: ex = c1x - c2x, ey = c1y - c2y
-  // Combined error = sqrt(ex^2 + ey^2)
-  // d(error)/d(c1x) = ex/error, d(error)/d(c1y) = ey/error
-  // d(error)/d(c2x) = -ex/error, d(error)/d(c2y) = -ey/error
-
-  double ex = errorX();
-  double ey = errorY();
-  double err = std::sqrt(ex * ex + ey * ey);
-
-  if (err < 1e-10) {
-    // When centers are coincident, use unit vectors
-    err = 1.0;
-    ex = 1.0;
-    ey = 0.0;
-  }
-
   switch (m_concentricType) {
   case ConcentricType::CircleToCircle:
-    // Circle 1: cx, cy, r
-    jac.push_back(ex / err); // d/d(c1.x)
-    jac.push_back(ey / err); // d/d(c1.y)
-    jac.push_back(0.0);      // d/d(r1) - radius doesn't affect concentricity
+    // Row 0: d(errorX) / d(params)
+    jac.push_back(1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(-1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
 
-    // Circle 2: cx, cy, r
-    jac.push_back(-ex / err); // d/d(c2.x)
-    jac.push_back(-ey / err); // d/d(c2.y)
-    jac.push_back(0.0);       // d/d(r2)
+    // Row 1: d(errorY) / d(params)
+    jac.push_back(0.0);
+    jac.push_back(1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(-1.0);
+    jac.push_back(0.0);
     break;
 
   case ConcentricType::CircleToArc:
-    // Circle 1: cx, cy, r
-    jac.push_back(ex / err); // d/d(c1.x)
-    jac.push_back(ey / err); // d/d(c1.y)
-    jac.push_back(0.0);      // d/d(r1)
+    // Row 0: d(errorX)
+    jac.push_back(1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(-1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
 
-    // Arc: cx, cy, r, startAngle, endAngle
-    jac.push_back(-ex / err); // d/d(arc.cx)
-    jac.push_back(-ey / err); // d/d(arc.cy)
-    jac.push_back(0.0);       // d/d(r)
-    jac.push_back(0.0);       // d/d(startAngle)
-    jac.push_back(0.0);       // d/d(endAngle)
+    // Row 1: d(errorY)
+    jac.push_back(0.0);
+    jac.push_back(1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(-1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
     break;
 
   case ConcentricType::ArcToArc:
-    // Arc 1: cx, cy, r, startAngle, endAngle
-    jac.push_back(ex / err); // d/d(arc1.cx)
-    jac.push_back(ey / err); // d/d(arc1.cy)
-    jac.push_back(0.0);      // d/d(r1)
-    jac.push_back(0.0);      // d/d(startAngle1)
-    jac.push_back(0.0);      // d/d(endAngle1)
+    // Row 0: d(errorX)
+    jac.push_back(1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(-1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
 
-    // Arc 2: cx, cy, r, startAngle, endAngle
-    jac.push_back(-ex / err); // d/d(arc2.cx)
-    jac.push_back(-ey / err); // d/d(arc2.cy)
-    jac.push_back(0.0);       // d/d(r2)
-    jac.push_back(0.0);       // d/d(startAngle2)
-    jac.push_back(0.0);       // d/d(endAngle2)
+    // Row 1: d(errorY)
+    jac.push_back(0.0);
+    jac.push_back(1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(-1.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
+    jac.push_back(0.0);
     break;
   }
 

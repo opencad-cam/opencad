@@ -6,10 +6,16 @@
  * OpenCAD - Modular CAD/CAE Platform
  */
 
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <QInputDialog>
+#include <QMainWindow>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPointF>
 #include <QWheelEvent>
 #include <QWidget>
+#include <TopoDS_Face.hxx>
 #include <TopoDS_Wire.hxx>
 #include <deque>
 #include <gp_Pnt2d.hxx>
@@ -37,10 +43,13 @@ enum class SketchToolType {
   Point,
   Spline,
   Ellipse,
-  Polygon,      // Regular polygon tool
-  Slot,         // Slot (elongated hole) tool
-  Offset,       // Offset entities tool
-  ProfileSelect // For selecting closed profiles during Extrude/Cut
+  Polygon,       // Regular polygon tool
+  Slot,          // Slot (elongated hole) tool
+  Offset,        // Offset entities tool
+  Dimension,     // Smart dimension tool for setting lengths and radii
+  ProfileSelect, // For selecting closed profiles during Extrude/Cut
+  PointSelect,   // For picking a specific 2D coordinate/snap on the sketch
+  Trim           // For PowerTrimming sketch entities
 };
 
 /**
@@ -135,13 +144,15 @@ signals:
   // Profile selection signals
   void profileSelected(int profileIndex);
   void ringSelected(int outerProfileIndex, int innerProfileIndex);
-  void
-  multiProfilesConfirmed(const std::vector<std::pair<int, int>>
-                             &selections); // (outer, inner), inner=-1 for solid
+  void multiProfilesConfirmed(
+      const std::vector<int> &selections); // indices of selected regions
   void profileHovered(int profileIndex);
   void profileSelectionConfirmed(); // Emitted when Enter pressed in
                                     // ProfileSelect mode
   void profileSelectionCancelled();
+
+  // Emitted when selecting a point in PointSelect tool
+  void pointSelected(double x, double y);
 
 protected:
   void paintEvent(QPaintEvent *event) override;
@@ -204,8 +215,9 @@ private:
 
 public:
   // Profile selection mode
-  void enterProfileSelectMode();
+  void enterProfileSelectMode(bool allowOpenProfiles = false);
   void exitProfileSelectMode();
+  const std::vector<TopoDS_Shape> &getProfiles() const { return m_profiles; }
 
   // Data
   std::shared_ptr<sketch::Sketch> m_sketch;
@@ -251,6 +263,17 @@ public:
 
   // Slot tool settings
   double m_slotWidth = 10.0; // Default slot width
+
+  // Preview points (e.g. for Hole Wizard point selection visualization)
+  std::vector<gp_Pnt2d> m_previewPoints;
+  void setPreviewPoints(const std::vector<gp_Pnt2d> &points) {
+    m_previewPoints = points;
+    update();
+  }
+  void clearPreviewPoints() {
+    m_previewPoints.clear();
+    update();
+  }
 
   // ============================================
   // Multi-Selection System
@@ -330,14 +353,13 @@ public:
   void drawBoxSelection(QPainter &painter);
 
   // Profile selection mode
-  int m_hoveredProfileIndex = -1;      // Currently hovered profile
-  std::vector<TopoDS_Wire> m_profiles; // Cached closed profiles
-  int m_pendingRingOuter = -1;         // Outer profile for ring selection
-  int m_pendingRingInner = -1;         // Inner profile for ring selection
+  // Profile selection mode
+  int m_hoveredProfileIndex = -1; // Currently hovered profile
+  std::vector<TopoDS_Shape>
+      m_profiles; // Cached profiles (Faces or Open Wires/Edges)
 
-  // Multi-selection support
-  std::vector<std::pair<int, int>>
-      m_selectedProfiles;        // (outer, inner), inner=-1 for solid
+  // Multi-selection support (indices)
+  std::vector<int> m_selectedProfiles;
   bool m_multiSelectMode = true; // Always multi-select mode
 
   // Colors

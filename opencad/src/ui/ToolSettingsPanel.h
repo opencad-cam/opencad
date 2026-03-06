@@ -11,11 +11,14 @@
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSpinBox>
+#include <QStringList>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <vector>
 
 namespace opencad {
 namespace ui {
@@ -62,6 +65,7 @@ public:
 
   void showHoleSettings();
   void showGearSettings();
+  void showRibSettings();
 
   // Get current values
   double extrudeDepth() const;
@@ -73,6 +77,7 @@ public:
   int patternCount() const;
   double patternSpacing() const;
   double patternAngle() const;
+  bool patternIsLinear() const;
   double shellThickness() const;
   double domeHeight() const;
   double domeRatio() const;
@@ -90,12 +95,34 @@ public:
   int gearNumTeeth() const;
   double gearPressureAngle() const;
   double gearThickness() const;
+
+  // Hole settings
+  int holeType() const;
+  double holeDiameter() const;
+  double holeDepth() const;
+  bool holeFlipDirection() const;
+  double holeCounterboreDiameter() const;
+  double holeCounterboreDepth() const;
+  double holeCountersinkDiameter() const;
+  double holeCountersinkAngle() const;
+
   // Revolve settings
   // Revolve settings
   double revolveAngle() const;
   int revolveAxis() const;
+  void setRevolveAxis(int index);
+
   // Sweep settings
-  bool sweepSolid() const;
+  bool sweepSolid() const; // Sweep
+  void setSweepProfileText(const QString &text);
+  void setSweepPathText(const QString &text);
+  void populateSweepPathSketches(const QStringList &names);
+  int sweepPathSketchIndex() const;
+
+  // Loft
+  void populateLoftSketches(const QStringList &sketches);
+  std::vector<int> loftSelectedSketches() const;
+
   // Loft settings
   bool loftSolid() const;
   bool loftRuled() const;
@@ -108,6 +135,16 @@ public:
   double splitOffset() const;
   int splitKeepPart() const;
   int sketchPlaneType() const;
+  double sketchPlaneOffsetDistance() const;
+  double sketchPlaneAngle() const;
+
+  // Rib settings
+  double ribThickness() const;
+  int ribType() const; // 0:Parallel, 1:Normal, 2:AtAngle
+  bool ribSymmetric() const;
+  double ribAngle() const;
+  bool ribFlipDirection() const;
+  double ribDraftAngle() const;
 
 signals:
   void polygonSidesChanged(int sides);
@@ -219,12 +256,15 @@ private:
   // Sweep settings
   QGroupBox *m_sweepGroup;
   QCheckBox *m_sweepSolidCheck;
+  QLabel *m_sweepProfileLabel;
   QLabel *m_sweepPathLabel;
+  QComboBox *m_sweepPathCombo;
 
   // Loft settings
   QGroupBox *m_loftGroup;
   QCheckBox *m_loftSolidCheck;
   QCheckBox *m_loftRuledCheck;
+  QListWidget *m_loftProfilesList;
   QLabel *m_loftProfilesLabel;
 
   // Boolean settings
@@ -255,6 +295,8 @@ private:
   QRadioButton *m_sketchPlaneXZ;
   QRadioButton *m_sketchPlaneYZ;
   QRadioButton *m_sketchPlaneFace;
+  QDoubleSpinBox *m_sketchPlaneOffsetSpin;
+  QDoubleSpinBox *m_sketchPlaneAngleSpin;
 
   // Constraint info
   QGroupBox *m_constraintGroup;
@@ -279,9 +321,20 @@ private:
   QDoubleSpinBox *m_cboreDepthSpin;
   QDoubleSpinBox *m_csinkDiameterSpin;
   QDoubleSpinBox *m_csinkAngleSpin;
+  QCheckBox *m_holeFlipDirectionCheck;
 
   // Apply button
   QPushButton *m_applyButton;
+
+private:
+  // Rib settings
+  QGroupBox *m_ribGroup;
+  QDoubleSpinBox *m_ribThicknessSpin;
+  QComboBox *m_ribTypeCombo;
+  QCheckBox *m_ribSymmetricCheck;
+  QDoubleSpinBox *m_ribAngleSpin;
+  QCheckBox *m_ribFlipCheck;
+  QDoubleSpinBox *m_ribDraftSpin;
 };
 
 } // namespace ui

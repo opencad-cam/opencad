@@ -5,6 +5,7 @@
 
 #include "SketchView2D.h"
 #include "sketch/Sketch.h"
+#include "sketch/SketchTrimExtend.h"
 #include "sketch/entities/SketchArc.h"
 #include "sketch/entities/SketchCircle.h"
 #include "sketch/entities/SketchEllipse.h"
@@ -19,6 +20,7 @@
 
 // Constraints for auto-constraint feature
 #include "sketch/constraints/CoincidentConstraint.h"
+#include "sketch/constraints/DimensionConstraint.h"
 #include "sketch/constraints/HorizontalConstraint.h"
 #include "sketch/constraints/VerticalConstraint.h"
 
@@ -39,9 +41,11 @@
 #include <BRepTools_WireExplorer.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
+#include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <Geom_Curve.hxx>
 #include <TopAbs_State.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <gp_Pnt.hxx>
@@ -234,6 +238,11 @@ std::vector<gp_Pnt2d> SketchView2D::findEndpoints() const {
         for (const auto &c : corners) {
           endpoints.push_back(c);
         }
+      }
+    } else if (entity->type() == sketch::EntityType::Point) {
+      auto *pt = dynamic_cast<sketch::SketchPoint *>(entity.get());
+      if (pt) {
+        endpoints.push_back(pt->position());
       }
     }
   }
@@ -446,6 +455,23 @@ void SketchView2D::paintEvent(QPaintEvent * /*event*/) {
   // Draw entities
   drawEntities(painter);
 
+  // Draw preview points (e.g. Hole Wizard selections)
+  if (!m_previewPoints.empty()) {
+    painter.save();
+    painter.setPen(QPen(m_previewColor, 2));
+    painter.setBrush(Qt::transparent);
+    for (const auto &pt : m_previewPoints) {
+      QPointF screenPt = worldToScreen(pt);
+      painter.drawEllipse(screenPt, 5, 5);
+      // Draw a small cross inside
+      painter.drawLine(screenPt.x() - 5, screenPt.y(), screenPt.x() + 5,
+                       screenPt.y());
+      painter.drawLine(screenPt.x(), screenPt.y() - 5, screenPt.x(),
+                       screenPt.y() + 5);
+    }
+    painter.restore();
+  }
+
   // Draw profile overlays in ProfileSelect mode
   if (m_currentTool == SketchToolType::ProfileSelect && m_sketch) {
     drawProfileOverlays(painter);
@@ -534,8 +560,8 @@ void SketchView2D::drawClosedProfileFaces(QPainter &painter) {
     return;
 
   // Detect all closed profiles
-  auto closedProfiles = m_sketch->detectClosedProfiles();
-  if (closedProfiles.empty())
+  auto closedWires = m_sketch->detectClosedProfiles();
+  if (closedWires.empty())
     return;
 
   // Set semi-transparent fill color (CAD-style light blue)
@@ -543,15 +569,23 @@ void SketchView2D::drawClosedProfileFaces(QPainter &painter) {
   painter.setBrush(QBrush(fillColor));
   painter.setPen(Qt::NoPen); // No outline for fill
 
+  // Combine all profiles into a single path for OddEvenFill
+  QPainterPath combinedPath;
+  combinedPath.setFillRule(Qt::OddEvenFill);
+
   // Draw each closed profile as a filled polygon
-  for (const auto &wire : closedProfiles) {
+  for (const auto &wire : closedWires) {
     try {
       // Extract edges from wire
       TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
       QPolygonF polygon;
 
-      while (edgeExp.More()) {
-        TopoDS_Edge edge = static_cast<const TopoDS_Edge &>(edgeExp.Current());
+      // We need to order edges to form a continuous loop for QPolygonF
+      // But BRepBuilderAPI_MakeWire should have ordered them.
+      // Ideally we walk the wire in order.
+      BRepTools_WireExplorer wireExp(wire);
+      while (wireExp.More()) {
+        TopoDS_Edge edge = wireExp.Current();
 
         // Get edge curve and sample points
         Standard_Real first, last;
@@ -559,31 +593,73 @@ void SketchView2D::drawClosedProfileFaces(QPainter &painter) {
 
         if (!curve.IsNull()) {
           // Sample points along the edge
+          // Check orientation to walk correctly? WireExplorer handles this.
+          if (edge.Orientation() == TopAbs_REVERSED) {
+            // Sample reverse?
+          }
+
           int numSamples = 20;
+          // Determine direction based on WireExplorer
+          // Actually, simplest visualization is just dumping points?
+          // No, for Polygon to be closed correctly, order matters.
+          // WireExplorer visits edges in order.
+
+          // We need to ensure we add points in consistent direction.
+          // BRepAdaptor_Curve takes orientation into account.
+          BRepAdaptor_Curve adaptor(edge);
+          first = adaptor.FirstParameter();
+          last = adaptor.LastParameter();
+
           for (int i = 0; i <= numSamples; ++i) {
             double param = first + (last - first) * i / numSamples;
-            gp_Pnt point3D;
-            curve->D0(param, point3D);
+            gp_Pnt point3D = adaptor.Value(param);
 
             // Convert 3D point to 2D sketch coordinates using sketch plane
             gp_Pnt2d point2D = m_sketch->plane().to2D(point3D);
             QPointF screenPt = worldToScreen(point2D);
-            polygon << screenPt;
+
+            // Avoid duplicate points (end of previous edge = start of next)
+            if (polygon.isEmpty() ||
+                (QPointF(polygon.last() - screenPt).manhattanLength() > 1.0)) {
+              polygon << screenPt;
+            }
           }
         }
-
-        edgeExp.Next();
+        wireExp.Next();
       }
 
-      // Draw filled polygon
+      // Fallback if WireExplorer fails (e.g. disconnected) - use legacy
+      // iterating
+      if (polygon.isEmpty()) {
+        TopExp_Explorer legacyExp(wire, TopAbs_EDGE);
+        while (legacyExp.More()) {
+          TopoDS_Edge edge = TopoDS::Edge(legacyExp.Current());
+          Standard_Real first, last;
+          Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
+          if (!curve.IsNull()) {
+            for (int i = 0; i <= 20; ++i) {
+              double param = first + (last - first) * i / 20;
+              gp_Pnt p;
+              curve->D0(param, p);
+              polygon << worldToScreen(m_sketch->plane().to2D(p));
+            }
+          }
+          legacyExp.Next();
+        }
+      }
+
+      // Add to combined path
       if (!polygon.isEmpty()) {
-        painter.drawPolygon(polygon);
+        combinedPath.addPolygon(polygon);
       }
     } catch (...) {
-      // Skip invalid profiles
       continue;
     }
   }
+
+  // Draw the combined path with EvenOdd fill
+  // This automatically handles holes (nested polygons)
+  painter.drawPath(combinedPath);
 }
 
 void SketchView2D::drawEntity(QPainter &painter,
@@ -1284,6 +1360,12 @@ void SketchView2D::drawCursor(QPainter &painter) {
   case SketchToolType::Polygon:
     toolText = QString("Polygon (%1 sides)").arg(m_polygonSides);
     break;
+  case SketchToolType::PointSelect:
+    toolText = "Select Point";
+    break;
+  case SketchToolType::Dimension:
+    toolText = "Dimension (Click entity)";
+    break;
   default:
     toolText = "";
     break;
@@ -1319,10 +1401,31 @@ void SketchView2D::mousePressEvent(QMouseEvent *event) {
     case SketchToolType::Line:
     case SketchToolType::Rectangle:
     case SketchToolType::Circle:
+    case SketchToolType::Trim:
       m_isDrawing = true;
       m_startPoint = snappedPos;
       m_currentPoint = snappedPos;
       m_startSnap = snap;
+
+      // If we are trimming, try an immediate trim on click
+      if (m_currentTool == SketchToolType::Trim) {
+        double tolerance = m_snapRadius / m_scale;
+        sketch::SketchEntity *entityToTrim =
+            findEntityAtPoint(worldPos, tolerance);
+        if (entityToTrim) {
+          auto it = std::find_if(
+              m_sketch->entities().begin(), m_sketch->entities().end(),
+              [entityToTrim](const sketch::SketchEntity::Ptr &ptr) {
+                return ptr->id() == entityToTrim->id();
+              });
+          if (it != m_sketch->entities().end()) {
+            opencad::sketch::SketchTrimExtend trimmer;
+            if (trimmer.trim(*m_sketch, *it, worldPos).success) {
+              emit entityCreated(nullptr); // triggers update
+            }
+          }
+        }
+      }
       break;
 
     case SketchToolType::Arc:
@@ -1431,35 +1534,177 @@ void SketchView2D::mousePressEvent(QMouseEvent *event) {
     }
 
     case SketchToolType::ProfileSelect: {
+      // Allow entity selection (e.g. for Revolve Axis)
+      // Check for entity first
+      double tolerance = m_snapRadius / m_scale;
+      sketch::SketchEntity *clickedEntity =
+          findEntityAtPoint(snappedPos, tolerance);
+
+      bool handled = false;
+      if (clickedEntity) {
+        // If we clicked a line, valid for Axis selection
+        if (clickedEntity->type() == sketch::EntityType::Line) {
+          qDebug() << "SketchView: Clicked on a Line entity in ProfileSelect "
+                      "mode. Selecting it.";
+          selectEntity(clickedEntity, false);
+          handled = true; // Mark handled so we don't also try to select profile
+                          // at same spot?
+        } else {
+          qDebug() << "SketchView: Clicked entity is NOT a line. Type:"
+                   << (int)clickedEntity->type();
+        }
+      } else {
+        qDebug() << "SketchView: No entity found at click point.";
+      }
+
       // Multi-selection mode: clicking adds to selection list
       // Prioritize hovered profile if available
       int profileIdx = (m_hoveredProfileIndex >= 0)
                            ? m_hoveredProfileIndex
                            : findProfileAtPoint(event->pos());
 
-      if (profileIdx == -2) {
-        // Ring selection - add to list
-        std::pair<int, int> ring = {m_pendingRingOuter, m_pendingRingInner};
-        // Check if already selected, toggle off if so
+      if (profileIdx >= 0) {
+        // Toggle selection
         auto it = std::find(m_selectedProfiles.begin(),
-                            m_selectedProfiles.end(), ring);
+                            m_selectedProfiles.end(), profileIdx);
         if (it != m_selectedProfiles.end()) {
           m_selectedProfiles.erase(it);
         } else {
-          m_selectedProfiles.push_back(ring);
+          m_selectedProfiles.clear(); // only allow single selection for now or
+                                      // multi if shift is held
+          m_selectedProfiles.push_back(profileIdx);
         }
         update();
-      } else if (profileIdx >= 0) {
-        // Solid profile selection - add to list
-        std::pair<int, int> solid = {profileIdx, -1};
-        auto it = std::find(m_selectedProfiles.begin(),
-                            m_selectedProfiles.end(), solid);
-        if (it != m_selectedProfiles.end()) {
-          m_selectedProfiles.erase(it);
+        emit profileSelected(profileIdx);
+        emit multiProfilesConfirmed(m_selectedProfiles);
+      }
+      break;
+    }
+
+    case SketchToolType::PointSelect: {
+      emit pointSelected(snappedPos.X(), snappedPos.Y());
+      break;
+    }
+
+    case SketchToolType::Dimension: {
+      double tolerance = m_snapRadius / m_scale;
+      sketch::SketchEntity *clickedEntity =
+          findEntityAtPoint(worldPos, tolerance);
+
+      if (clickedEntity) {
+        if (clickedEntity->type() == sketch::EntityType::Line) {
+          auto line = std::dynamic_pointer_cast<sketch::SketchLine>(
+              m_sketch->getEntity(clickedEntity->id()));
+          if (line) {
+            bool ok;
+            double currentLen = line->length();
+            double newLen = QInputDialog::getDouble(this, "Smart Dimension",
+                                                    "Length:", currentLen,
+                                                    0.001, 1000000.0, 3, &ok);
+            if (ok && newLen > 0) {
+              std::shared_ptr<sketch::DimensionConstraint> existingDim;
+              for (const auto &c : m_sketch->constraints()) {
+                if (c->hasDimension()) {
+                  auto dimC =
+                      std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+                  if (dimC && dimC->dimensionType() ==
+                                  sketch::DimensionType::LineLength) {
+                    auto ents = dimC->entities();
+                    if (ents.size() == 1 && ents[0]->id() == line->id()) {
+                      existingDim = dimC;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (existingDim) {
+                existingDim->setDimension(newLen);
+              } else {
+                m_sketch->addLength(line, newLen);
+              }
+              m_sketch->solve();
+              saveSketchCheckpoint("Add Length Dimension");
+              update();
+            }
+          }
+        } else if (clickedEntity->type() == sketch::EntityType::Circle) {
+          auto circle = std::dynamic_pointer_cast<sketch::SketchCircle>(
+              m_sketch->getEntity(clickedEntity->id()));
+          if (circle) {
+            bool ok;
+            double currentRad = circle->radius();
+            double newRad = QInputDialog::getDouble(this, "Smart Dimension",
+                                                    "Radius:", currentRad,
+                                                    0.001, 1000000.0, 3, &ok);
+            if (ok && newRad > 0) {
+              std::shared_ptr<sketch::DimensionConstraint> existingDim;
+              for (const auto &c : m_sketch->constraints()) {
+                if (c->hasDimension()) {
+                  auto dimC =
+                      std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+                  if (dimC &&
+                      dimC->dimensionType() == sketch::DimensionType::Radius) {
+                    auto ents = dimC->entities();
+                    if (ents.size() == 1 && ents[0]->id() == circle->id()) {
+                      existingDim = dimC;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (existingDim) {
+                existingDim->setDimension(newRad);
+              } else {
+                m_sketch->addRadius(circle, newRad);
+              }
+              m_sketch->solve();
+              saveSketchCheckpoint("Add Radius Dimension (Circle)");
+              update();
+            }
+          }
+        } else if (clickedEntity->type() == sketch::EntityType::Arc) {
+          auto arc = std::dynamic_pointer_cast<sketch::SketchArc>(
+              m_sketch->getEntity(clickedEntity->id()));
+          if (arc) {
+            bool ok;
+            double currentRad = arc->radius();
+            double newRad = QInputDialog::getDouble(this, "Smart Dimension",
+                                                    "Radius:", currentRad,
+                                                    0.001, 1000000.0, 3, &ok);
+            if (ok && newRad > 0) {
+              std::shared_ptr<sketch::DimensionConstraint> existingDim;
+              for (const auto &c : m_sketch->constraints()) {
+                if (c->hasDimension()) {
+                  auto dimC =
+                      std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+                  if (dimC &&
+                      dimC->dimensionType() == sketch::DimensionType::Radius) {
+                    auto ents = dimC->entities();
+                    if (ents.size() == 1 && ents[0]->id() == arc->id()) {
+                      existingDim = dimC;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (existingDim) {
+                existingDim->setDimension(newRad);
+              } else {
+                m_sketch->addRadius(arc, newRad);
+              }
+              m_sketch->solve();
+              saveSketchCheckpoint("Add Radius Dimension (Arc)");
+              update();
+            }
+          }
         } else {
-          m_selectedProfiles.push_back(solid);
+          // Not a measurable entity
         }
-        update();
+      } else {
+        // Clicked on empty space
       }
       break;
     }
@@ -1548,9 +1793,39 @@ void SketchView2D::mouseMoveEvent(QMouseEvent *event) {
     }
   }
 
-  // Update hover state for Select mode
-  if (m_currentTool == SketchToolType::Select && !m_isDragging &&
-      !m_isBoxSelecting) {
+  // Update mouseMoveEvent in SketchView2D.cpp...
+  // Handle Trim tool dragging (power trim)
+  if (m_currentTool == SketchToolType::Trim && m_isDrawing) {
+    // We are clicking and dragging in Trim mode (Power Trim)
+    // Find entity under cursor and trim it
+    double tolerance = m_snapRadius / m_scale;
+    sketch::SketchEntity *entityToTrim = findEntityAtPoint(worldPos, tolerance);
+
+    if (entityToTrim) {
+      // Find the entity in the sketch
+      auto it =
+          std::find_if(m_sketch->entities().begin(), m_sketch->entities().end(),
+                       [entityToTrim](const sketch::SketchEntity::Ptr &ptr) {
+                         return ptr->id() == entityToTrim->id();
+                       });
+
+      if (it != m_sketch->entities().end()) {
+        sketch::SketchTrimExtend trimmer;
+        // The trim function modifies the sketch entities
+        sketch::TrimResult trimRes = trimmer.trim(*m_sketch, *it, worldPos);
+
+        if (trimRes.success) {
+          emit entityCreated(nullptr); // trigger update/save state
+          qDebug() << "Power Trimmed entity:" << (int)entityToTrim->type();
+        }
+      }
+    }
+  }
+
+  // Update hover state for Select and Trim mode
+  if ((m_currentTool == SketchToolType::Select ||
+       m_currentTool == SketchToolType::Trim) &&
+      !m_isDragging && !m_isBoxSelecting) {
     double tolerance = m_snapRadius / m_scale;
     sketch::SketchEntity *hovered = findEntityAtPoint(worldPos, tolerance);
     if (hovered != m_hoveredEntity) {
@@ -1606,7 +1881,13 @@ void SketchView2D::mouseReleaseEvent(QMouseEvent *event) {
   }
 
   if (event->button() == Qt::LeftButton && m_isDrawing && m_sketch) {
-    finishCurrentEntity();
+    if (m_currentTool == SketchToolType::Trim) {
+      m_isDrawing = false;
+      saveSketchCheckpoint("Trim Entity");
+      update();
+    } else {
+      finishCurrentEntity();
+    }
   }
 }
 
@@ -2054,12 +2335,12 @@ void SketchView2D::drawProfileOverlays(QPainter &painter) {
 
   // Draw all profiles with different colors
   for (size_t i = 0; i < m_profiles.size(); ++i) {
-    const TopoDS_Wire &wire = m_profiles[i];
+    const TopoDS_Shape &profileShape = m_profiles[i];
 
     // Check if this profile is selected
     bool isSelected = false;
-    for (const auto &sel : m_selectedProfiles) {
-      if (sel.first == static_cast<int>(i)) {
+    for (int selIdx : m_selectedProfiles) {
+      if (selIdx == static_cast<int>(i)) {
         isSelected = true;
         break;
       }
@@ -2071,71 +2352,130 @@ void SketchView2D::drawProfileOverlays(QPainter &painter) {
     // Choose color based on state
     QColor outlineColor;
     int lineWidth;
+    QColor fillColor;
+
     if (isSelected) {
-      outlineColor = QColor(0, 255, 0, 255); // Bright green for selected
-      lineWidth = 4;
-    } else if (isHovered) {
-      outlineColor = QColor(255, 255, 0, 255); // Yellow for hovered
+      outlineColor = QColor(0, 255, 0, 255); // Bright green
+      fillColor = QColor(0, 255, 0, 100);
       lineWidth = 3;
-    } else {
-      // Use profile color from palette
-      outlineColor = m_profileColors[i % m_profileColors.size()];
+    } else if (isHovered) {
+      outlineColor = QColor(255, 255, 0, 255); // Yellow
+      fillColor = QColor(255, 255, 0, 100);
       lineWidth = 2;
+    } else {
+      outlineColor = m_profileColors[i % m_profileColors.size()];
+      fillColor = outlineColor;
+      fillColor.setAlpha(40);
+      lineWidth = 1;
     }
 
     painter.setPen(QPen(outlineColor, lineWidth));
-    painter.setBrush(Qt::NoBrush);
+    painter.setBrush(fillColor);
 
-    // Draw wire outline
+    // Draw face
+    QPainterPath path;
+    path.setFillRule(Qt::OddEvenFill);
+
     try {
-      TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
+      if (profileShape.ShapeType() == TopAbs_FACE) {
+        TopoDS_Face face = TopoDS::Face(profileShape);
+        // Iterate over wires to handle holes correctly
+        TopExp_Explorer wireExp(face, TopAbs_WIRE);
+        while (wireExp.More()) {
+          TopoDS_Wire wire = TopoDS::Wire(wireExp.Current());
 
-      while (edgeExp.More()) {
-        TopoDS_Edge edge = static_cast<const TopoDS_Edge &>(edgeExp.Current());
+          // Use WireExplorer to visit edges in order
+          BRepTools_WireExplorer ex(wire);
+          bool firstEdge = true;
 
-        // Use BRepAdaptor_Curve to handle both 3D curves and curves on surfaces
-        // (like Splines)
-        BRepAdaptor_Curve curveAdaptor(edge);
-        double first = curveAdaptor.FirstParameter();
-        double last = curveAdaptor.LastParameter();
+          for (; ex.More(); ex.Next()) {
+            TopoDS_Edge edge = ex.Current();
+            BRepAdaptor_Curve adaptor(edge);
+            double first = adaptor.FirstParameter();
+            double last = adaptor.LastParameter();
 
-        // Sample points along the edge
-        int numSamples = 30; // Increase resolution for splines
-        QPointF prevPt;
-        for (int j = 0; j <= numSamples; ++j) {
-          double param = first + (last - first) * j / numSamples;
-          gp_Pnt point3D = curveAdaptor.Value(param);
+            // Discretize edge
+            // Determine step count based on length or curvature?
+            // For now, fixed count is safe enough for display
+            int steps = 20;
 
-          // Convert 3D point to 2D sketch coordinates using sketch plane
-          gp_Pnt2d point2D = m_sketch->plane().to2D(point3D);
-          QPointF screenPt = worldToScreen(point2D);
+            gp_Pnt pStart = adaptor.Value(first);
+            gp_Pnt2d pStart2d = m_sketch->plane().to2D(pStart);
+            QPointF qStart = worldToScreen(pStart2d);
 
-          if (j > 0) {
-            painter.drawLine(prevPt, screenPt);
+            // Handle start of wire or gap
+            if (firstEdge) {
+              path.moveTo(qStart);
+              firstEdge = false;
+            } else {
+              // If gap is large, move to (shouldn't happen in valid wire)
+              if (QVector2D(path.currentPosition() - qStart).length() > 1.0) {
+                path.moveTo(qStart);
+              }
+            }
+
+            for (int k = 1; k <= steps; ++k) {
+              double param = first + (last - first) * k / (double)steps;
+              gp_Pnt p = adaptor.Value(param);
+              gp_Pnt2d p2d = m_sketch->plane().to2D(p);
+              path.lineTo(worldToScreen(p2d));
+            }
           }
-          prevPt = screenPt;
+          // Close the wire loop
+          path.closeSubpath();
+          wireExp.Next();
         }
 
-        edgeExp.Next();
+        // Draw the filled path
+        painter.drawPath(path);
+
+      } else {
+        // Just draw lines for open profiles (wire/edge)
+        TopExp_Explorer edgeExp(profileShape, TopAbs_EDGE);
+        while (edgeExp.More()) {
+          TopoDS_Edge edge = TopoDS::Edge(edgeExp.Current());
+          BRepAdaptor_Curve adaptor(edge);
+          double first = adaptor.FirstParameter();
+          double last = adaptor.LastParameter();
+
+          QPolygonF poly;
+          for (int k = 0; k <= 20; ++k) {
+            gp_Pnt p = adaptor.Value(first + (last - first) * k / 20.0);
+            gp_Pnt2d p2d = m_sketch->plane().to2D(p);
+            poly << worldToScreen(p2d);
+          }
+          painter.drawPolyline(poly);
+          edgeExp.Next();
+        }
       }
     } catch (...) {
-      // Skip invalid profiles
-      continue;
+      TopExp_Explorer edgeExp(profileShape, TopAbs_EDGE);
+      while (edgeExp.More()) {
+        TopoDS_Edge edge = TopoDS::Edge(edgeExp.Current());
+        BRepAdaptor_Curve adaptor(edge);
+        double first = adaptor.FirstParameter();
+        double last = adaptor.LastParameter();
+
+        QPolygonF poly;
+        for (int k = 0; k <= 20; ++k) {
+          gp_Pnt p = adaptor.Value(first + (last - first) * k / 20.0);
+          gp_Pnt2d p2d = m_sketch->plane().to2D(p);
+          poly << worldToScreen(p2d);
+        }
+        painter.drawPolyline(poly);
+        edgeExp.Next();
+      }
     }
   }
 
-  // Draw selection summary and instructions at bottom
+  // Draw selection summary
   painter.setPen(Qt::white);
   painter.setFont(QFont("Arial", 11));
 
   QString selectionInfo =
-      m_selectedProfiles.empty()
-          ? "No selection"
-          : QString("Selected: %1 item(s)").arg(m_selectedProfiles.size());
-
-  QString hint =
-      QString("%1 | Click to add/remove, ENTER to confirm, ESC to cancel")
-          .arg(selectionInfo);
+      QString("Selected: %1 regions").arg(m_selectedProfiles.size());
+  QString hint = QString("%1 | Click to select regions (Boolean Split)")
+                     .arg(selectionInfo);
   painter.drawText(10, height() - 10, hint);
 
   painter.restore();
@@ -2146,111 +2486,55 @@ int SketchView2D::findProfileAtPoint(const QPointF &screenPos) {
     return -1;
 
   gp_Pnt2d worldPt = screenToWorld(screenPos);
-
-  // Convert 2D sketch point to 3D using sketch plane
   gp_Pnt testPoint3D = m_sketch->plane().to3D(worldPt.X(), worldPt.Y());
 
-  // Collect all profiles that contain this point with their areas
-  struct ProfileInfo {
-    int index;
-    double area;
-  };
-  std::vector<ProfileInfo> containingProfiles;
-
+  // Check all profiles
   for (size_t i = 0; i < m_profiles.size(); ++i) {
-    const auto &wire = m_profiles[i];
-    if (wire.IsNull())
-      continue;
+    const TopoDS_Shape &profile = m_profiles[i];
 
-    try {
-      BRepBuilderAPI_MakeFace faceBuilder(wire, true);
-      if (faceBuilder.IsDone()) {
-        TopoDS_Face face = faceBuilder.Face();
-        BRepClass_FaceClassifier classifier(face, testPoint3D, 1e-6);
-        TopAbs_State state = classifier.State();
-
-        if (state == TopAbs_IN || state == TopAbs_ON) {
-          GProp_GProps props;
-          BRepGProp::SurfaceProperties(face, props);
-          containingProfiles.push_back({static_cast<int>(i), props.Mass()});
-        }
-      }
-    } catch (...) {
-    }
-  }
-
-  if (containingProfiles.empty()) {
-    m_pendingRingOuter = -1;
-    m_pendingRingInner = -1;
-    return -1;
-  }
-
-  // Sort by area (smallest first)
-  std::sort(containingProfiles.begin(), containingProfiles.end(),
-            [](const ProfileInfo &a, const ProfileInfo &b) {
-              return a.area < b.area;
-            });
-
-  if (containingProfiles.size() == 1) {
-    // Only one profile contains point - check if there's a smaller profile
-    // inside it
-    int outerIdx = containingProfiles[0].index;
-    double outerArea = containingProfiles[0].area;
-
-    // Find any profile that is INSIDE the outer but doesn't contain the point
-    int innerIdx = -1;
-    double innerArea = 0;
-    for (size_t i = 0; i < m_profiles.size(); ++i) {
-      if (static_cast<int>(i) == outerIdx)
-        continue;
-
-      const auto &wire = m_profiles[i];
-      if (wire.IsNull())
-        continue;
-
+    if (profile.ShapeType() == TopAbs_FACE) {
       try {
-        BRepBuilderAPI_MakeFace faceBuilder(wire, true);
-        if (faceBuilder.IsDone()) {
-          TopoDS_Face face = faceBuilder.Face();
-          GProp_GProps props;
-          BRepGProp::SurfaceProperties(face, props);
-          double area = props.Mass();
-
-          // Check if this profile is smaller than outer (i.e., inside it)
-          if (area < outerArea && area > innerArea) {
-            innerArea = area;
-            innerIdx = static_cast<int>(i);
+        BRepClass_FaceClassifier classifier(TopoDS::Face(profile), testPoint3D,
+                                            1e-6);
+        if (classifier.State() == TopAbs_IN ||
+            classifier.State() == TopAbs_ON) {
+          return static_cast<int>(i);
+        }
+      } catch (...) {
+      }
+    } else if (profile.ShapeType() == TopAbs_WIRE ||
+               profile.ShapeType() == TopAbs_EDGE) {
+      // For wires and edges, check distance
+      try {
+        TopExp_Explorer edgeExp(profile, TopAbs_EDGE);
+        while (edgeExp.More()) {
+          TopoDS_Edge edge = TopoDS::Edge(edgeExp.Current());
+          Standard_Real first, last;
+          Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
+          if (!curve.IsNull()) {
+            GeomAPI_ProjectPointOnCurve proj(testPoint3D, curve, first, last);
+            if (proj.NbPoints() > 0) {
+              if (proj.LowerDistance() < (5.0 / m_scale)) {
+                return static_cast<int>(i);
+              }
+            }
           }
+          edgeExp.Next();
         }
       } catch (...) {
       }
     }
-
-    if (innerIdx >= 0) {
-      // Ring selection: point is between outer and inner profiles
-      m_pendingRingOuter = outerIdx;
-      m_pendingRingInner = innerIdx;
-      return -2; // Special code for ring selection
-    } else {
-      // Single solid profile
-      m_pendingRingOuter = -1;
-      m_pendingRingInner = -1;
-      return outerIdx;
-    }
-  } else {
-    // Multiple profiles contain point - return smallest (innermost)
-    m_pendingRingOuter = -1;
-    m_pendingRingInner = -1;
-    return containingProfiles[0].index;
   }
+
+  return -1;
 }
 
-void SketchView2D::enterProfileSelectMode() {
+void SketchView2D::enterProfileSelectMode(bool allowOpenProfiles) {
   // Cache profiles from sketch and clear selection
   if (m_sketch) {
-    m_profiles = m_sketch->detectClosedProfiles();
+    m_profiles = m_sketch->extractProfiles(allowOpenProfiles); // Use new method
     qDebug() << "enterProfileSelectMode: Detected" << m_profiles.size()
-             << "closed profiles";
+             << "profiles";
   } else {
     qDebug() << "enterProfileSelectMode: No sketch!";
   }

@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-
 namespace opencad {
 namespace sketch {
 
@@ -98,6 +97,7 @@ public:
   virtual int dofRemoved() const = 0;
 
   // Evaluation
+  virtual std::vector<double> errorVector() const { return {error()}; }
   virtual double error() const = 0; // How far from satisfied
   virtual bool isSatisfied(double tolerance = 1e-6) const;
   virtual ConstraintStatus status() const;

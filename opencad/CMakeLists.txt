@@ -43,11 +43,11 @@ endif()
 
 # Qt6/Qt5
 if(OPENCAD_USE_QT6)
-    find_package(Qt6 COMPONENTS Core Widgets OpenGL OpenGLWidgets Network REQUIRED)
-    set(QT_LIBS Qt6::Core Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Network)
+    find_package(Qt6 COMPONENTS Core Widgets OpenGL OpenGLWidgets Network Svg SvgWidgets REQUIRED)
+    set(QT_LIBS Qt6::Core Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Network Qt6::Svg Qt6::SvgWidgets)
 else()
-    find_package(Qt5 COMPONENTS Core Widgets OpenGL Network REQUIRED)
-    set(QT_LIBS Qt5::Core Qt5::Widgets Qt5::OpenGL Qt5::Network)
+    find_package(Qt5 COMPONENTS Core Widgets OpenGL Network Svg REQUIRED)
+    set(QT_LIBS Qt5::Core Qt5::Widgets Qt5::OpenGL Qt5::Network Qt5::Svg)
 endif()
 
 # OpenGL

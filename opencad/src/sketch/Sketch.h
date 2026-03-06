@@ -21,11 +21,13 @@
 
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
 
 namespace opencad {
 namespace sketch {
@@ -187,6 +189,10 @@ public:
 
   // Build faces from all closed profiles
   std::vector<TopoDS_Face> buildProfileFaces() const;
+
+  // Extract all profiles, optionally including open wires as shapes
+  std::vector<TopoDS_Shape>
+  extractProfiles(bool includeOpenWires = false) const;
 
   // Get number of closed profiles
   int closedProfileCount() const;

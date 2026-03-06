@@ -41,6 +41,8 @@ class Document : public QObject {
   Q_OBJECT
 
 public:
+  enum class Type { Part, Assembly, Drawing };
+
   explicit Document(QObject *parent = nullptr);
   ~Document() override;
 
@@ -56,6 +58,9 @@ public:
 
   QDateTime creationDate() const { return m_creationDate; }
   QDateTime lastModifiedDate() const { return m_lastModifiedDate; }
+
+  Type type() const { return m_type; }
+  void setType(Type type) { m_type = type; }
 
   // Feature management
   FeatureTree *featureTree() { return m_featureTree.get(); }
@@ -225,6 +230,7 @@ private:
   bool m_modified = false;
   QDateTime m_creationDate;
   QDateTime m_lastModifiedDate;
+  Type m_type = Type::Part;
 
   // Core systems
   std::unique_ptr<FeatureTree> m_featureTree;

@@ -9,7 +9,9 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeSolid.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepGProp.hxx>
 #include <BRepOffsetAPI_MakeFilling.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
@@ -20,13 +22,14 @@
 #include <ShapeAnalysis.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <cmath>
 #include <gp_Ax2.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Sphere.hxx>
-
+#include <limits>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -110,16 +113,44 @@ TopoDS_Shape DomeFeature::createDome(const TopoDS_Face &face, double height) {
     gp_Pnt center = plane.Location();
     gp_Dir normal = plane.Axis().Direction();
 
+    // The underlying surface normal might point inward depending on face
+    // orientation in the solid
+    if (face.Orientation() == TopAbs_REVERSED) {
+      normal.Reverse();
+    }
+
     // Get face center using mass properties
     GProp_GProps props;
     BRepGProp::SurfaceProperties(face, props);
     gp_Pnt faceCentroid = props.CentreOfMass();
 
-    // Calculate dome radius based on face size
-    // For a spherical cap: if h = height and r = base radius
-    // then R (sphere radius) = (r² + h²) / (2h)
-    double faceArea = props.Mass();
-    double baseRadius = std::sqrt(faceArea / M_PI); // Approximate as circle
+    // Calculate robust base radius (distance from centroid to nearest boundary)
+    TopoDS_Vertex centroidVertex = BRepBuilderAPI_MakeVertex(faceCentroid);
+
+    double minDistance = std::numeric_limits<double>::max();
+    bool foundBoundary = false;
+
+    TopExp_Explorer expl(face, TopAbs_WIRE);
+    for (; expl.More(); expl.Next()) {
+      const TopoDS_Wire &wire = TopoDS::Wire(expl.Current());
+      BRepExtrema_DistShapeShape extrema(centroidVertex, wire);
+      if (extrema.IsDone() && extrema.NbSolution() > 0) {
+        double d = extrema.Value();
+        if (d < minDistance) {
+          minDistance = d;
+          foundBoundary = true;
+        }
+      }
+    }
+
+    double baseRadius;
+    if (foundBoundary && minDistance > 1e-6) {
+      baseRadius = minDistance;
+    } else {
+      // Fallback for infinite planes or odd geometry
+      double faceArea = props.Mass();
+      baseRadius = std::sqrt(faceArea / M_PI);
+    }
 
     // Sphere radius for given height
     double sphereRadius =
@@ -132,7 +163,26 @@ TopoDS_Shape DomeFeature::createDome(const TopoDS_Face &face, double height) {
 
     // Create sphere
     gp_Ax2 sphereAxis(sphereCenter, normal);
-    BRepPrimAPI_MakeSphere sphereMaker(sphereAxis, sphereRadius);
+
+    // Calculate vMin for spherical cap
+    // Z_cut = R - h relative to center.
+    // sin(vMin) = (R - h) / R
+    // R - h = (r^2 - h^2) / 2h
+    // (R - h)/R = (r^2 - h^2) / (r^2 + h^2)
+
+    double ratio = (baseRadius * baseRadius - height * height) /
+                   (baseRadius * baseRadius + height * height);
+
+    // Clamp ratio specific cases
+    if (ratio > 1.0)
+      ratio = 1.0;
+    if (ratio < -1.0)
+      ratio = -1.0;
+
+    double vMin = std::asin(ratio);
+    double vMax = M_PI / 2.0;
+
+    BRepPrimAPI_MakeSphere sphereMaker(sphereAxis, sphereRadius, vMin, vMax);
     TopoDS_Shape sphere = sphereMaker.Shape();
 
     // We need a half-sphere, cut at the face plane

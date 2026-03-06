@@ -248,6 +248,8 @@ void ToolSettingsPanel::setupUI() {
   m_sketchPlaneGroup = new QGroupBox("📐 Sketch Plane", this);
   m_sketchPlaneGroup->setStyleSheet("QGroupBox { font-weight: bold; }");
   auto *sketchPlaneLayout = new QVBoxLayout(m_sketchPlaneGroup);
+
+  // Radio buttons for plane selection
   m_sketchPlaneXY = new QRadioButton("XY Plane (Top)", this);
   m_sketchPlaneXZ = new QRadioButton("XZ Plane (Front)", this);
   m_sketchPlaneYZ = new QRadioButton("YZ Plane (Right)", this);
@@ -258,6 +260,23 @@ void ToolSettingsPanel::setupUI() {
   sketchPlaneLayout->addWidget(m_sketchPlaneXZ);
   sketchPlaneLayout->addWidget(m_sketchPlaneYZ);
   sketchPlaneLayout->addWidget(m_sketchPlaneFace);
+
+  // Offset & Angle Inputs
+  auto *sketchOffsetLayout = new QFormLayout();
+  m_sketchPlaneOffsetSpin = new QDoubleSpinBox(this);
+  m_sketchPlaneOffsetSpin->setRange(-10000.0, 10000.0);
+  m_sketchPlaneOffsetSpin->setValue(0.0);
+  m_sketchPlaneOffsetSpin->setSuffix(" mm");
+  sketchOffsetLayout->addRow("Offset:", m_sketchPlaneOffsetSpin);
+
+  m_sketchPlaneAngleSpin = new QDoubleSpinBox(this);
+  m_sketchPlaneAngleSpin->setRange(-360.0, 360.0);
+  m_sketchPlaneAngleSpin->setValue(0.0);
+  m_sketchPlaneAngleSpin->setSuffix("°");
+  sketchOffsetLayout->addRow("Angle:", m_sketchPlaneAngleSpin);
+
+  sketchPlaneLayout->addLayout(sketchOffsetLayout);
+
   mainLayout->addWidget(m_sketchPlaneGroup);
   m_sketchPlaneGroup->hide();
 
@@ -311,8 +330,18 @@ void ToolSettingsPanel::setupUI() {
   loftLayout->addRow(m_loftSolidCheck);
   m_loftRuledCheck = new QCheckBox("Ruled Surface", this);
   loftLayout->addRow(m_loftRuledCheck);
+  m_loftProfilesList = new QListWidget(this);
+  m_loftProfilesList->setSelectionMode(QAbstractItemView::MultiSelection);
+  loftLayout->addRow(m_loftProfilesList);
   m_loftProfilesLabel = new QLabel("Profiles: 0 selected", this);
   loftLayout->addRow(m_loftProfilesLabel);
+
+  connect(m_loftProfilesList, &QListWidget::itemSelectionChanged, this,
+          [this]() {
+            int count = m_loftProfilesList->selectedItems().count();
+            m_loftProfilesLabel->setText(
+                QString("Profiles: %1 selected").arg(count));
+          });
   mainLayout->addWidget(m_loftGroup);
   m_loftGroup->hide();
 
@@ -392,6 +421,72 @@ void ToolSettingsPanel::setupUI() {
 
   mainLayout->addWidget(m_gearGroup);
   m_gearGroup->hide();
+
+  // Hole settings
+  m_holeGroup = new QGroupBox("🕳️ Hole Settings", this);
+  m_holeGroup->setStyleSheet("QGroupBox { font-weight: bold; }");
+  auto *holeLayout = new QFormLayout(m_holeGroup);
+
+  // Hole type
+  m_holeTypeCombo = new QComboBox(this);
+  m_holeTypeCombo->addItems({"Simple", "Counterbore", "Countersink", "Tapped"});
+  holeLayout->addRow("Hole Type:", m_holeTypeCombo);
+
+  // Diameter
+  m_holeDiameterSpin = new QDoubleSpinBox(this);
+  m_holeDiameterSpin->setRange(0.1, 1000.0);
+  m_holeDiameterSpin->setValue(10.0);
+  m_holeDiameterSpin->setSingleStep(0.5);
+  m_holeDiameterSpin->setSuffix(" mm");
+  holeLayout->addRow("Diameter:", m_holeDiameterSpin);
+
+  // Depth
+  m_holeDepthSpin = new QDoubleSpinBox(this);
+  m_holeDepthSpin->setRange(0.1, 1000.0);
+  m_holeDepthSpin->setValue(20.0);
+  m_holeDepthSpin->setSingleStep(1.0);
+  m_holeDepthSpin->setSuffix(" mm");
+  holeLayout->addRow("Depth:", m_holeDepthSpin);
+
+  // Counterbore diameter
+  m_cboreDiameterSpin = new QDoubleSpinBox(this);
+  m_cboreDiameterSpin->setRange(0.1, 1000.0);
+  m_cboreDiameterSpin->setValue(18.0);
+  m_cboreDiameterSpin->setSingleStep(0.5);
+  m_cboreDiameterSpin->setSuffix(" mm");
+  holeLayout->addRow("Counterbore Dia:", m_cboreDiameterSpin);
+
+  // Counterbore depth
+  m_cboreDepthSpin = new QDoubleSpinBox(this);
+  m_cboreDepthSpin->setRange(0.1, 1000.0);
+  m_cboreDepthSpin->setValue(5.0);
+  m_cboreDepthSpin->setSingleStep(0.5);
+  m_cboreDepthSpin->setSuffix(" mm");
+  holeLayout->addRow("Counterbore Depth:", m_cboreDepthSpin);
+
+  // Countersink diameter
+  m_csinkDiameterSpin = new QDoubleSpinBox(this);
+  m_csinkDiameterSpin->setRange(0.1, 1000.0);
+  m_csinkDiameterSpin->setValue(18.0);
+  m_csinkDiameterSpin->setSingleStep(0.5);
+  m_csinkDiameterSpin->setSuffix(" mm");
+  holeLayout->addRow("Countersink Dia:", m_csinkDiameterSpin);
+
+  // Countersink angle
+  m_csinkAngleSpin = new QDoubleSpinBox(this);
+  m_csinkAngleSpin->setRange(1.0, 180.0);
+  m_csinkAngleSpin->setValue(82.0);
+  m_csinkAngleSpin->setSingleStep(1.0);
+  m_csinkAngleSpin->setSuffix(" °");
+  holeLayout->addRow("Countersink Angle:", m_csinkAngleSpin);
+
+  // Flip Direction
+  m_holeFlipDirectionCheck = new QCheckBox("Flip Direction", this);
+  m_holeFlipDirectionCheck->setChecked(false);
+  holeLayout->addRow(m_holeFlipDirectionCheck);
+
+  mainLayout->addWidget(m_holeGroup);
+  m_holeGroup->hide();
 
   // Apply button
   m_applyButton = new QPushButton("Apply (Enter)", this);
@@ -577,6 +672,8 @@ void ToolSettingsPanel::hideAllSettings() {
   m_refPlaneGroup->hide();
   m_splitGroup->hide();
   m_gearGroup->hide();
+  if (m_holeGroup)
+    m_holeGroup->hide();
   m_sketchPlaneGroup->hide();
   m_constraintGroup->hide();
   m_applyButton->hide();
@@ -813,6 +910,29 @@ double ToolSettingsPanel::offsetSurfaceValue() const {
   return m_offsetSurfaceValueSpin ? m_offsetSurfaceValueSpin->value() : 5.0;
 }
 
+// Hole Wizard getters
+int ToolSettingsPanel::holeType() const {
+  return m_holeTypeCombo ? m_holeTypeCombo->currentIndex() : 0;
+}
+double ToolSettingsPanel::holeDiameter() const {
+  return m_holeDiameterSpin ? m_holeDiameterSpin->value() : 10.0;
+}
+double ToolSettingsPanel::holeDepth() const {
+  return m_holeDepthSpin ? m_holeDepthSpin->value() : 20.0;
+}
+double ToolSettingsPanel::holeCounterboreDiameter() const {
+  return m_cboreDiameterSpin ? m_cboreDiameterSpin->value() : 18.0;
+}
+double ToolSettingsPanel::holeCounterboreDepth() const {
+  return m_cboreDepthSpin ? m_cboreDepthSpin->value() : 5.0;
+}
+double ToolSettingsPanel::holeCountersinkDiameter() const {
+  return m_csinkDiameterSpin ? m_csinkDiameterSpin->value() : 18.0;
+}
+double ToolSettingsPanel::holeCountersinkAngle() const {
+  return m_csinkAngleSpin ? m_csinkAngleSpin->value() : 82.0;
+}
+
 // Slots
 void ToolSettingsPanel::onPolygonSidesChanged(int value) {
   if (m_sketchView)
@@ -881,6 +1001,11 @@ bool ToolSettingsPanel::loftSolid() const {
 
 bool ToolSettingsPanel::loftRuled() const {
   return m_loftRuledCheck->isChecked();
+}
+
+bool ToolSettingsPanel::holeFlipDirection() const {
+  return m_holeFlipDirectionCheck ? m_holeFlipDirectionCheck->isChecked()
+                                  : false;
 }
 
 int ToolSettingsPanel::booleanOperation() const {
@@ -971,73 +1096,8 @@ void ToolSettingsPanel::showHoleSettings() {
   m_toolLabel->setText("🕳️ Hole Wizard");
   m_descriptionLabel->setText("Create holes with various configurations");
 
-  if (!m_holeGroup) {
-    m_holeGroup = new QGroupBox("🕳️ Hole Settings", this);
-    QVBoxLayout *layout = new QVBoxLayout(m_holeGroup);
-
-    // Hole type
-    layout->addWidget(new QLabel("Hole Type:"));
-    m_holeTypeCombo = new QComboBox();
-    m_holeTypeCombo->addItems(
-        {"Simple", "Counterbore", "Countersink", "Tapped"});
-    layout->addWidget(m_holeTypeCombo);
-
-    // Diameter
-    layout->addWidget(new QLabel("Diameter:"));
-    m_holeDiameterSpin = new QDoubleSpinBox();
-    m_holeDiameterSpin->setRange(0.1, 1000.0);
-    m_holeDiameterSpin->setValue(10.0);
-    m_holeDiameterSpin->setSingleStep(0.5);
-    m_holeDiameterSpin->setSuffix(" mm");
-    layout->addWidget(m_holeDiameterSpin);
-
-    // Depth
-    layout->addWidget(new QLabel("Depth:"));
-    m_holeDepthSpin = new QDoubleSpinBox();
-    m_holeDepthSpin->setRange(0.1, 1000.0);
-    m_holeDepthSpin->setValue(20.0);
-    m_holeDepthSpin->setSingleStep(1.0);
-    m_holeDepthSpin->setSuffix(" mm");
-    layout->addWidget(m_holeDepthSpin);
-
-    // Counterbore diameter
-    layout->addWidget(new QLabel("Counterbore Diameter:"));
-    m_cboreDiameterSpin = new QDoubleSpinBox();
-    m_cboreDiameterSpin->setRange(0.1, 1000.0);
-    m_cboreDiameterSpin->setValue(18.0);
-    m_cboreDiameterSpin->setSingleStep(0.5);
-    m_cboreDiameterSpin->setSuffix(" mm");
-    layout->addWidget(m_cboreDiameterSpin);
-
-    // Counterbore depth
-    layout->addWidget(new QLabel("Counterbore Depth:"));
-    m_cboreDepthSpin = new QDoubleSpinBox();
-    m_cboreDepthSpin->setRange(0.1, 1000.0);
-    m_cboreDepthSpin->setValue(5.0);
-    m_cboreDepthSpin->setSingleStep(0.5);
-    m_cboreDepthSpin->setSuffix(" mm");
-    layout->addWidget(m_cboreDepthSpin);
-
-    // Countersink diameter
-    layout->addWidget(new QLabel("Countersink Diameter:"));
-    m_csinkDiameterSpin = new QDoubleSpinBox();
-    m_csinkDiameterSpin->setRange(0.1, 1000.0);
-    m_csinkDiameterSpin->setValue(18.0);
-    m_csinkDiameterSpin->setSingleStep(0.5);
-    m_csinkDiameterSpin->setSuffix(" mm");
-    layout->addWidget(m_csinkDiameterSpin);
-
-    // Countersink angle
-    layout->addWidget(new QLabel("Countersink Angle:"));
-    m_csinkAngleSpin = new QDoubleSpinBox();
-    m_csinkAngleSpin->setRange(1.0, 180.0);
-    m_csinkAngleSpin->setValue(82.0);
-    m_csinkAngleSpin->setSingleStep(1.0);
-    m_csinkAngleSpin->setSuffix(" °");
-    layout->addWidget(m_csinkAngleSpin);
-  }
-
-  m_holeGroup->show();
+  if (m_holeGroup)
+    m_holeGroup->show();
   m_applyButton->show();
 }
 
@@ -1047,6 +1107,95 @@ void ToolSettingsPanel::showGearSettings() {
   m_descriptionLabel->setText("Create a spur gear with specified parameters.");
   m_gearGroup->show();
   m_applyButton->show();
+}
+
+bool ToolSettingsPanel::patternIsLinear() const {
+  return m_patternTypeCombo && m_patternTypeCombo->currentIndex() == 0;
+}
+
+double ToolSettingsPanel::ribThickness() const {
+  return m_ribThicknessSpin ? m_ribThicknessSpin->value() : 0.0;
+}
+
+int ToolSettingsPanel::ribType() const {
+  return m_ribTypeCombo ? m_ribTypeCombo->currentIndex() : 0;
+}
+
+bool ToolSettingsPanel::ribSymmetric() const {
+  return m_ribSymmetricCheck ? m_ribSymmetricCheck->isChecked() : false;
+}
+
+double ToolSettingsPanel::ribAngle() const {
+  return m_ribAngleSpin ? m_ribAngleSpin->value() : 0.0;
+}
+
+bool ToolSettingsPanel::ribFlipDirection() const {
+  return m_ribFlipCheck ? m_ribFlipCheck->isChecked() : false;
+}
+
+double ToolSettingsPanel::ribDraftAngle() const {
+  return m_ribDraftSpin ? m_ribDraftSpin->value() : 0.0;
+}
+
+void ToolSettingsPanel::setSweepProfileText(const QString &text) {
+  if (m_sweepProfileLabel)
+    m_sweepProfileLabel->setText(text);
+}
+
+void ToolSettingsPanel::setSweepPathText(const QString &text) {
+  if (m_sweepPathLabel)
+    m_sweepPathLabel->setText(text);
+}
+
+void ToolSettingsPanel::populateSweepPathSketches(const QStringList &names) {
+  if (m_sweepPathCombo) {
+    m_sweepPathCombo->clear();
+    m_sweepPathCombo->addItems(names);
+  }
+}
+
+int ToolSettingsPanel::sweepPathSketchIndex() const {
+  return m_sweepPathCombo ? m_sweepPathCombo->currentIndex() : -1;
+}
+
+void ToolSettingsPanel::populateLoftSketches(const QStringList &sketches) {
+  if (m_loftProfilesList) {
+    m_loftProfilesList->clear();
+    m_loftProfilesList->addItems(sketches);
+  }
+}
+
+std::vector<int> ToolSettingsPanel::loftSelectedSketches() const {
+  std::vector<int> selected;
+  if (!m_loftProfilesList)
+    return selected;
+  for (int i = 0; i < m_loftProfilesList->count(); ++i) {
+    if (m_loftProfilesList->item(i)->isSelected()) {
+      selected.push_back(i);
+    }
+  }
+  return selected;
+}
+void ToolSettingsPanel::setRevolveAxis(int index) {
+  if (m_revolveAxisCombo)
+    m_revolveAxisCombo->setCurrentIndex(index);
+}
+
+void ToolSettingsPanel::showRibSettings() {
+  hideAllSettings();
+  m_toolLabel->setText("Rib");
+  m_descriptionLabel->setText("Create a rib from a sketch profile.");
+  if (m_ribGroup)
+    m_ribGroup->show();
+  m_applyButton->show();
+}
+
+double ToolSettingsPanel::sketchPlaneOffsetDistance() const {
+  return m_sketchPlaneOffsetSpin ? m_sketchPlaneOffsetSpin->value() : 0.0;
+}
+
+double ToolSettingsPanel::sketchPlaneAngle() const {
+  return m_sketchPlaneAngleSpin ? m_sketchPlaneAngleSpin->value() : 0.0;
 }
 
 } // namespace ui

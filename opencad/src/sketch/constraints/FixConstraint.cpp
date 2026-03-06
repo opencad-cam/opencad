@@ -101,6 +101,50 @@ int FixConstraint::dofRemoved() const {
   }
 }
 
+std::vector<double> FixConstraint::errorVector() const {
+  if (!m_entity)
+    return {};
+
+  switch (m_entity->type()) {
+  case EntityType::Point: {
+    auto point = std::dynamic_pointer_cast<SketchPoint>(m_entity);
+    if (point) {
+      return {point->x() - m_fixedX, point->y() - m_fixedY};
+    }
+    break;
+  }
+  case EntityType::Line: {
+    auto line = std::dynamic_pointer_cast<SketchLine>(m_entity);
+    if (line) {
+      return {
+          line->startPoint().X() - m_fixedX, line->startPoint().Y() - m_fixedY,
+          line->endPoint().X() - m_fixedX2, line->endPoint().Y() - m_fixedY2};
+    }
+    break;
+  }
+  case EntityType::Circle: {
+    auto circle = std::dynamic_pointer_cast<SketchCircle>(m_entity);
+    if (circle) {
+      return {circle->center().X() - m_fixedX, circle->center().Y() - m_fixedY,
+              circle->radius() - m_fixedRadius};
+    }
+    break;
+  }
+  case EntityType::Arc: {
+    auto arc = std::dynamic_pointer_cast<SketchArc>(m_entity);
+    if (arc) {
+      return {arc->center().X() - m_fixedX, arc->center().Y() - m_fixedY,
+              arc->radius() - m_fixedRadius, 0.0, 0.0};
+    }
+    break;
+  }
+  default:
+    break;
+  }
+
+  return {};
+}
+
 double FixConstraint::error() const {
   if (!m_entity)
     return 0.0;
