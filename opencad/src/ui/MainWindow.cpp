@@ -4701,23 +4701,27 @@ void MainWindow::onToolApply() {
   } break;
 
   case ActivePartTool::Revolve: {
-    int profileIndex = m_profileSelectionPanel
-                           ? m_profileSelectionPanel->selectedProfile()
-                           : m_selectedProfileIndex;
+    std::vector<int> selectedIndices;
+    if (m_sketchView && !m_sketchView->m_selectedProfiles.empty()) {
+      selectedIndices = m_sketchView->m_selectedProfiles;
+    } else {
+      int profileIndex = m_profileSelectionPanel
+                             ? m_profileSelectionPanel->selectedProfile()
+                             : m_selectedProfileIndex;
+      if (profileIndex >= 0) {
+        selectedIndices.push_back(profileIndex);
+      }
+    }
 
-    // Revolve the selected profile with panel settings
-    if (profileIndex < 0 || !m_currentSketch) {
-      QMessageBox::warning(this, "Revolve",
-                           "No profile selected. Select a profile first.");
+    if (selectedIndices.empty() || !m_currentSketch) {
+      QMessageBox::warning(
+          this, "Revolve",
+          "No profile selected. Select at least one profile first.");
       return;
     }
 
     auto profileFaces = m_sketchView ? m_sketchView->getProfiles()
                                      : std::vector<TopoDS_Shape>();
-    if (profileIndex >= static_cast<int>(profileFaces.size())) {
-      QMessageBox::warning(this, "Revolve", "Invalid profile selection.");
-      return;
-    }
 
     // Get parameters from panel
     double angle =
@@ -4725,37 +4729,34 @@ void MainWindow::onToolApply() {
     int axisIndex =
         m_toolSettingsPanel ? m_toolSettingsPanel->revolveAxis() : 1;
 
-    // Build face from selected profile
-    qDebug() << "Revolve: Profile Index =" << profileIndex << "of"
-             << profileFaces.size() << "profiles";
+    qDebug() << "Revolve: Processing" << selectedIndices.size() << "profiles";
     qDebug() << "Revolve: Axis Index =" << axisIndex << ", Angle =" << angle;
 
-    TopoDS_Face profileFace;
-    if (profileIndex >= 0 &&
-        profileIndex < static_cast<int>(profileFaces.size())) {
-      TopoDS_Shape shape = profileFaces[profileIndex];
-      if (shape.ShapeType() == TopAbs_FACE) {
-        profileFace = TopoDS::Face(shape);
+    std::vector<TopoDS_Face> facesToRevolve;
+    Bnd_Box m_bndBox;
+    m_bndBox.SetGap(0.0);
+
+    for (int idx : selectedIndices) {
+      if (idx >= 0 && idx < static_cast<int>(profileFaces.size())) {
+        TopoDS_Shape shape = profileFaces[idx];
+        if (shape.ShapeType() == TopAbs_FACE) {
+          TopoDS_Face face = TopoDS::Face(shape);
+          face = enforceFaceHoles(face);
+          if (!face.IsNull()) {
+            facesToRevolve.push_back(face);
+            BRepBndLib::Add(face, m_bndBox);
+          }
+        }
       }
     }
 
-    // try-catch removed as face building is done in buildProfileFaces
-
-    if (profileFace.IsNull()) {
-      QMessageBox::warning(this, "Revolve", "Invalid profile face.");
+    if (facesToRevolve.empty()) {
+      QMessageBox::warning(this, "Revolve", "Invalid profile selection.");
       return;
-    }
-
-    profileFace = enforceFaceHoles(profileFace);
-
-    // Set up axis based on selection
-    if (!profileFace.IsNull()) {
-      qDebug() << "Revolve: Using unmodified profileFace.";
     }
 
     gp_Ax1 axis;
     QString axisName;
-    Bnd_Box m_bndBox;
     qDebug() << "Revolve Debug: Axis Index =" << axisIndex;
 
     switch (axisIndex) {
@@ -4809,11 +4810,11 @@ void MainWindow::onToolApply() {
     }
 
     // Debug: Check Profile Bounding Box
-    BRepBndLib::Add(profileFace, m_bndBox);
-    m_bndBox.SetGap(0.0);
-    double xmin, ymin, zmin, xmax, ymax, zmax;
-    m_bndBox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-    qDebug() << "Revolve Debug: Profile Bounding Box";
+    double xmin = 0, ymin = 0, zmin = 0, xmax = 0, ymax = 0, zmax = 0;
+    if (!m_bndBox.IsVoid()) {
+      m_bndBox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+    }
+    qDebug() << "Revolve Debug: Profiles Bounding Box";
     qDebug() << "  X: " << xmin << " to " << xmax;
     qDebug() << "  Y: " << ymin << " to " << ymax;
     qDebug() << "  Z: " << zmin << " to " << zmax;
@@ -4825,59 +4826,71 @@ void MainWindow::onToolApply() {
     // Check if axis intersects profile bounding box (debug info)
     bool axisIntersects = false;
     if (std::abs(axis.Direction().Y()) > 0.99) {
-      // Y-axis: check X range
       double axisX = axis.Location().X();
       if (axisX > xmin && axisX < xmax)
         axisIntersects = true;
     } else if (std::abs(axis.Direction().Z()) > 0.99) {
-      // Z-axis: check XY range
       double axisX = axis.Location().X();
       double axisY = axis.Location().Y();
       if (axisX > xmin && axisX < xmax && axisY > ymin && axisY < ymax)
         axisIntersects = true;
     } else if (std::abs(axis.Direction().X()) > 0.99) {
-      // X-axis: check Y range
       double axisY = axis.Location().Y();
       if (axisY > ymin && axisY < ymax)
         axisIntersects = true;
     }
-    qDebug() << "Revolve: Axis intersects profile bbox?" << axisIntersects;
+    qDebug() << "Revolve: Axis intersects profiles bbox?" << axisIntersects;
 
     try {
       part::RevolveFeature revolve;
-      TopoDS_Shape revolvedShape =
-          revolve.executeFace(profileFace, axis, angle);
+      TopoDS_Shape combinedRevolveShape;
 
-      if (revolvedShape.IsNull()) {
-        QString errMsg =
-            QString("Revolve failed (Profile %1, Axis %2): %3")
-                .arg(profileIndex)
-                .arg(axisName)
-                .arg(QString::fromStdString(revolve.errorMessage()));
-        qDebug() << errMsg;
-        QMessageBox::warning(this, "Revolve", errMsg);
-        return;
+      for (size_t i = 0; i < facesToRevolve.size(); ++i) {
+        TopoDS_Shape revolvedShape =
+            revolve.executeFace(facesToRevolve[i], axis, angle);
+
+        if (revolvedShape.IsNull()) {
+          QString errMsg =
+              QString("Revolve failed (Profile %1, Axis %2): %3")
+                  .arg(i + 1)
+                  .arg(axisName)
+                  .arg(QString::fromStdString(revolve.errorMessage()));
+          qDebug() << errMsg;
+          QMessageBox::warning(this, "Revolve", errMsg);
+          return;
+        }
+
+        if (combinedRevolveShape.IsNull()) {
+          combinedRevolveShape = revolvedShape;
+        } else {
+          try {
+            BRepAlgoAPI_Fuse fuseOp(combinedRevolveShape, revolvedShape);
+            if (fuseOp.IsDone()) {
+              combinedRevolveShape = fuseOp.Shape();
+            } else {
+              qDebug() << "Revolve: Failed to fuse multiple revolved profiles!";
+            }
+          } catch (...) {
+            qDebug() << "Revolve: Exception fusing revolved profiles!";
+          }
+        }
       }
 
       saveUndoState("Revolve");
 
       if (m_document->temporaryShapes().empty()) {
-        m_document->addTemporaryShape(revolvedShape);
+        m_document->addTemporaryShape(combinedRevolveShape);
       } else {
         try {
-          // If there are existing shapes, try to fuse (boolean union) with
-          // the first one This is a simplification; in a real Part Design, we
-          // might want New Body vs Add For now, we'll try to fuse if
-          // possible, or just add as a separate solid
           BRepAlgoAPI_Fuse fuseOp(m_document->temporaryShapes()[0],
-                                  revolvedShape);
+                                  combinedRevolveShape);
           if (fuseOp.IsDone()) {
             m_document->temporaryShapes()[0] = fuseOp.Shape();
           } else {
-            m_document->addTemporaryShape(revolvedShape);
+            m_document->addTemporaryShape(combinedRevolveShape);
           }
         } catch (...) {
-          m_document->addTemporaryShape(revolvedShape);
+          m_document->addTemporaryShape(combinedRevolveShape);
         }
       }
 
@@ -4888,9 +4901,9 @@ void MainWindow::onToolApply() {
 
       displayAllShapes();
       m_featureList->addItem(
-          QString("?? Revolve (%1� around %2)").arg(angle).arg(axisName));
-      statusBar()->showMessage(QString("Revolved Profile %1 around %2 axis")
-                                   .arg(profileIndex + 1)
+          QString("🔄 Revolve (%1° around %2)").arg(angle).arg(axisName));
+      statusBar()->showMessage(QString("Revolved %1 Profiles around %2 axis")
+                                   .arg(facesToRevolve.size())
                                    .arg(axisName),
                                3000);
       m_modified = true;

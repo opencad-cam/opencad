@@ -1570,8 +1570,6 @@ void SketchView2D::mousePressEvent(QMouseEvent *event) {
         if (it != m_selectedProfiles.end()) {
           m_selectedProfiles.erase(it);
         } else {
-          m_selectedProfiles.clear(); // only allow single selection for now or
-                                      // multi if shift is held
           m_selectedProfiles.push_back(profileIdx);
         }
         update();
