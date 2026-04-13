@@ -292,6 +292,12 @@ void Sketch::addLength(SketchLine::Ptr line, double length) {
   addConstraint(constraint);
 }
 
+void Sketch::addLineDistance(SketchLine::Ptr line1, SketchLine::Ptr line2,
+                             double distance) {
+  auto constraint = DimensionConstraint::createLineToLine(line1, line2, distance);
+  addConstraint(constraint);
+}
+
 void Sketch::addRadius(SketchCircle::Ptr circle, double radius) {
   auto constraint = DimensionConstraint::createRadius(circle, radius);
   addConstraint(constraint);

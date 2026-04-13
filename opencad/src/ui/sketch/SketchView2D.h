@@ -276,6 +276,14 @@ public:
   }
 
   // ============================================
+  // Dimension Tool State
+  // ============================================
+  // First entity selected in dimension tool (for two-entity distance dimension)
+  sketch::SketchEntity *m_dimFirstEntity = nullptr;
+  // Position clicked on first entity (used to determine reference point)
+  gp_Pnt2d m_dimFirstClickPos;
+
+  // ============================================
   // Multi-Selection System
   // ============================================
   std::vector<sketch::SketchEntity *> m_selectedEntities; // Multi-selection

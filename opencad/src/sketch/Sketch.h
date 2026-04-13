@@ -137,6 +137,7 @@ public:
                      SketchLine::Ptr line2, int endpoint2);
   void addDistance(SketchPoint::Ptr p1, SketchPoint::Ptr p2, double distance);
   void addLength(SketchLine::Ptr line, double length);
+  void addLineDistance(SketchLine::Ptr line1, SketchLine::Ptr line2, double distance); // Distance between two lines
   void addRadius(SketchCircle::Ptr circle, double radius);
   void addRadius(SketchArc::Ptr arc, double radius);
   void addAngle(SketchLine::Ptr line1, SketchLine::Ptr line2,

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file MainWindow.cpp
  * @brief Main window implementation
  */
@@ -16,6 +16,7 @@
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QString>
+#include <QTimer>
 #include <ShapeFix_Face.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -82,13 +83,20 @@
 #include "dialogs/NewDocumentDialog.h"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QCloseEvent>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QLabel>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
 #include <QToolBar>
+#include <QVBoxLayout>
 
 // OpenCASCADE for bounding box
 #include <BRepAlgoAPI_Cut.hxx>
@@ -573,6 +581,10 @@ void MainWindow::setupMenus() {
   auto *isoAction =
       viewMenu->addAction("Isometric", this, &MainWindow::onViewIsometric);
   isoAction->setShortcut(Qt::Key_0);
+  viewMenu->addSeparator();
+  m_actionSectionView =
+      viewMenu->addAction("Section View", this, &MainWindow::onSectionView);
+  m_actionSectionView->setCheckable(true);
 
   // Sketch Menu
   auto *sketchMenu = menuBar()->addMenu("&Sketch");
@@ -798,6 +810,10 @@ void MainWindow::setupToolbars() {
   mainToolbar->addSeparator();
   mainToolbar->addAction(QIcon(":/icons/maximize.svg"), "Fit", this,
                          &MainWindow::onViewFit);
+  mainToolbar->addSeparator();
+  if (m_actionSectionView) {
+      mainToolbar->addAction(m_actionSectionView);
+  }
 
   // Sketch toolbar
   m_sketchToolbar = addToolBar("Sketch");
@@ -955,6 +971,9 @@ void MainWindow::setupDockWidgets() {
 
   // 1. Part Feature List
   m_featureList = new QListWidget(m_treeStack);
+  m_featureList->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_featureList, &QListWidget::customContextMenuRequested,
+          this, &MainWindow::onFeatureListContextMenu);
   m_treeStack->addWidget(m_featureList);
 
   qDebug() << "setupDockWidgets: Feature List Created";
@@ -1132,11 +1151,31 @@ void MainWindow::setupDockWidgets() {
   connect(m_featureList, &QListWidget::customContextMenuRequested, this,
           &MainWindow::onFeatureContextMenu);
 
-  // Enable drag & drop for reordering
+  // ── Rollback Bar setup ───────────────────────────────────────────────────
+  // Only the rollback bar is draggable; regular feature items are NOT.
   m_featureList->setDragDropMode(QAbstractItemView::InternalMove);
   m_featureList->setDefaultDropAction(Qt::MoveAction);
+  m_featureList->setDragEnabled(true);
+  m_featureList->setAcceptDrops(true);
+  m_featureList->setDropIndicatorShown(true);
+
+  // Mark all existing items (origin planes) as non-draggable
+  for (int i = 0; i < m_featureList->count(); ++i) {
+    if (auto *itm = m_featureList->item(i)) {
+      itm->setFlags(itm->flags() & ~Qt::ItemIsDragEnabled);
+    }
+  }
+
+  // Create the rollback bar and add it at the bottom
+  m_rollbackBar = createRollbackBarItem();
+  m_featureList->addItem(m_rollbackBar);
+
+  // rowsMoved → only the rollback bar can move, so always call onRollbackBarMoved
   connect(m_featureList->model(), &QAbstractItemModel::rowsMoved, this,
-          &MainWindow::onFeatureReordered);
+          [this](const QModelIndex &/*parent*/, int srcRow, int /*srcLast*/,
+                 const QModelIndex &/*dstParent*/, int dstRow) {
+            onRollbackBarMoved(srcRow, dstRow);
+          });
 
   // moved to onTabChanged
 
@@ -1539,6 +1578,53 @@ void MainWindow::onViewRight() {
 void MainWindow::onViewIsometric() {
   if (m_viewport)
     m_viewport->setViewIsometric();
+}
+
+void MainWindow::onSectionView() {
+  if (!m_actionSectionView || !m_viewport) return;
+  bool isChecked = m_actionSectionView->isChecked();
+  
+  if (isChecked) {
+    m_activePartTool = ActivePartTool::SectionView;
+    if (m_toolSettingsDock && m_toolSettingsPanel) {
+      m_toolSettingsDock->setFloating(false);
+      addDockWidget(Qt::LeftDockWidgetArea, m_toolSettingsDock);
+      m_toolSettingsDock->show();
+      m_toolSettingsDock->raise();
+      m_toolSettingsPanel->showSectionViewSettings();
+    }
+    updateSectionViewPreview();
+  } else {
+    m_activePartTool = ActivePartTool::None;
+    m_viewport->setSectionView(false);
+    if (m_toolSettingsDock) m_toolSettingsDock->hide();
+  }
+}
+
+void MainWindow::updateSectionViewPreview() {
+  if (!m_viewport || !m_toolSettingsPanel || m_activePartTool != ActivePartTool::SectionView) return;
+
+  int planeType = m_toolSettingsPanel->sectionPlane();
+  double offset = m_toolSettingsPanel->sectionOffset();
+  bool flip = m_toolSettingsPanel->sectionFlip();
+
+  gp_Dir normal;
+  if (planeType == 0) { // XY (Top)
+      normal = gp_Dir(0, 0, 1);
+  } else if (planeType == 1) { // XZ (Front)
+      normal = gp_Dir(0, 1, 0);
+  } else { // YZ (Right)
+      normal = gp_Dir(1, 0, 0);
+  }
+
+  if (flip) normal.Reverse();
+
+  // Create plane passing through offset.
+  // Origin is translated backwards along normal because offset pushes plane forward
+  gp_Pnt origin = gp_Pnt(0, 0, 0).Translated(gp_Vec(normal).Multiplied(offset));
+  gp_Pln sectionPlane(origin, normal);
+
+  m_viewport->setSectionView(true, sectionPlane, true);
 }
 
 // Create menu slots
@@ -3241,7 +3327,13 @@ void MainWindow::onMultiProfilesConfirmed(const std::vector<int> &selections) {
 
 void MainWindow::saveUndoState(const std::string &description) {
   // checkpoint() should be called AFTER making changes
-  m_document->checkpoint(QString::fromStdString(description));
+  QStringList featureList;
+  if (m_featureList) {
+    for (int i = 0; i < m_featureList->count(); ++i) {
+      featureList.append(m_featureList->item(i)->text());
+    }
+  }
+  m_document->checkpoint(QString::fromStdString(description), featureList);
 }
 
 // ==================== NEW PART FEATURES ====================
@@ -3917,6 +4009,11 @@ void MainWindow::onConstraintConcentric() {
 }
 
 void MainWindow::updateExtrudePreview() {
+  if (m_activePartTool == ActivePartTool::SectionView) {
+    updateSectionViewPreview();
+    return;
+  }
+
   if (m_pendingOperation == PendingOperation::None ||
       m_activePartTool != ActivePartTool::Extrude) {
     if (!m_previewShape.IsNull() && m_viewport) {
@@ -4277,6 +4374,33 @@ void MainWindow::onToolApply() {
       // Save undo state AFTER adding shape
       saveUndoState("Extrude");
 
+      // Store FeatureRecord for Edit Feature
+      {
+        core::FeatureRecord record;
+        record.type = "Extrude";
+        record.parameters["depth"] = depth;
+        record.parameters["symmetric"] = symmetric;
+        record.parameters["draftAngle"] = draftAngle;
+        record.profileIndex = profileIndex;
+        record.sketchIndex = findSketchIndex(m_currentSketch);
+        // baseShape = shape BEFORE this extrude was applied
+        // (we already saved it in undo, use the shape before fuse)
+        record.baseShape = TopoDS_Shape(); // Will be populated from undo stack
+        if (m_document->temporaryShapes().size() > 0) {
+          // The base shape for next feature is the current result
+          record.baseShape = m_document->temporaryShapes()[0];
+        }
+        // Insert feature at rollback position (or append if no rollback).
+        // This makes new features appear BEFORE the rolled-back features,
+        // matching SolidWorks behaviour.
+        if (m_rollbackPosition >= 0 && m_rollbackPosition <= m_featureRecords.size()) {
+          m_featureRecords.insert(m_rollbackPosition, record);
+          ++m_rollbackPosition; // bar advances past the newly added feature
+        } else {
+          m_featureRecords.append(record);
+        }
+      }
+
       // Hide the consumed sketch
       if (m_currentSketch) {
         m_currentSketch->setVisible(false);
@@ -4297,10 +4421,17 @@ void MainWindow::onToolApply() {
       QString draftInfo = (std::abs(draftAngle) > 0.001)
                               ? QString(" draft=%1").arg(draftAngle)
                               : "";
-      m_featureList->addItem(QString("✅ Extrude (%1)%2%3")
-                                 .arg(depth)
-                                 .arg(symInfo)
-                                 .arg(draftInfo));
+      // If rollback is active, rebuild the full list from m_featureRecords
+      // so the new feature appears at the correct position (before bar).
+      // Otherwise just do a fast single-item insert.
+      if (m_rollbackPosition >= 0) {
+        replayFeaturesFrom(0);
+      } else {
+        addFeatureListItem(QString("\u2705 Extrude (%1)%2%3")
+                               .arg(depth)
+                               .arg(symInfo)
+                               .arg(draftInfo));
+      }
       statusBar()->showMessage(
           QString("Extruded Profile %1").arg(profileIndex + 1), 3000);
       m_modified = true;
@@ -4878,6 +5009,26 @@ void MainWindow::onToolApply() {
 
       saveUndoState("Revolve");
 
+      // Store FeatureRecord for Edit Feature
+      {
+        core::FeatureRecord record;
+        record.type = "Revolve";
+        record.parameters["revolveAngle"] = angle;
+        record.parameters["axisIndex"] = axisIndex;
+        record.parameters["axisName"] = axisName;
+        record.profileIndex = m_selectedProfileIndex >= 0 ? m_selectedProfileIndex : 0;
+        record.sketchIndex = findSketchIndex(m_currentSketch);
+        if (m_document->temporaryShapes().size() > 0) {
+          record.baseShape = m_document->temporaryShapes()[0];
+        }
+        if (m_rollbackPosition >= 0 && m_rollbackPosition <= m_featureRecords.size()) {
+          m_featureRecords.insert(m_rollbackPosition, record);
+          ++m_rollbackPosition;
+        } else {
+          m_featureRecords.append(record);
+        }
+      }
+
       if (m_document->temporaryShapes().empty()) {
         m_document->addTemporaryShape(combinedRevolveShape);
       } else {
@@ -4900,8 +5051,12 @@ void MainWindow::onToolApply() {
       }
 
       displayAllShapes();
-      m_featureList->addItem(
-          QString("🔄 Revolve (%1° around %2)").arg(angle).arg(axisName));
+      if (m_rollbackPosition >= 0) {
+        replayFeaturesFrom(0);
+      } else {
+        addFeatureListItem(
+            QString("\U0001F504 Revolve (%1\u00B0 around %2)").arg(angle).arg(axisName));
+      }
       statusBar()->showMessage(QString("Revolved %1 Profiles around %2 axis")
                                    .arg(facesToRevolve.size())
                                    .arg(axisName),
@@ -4969,13 +5124,35 @@ void MainWindow::onToolApply() {
             saveUndoState("Cut");
             m_document->temporaryShapes()[0] = cutOp.Shape();
 
+            // Store FeatureRecord for Edit Feature
+            {
+              core::FeatureRecord record;
+              record.type = "Cut";
+              record.parameters["depth"] = depth;
+              record.profileIndex = profileIndex;
+              record.sketchIndex = findSketchIndex(m_currentSketch);
+              if (m_document->temporaryShapes().size() > 0) {
+                record.baseShape = m_document->temporaryShapes()[0];
+              }
+              if (m_rollbackPosition >= 0 && m_rollbackPosition <= m_featureRecords.size()) {
+                m_featureRecords.insert(m_rollbackPosition, record);
+                ++m_rollbackPosition;
+              } else {
+                m_featureRecords.append(record);
+              }
+            }
+
             // Hide the consumed sketch
             if (m_currentSketch) {
               m_currentSketch->setVisible(false);
             }
 
             displayAllShapes();
-            m_featureList->addItem(QString("?? Cut (%1)").arg(depth));
+            if (m_rollbackPosition >= 0) {
+              replayFeaturesFrom(0);
+            } else {
+              addFeatureListItem(QString("\u2702\uFE0F Cut (%1)").arg(depth));
+            }
             statusBar()->showMessage("Cut completed", 3000);
             m_modified = true;
             updateWindowTitle();
@@ -5580,32 +5757,83 @@ void MainWindow::updateFeatureList() {
   if (!m_featureList)
     return;
 
+  m_rollbackBar = nullptr; // will become dangling after clear()
+  m_featureList->model()->blockSignals(true);
   m_featureList->clear();
 
-  // Add default origin items
-  m_featureList->addItem("🌐 Origin");
-  m_featureList->addItem("  ⬜ XY Plane");
-  m_featureList->addItem("  ⬜ XZ Plane");
-  m_featureList->addItem("  ⬜ YZ Plane");
+  // ── Fixed origin items (non-draggable, non-drop) ──────────────────────
+  auto addOriginItm = [this](const QString &text) {
+    auto *itm = new QListWidgetItem(text);
+    itm->setFlags(itm->flags() & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsDropEnabled);
+    m_featureList->addItem(itm);
+  };
+  addOriginItm("\U0001F310 Origin");
+  addOriginItm("  \u2514 XY Plane");
+  addOriginItm("  \u2514 XZ Plane");
+  addOriginItm("  \u2514 YZ Plane");
 
-  // Add features from document
-  for (auto *feature : m_document->featureTree()->allFeatures()) {
-    QString icon = feature->isSuppressed() ? "⏸️" : "✅";
-    QString name = QString("%1 %2").arg(icon).arg(feature->name());
+  // ── Legacy feature records (Extrude / Cut / Revolve via m_featureRecords) ─
+  // These are separate from the new FeatureTree system.
+  if (!m_featureRecords.isEmpty()) {
+    const int barPos =
+        (m_rollbackPosition >= 0 && m_rollbackPosition <= m_featureRecords.size())
+            ? m_rollbackPosition
+            : m_featureRecords.size();
 
-    auto *item = new QListWidgetItem(name);
-    item->setData(Qt::UserRole, QVariant::fromValue((void *)feature));
+    for (int ri = 0; ri < m_featureRecords.size(); ++ri) {
+      // Insert rollback bar before the first rolled-back feature.
+      if (ri == barPos) {
+        m_rollbackBar = createRollbackBarItem();
+        m_featureList->addItem(m_rollbackBar);
+      }
 
-    // Visual feedback for suppressed features
-    if (feature->isSuppressed()) {
-      item->setForeground(Qt::gray);
-      QFont font = item->font();
-      font.setItalic(true);
-      item->setFont(font);
+      const bool rolledBack = (ri >= barPos);
+      auto *itm = new QListWidgetItem(m_featureRecords[ri].displayString());
+      itm->setData(Qt::UserRole + 1, ri);
+      itm->setFlags(itm->flags() & ~Qt::ItemIsDragEnabled);
+
+      if (rolledBack) {
+        itm->setForeground(QColor(130, 130, 130));
+        QFont f = itm->font();
+        f.setItalic(true);
+        itm->setFont(f);
+      }
+      m_featureList->addItem(itm);
     }
 
-    m_featureList->addItem(item);
+    // Bar at the very end (all features active).
+    if (barPos >= m_featureRecords.size()) {
+      m_rollbackBar = createRollbackBarItem();
+      m_featureList->addItem(m_rollbackBar);
+    }
+  } else {
+    // ── New FeatureTree system features ───────────────────────────────────
+    if (m_document) {
+      for (auto *feature : m_document->featureTree()->allFeatures()) {
+        QString icon = feature->isSuppressed() ? "\u23F8\uFE0F" : "\u2705";
+        QString name = QString("%1 %2").arg(icon).arg(feature->name());
+
+        auto *item = new QListWidgetItem(name);
+        item->setData(Qt::UserRole, QVariant::fromValue((void *)feature));
+        item->setFlags(item->flags() & ~Qt::ItemIsDragEnabled);
+
+        if (feature->isSuppressed()) {
+          item->setForeground(Qt::gray);
+          QFont font = item->font();
+          font.setItalic(true);
+          item->setFont(font);
+        }
+        m_featureList->addItem(item);
+      }
+    }
+
+    // Rollback bar at the bottom (no legacy features, so always at end).
+    m_rollbackBar = createRollbackBarItem();
+    m_featureList->addItem(m_rollbackBar);
   }
+
+  m_featureList->model()->blockSignals(false);
+
 }
 
 void MainWindow::onFeatureSelected(QListWidgetItem *item) {
@@ -5705,26 +5933,65 @@ void MainWindow::onToggleFeatureSuppression() {
   statusBar()->showMessage(QString("%1: %2").arg(action).arg(feature->name()));
 }
 
-void MainWindow::onFeatureReordered() {
-  // Get new order from list widget
-  QList<core::Feature *> newOrder;
+void MainWindow::onFeatureReordered(int srcRow, int dstRow) {
+  // -----------------------------------------------------------------------
+  // SolidWorks-style rollback: when the user drags a feature up/down in the
+  // feature tree, reorder m_featureRecords to match the new list order, then
+  // replay all features from scratch so the 3D model reflects the new order.
+  // -----------------------------------------------------------------------
 
-  for (int i = 4; i < m_featureList->count(); ++i) { // Skip origin items
-    auto *item = m_featureList->item(i);
-    auto *feature =
-        static_cast<core::Feature *>(item->data(Qt::UserRole).value<void *>());
-    if (feature) {
-      newOrder.append(feature);
+  static const int kOriginItems = 4; // Origin, XY, XZ, YZ plane rows
+
+  if (!m_featureList || m_featureRecords.isEmpty())
+    return;
+
+  // Translate list-widget row indices to m_featureRecords indices.
+  // The origin items occupy rows 0..kOriginItems-1 and are non-draggable.
+  int recSrc = srcRow - kOriginItems;
+
+  // Qt's rowsMoved dstRow is the row BEFORE which the item is inserted.
+  // If moving downward Qt passes dstRow one past the final position, so we
+  // adjust: actual record destination = dstRow - kOriginItems, clamped.
+  int recDst = dstRow - kOriginItems;
+  if (dstRow > srcRow)
+    recDst -= 1; // Qt inserts before dstRow; actual pos is one less when moving down
+
+  // Validate both indices are within the feature records range.
+  if (recSrc < 0 || recSrc >= m_featureRecords.size() ||
+      recDst < 0 || recDst >= m_featureRecords.size() ||
+      recSrc == recDst) {
+
+    // Fallback: Strategy B — if tags exist use them; otherwise just refresh.
+    QVector<core::FeatureRecord> reordered;
+    bool allTagged = true;
+    for (int i = kOriginItems; i < m_featureList->count(); ++i) {
+      auto *item = m_featureList->item(i);
+      if (!item) { allTagged = false; break; }
+      QVariant roleData = item->data(Qt::UserRole + 1);
+      if (!roleData.isValid()) { allTagged = false; break; }
+      int origIdx = roleData.toInt();
+      if (origIdx < 0 || origIdx >= m_featureRecords.size()) { allTagged = false; break; }
+      reordered.append(m_featureRecords[origIdx]);
     }
+    if (allTagged && reordered.size() == m_featureRecords.size()) {
+      m_featureRecords = reordered;
+    }
+    replayFeaturesFrom(0);
+    displayAllShapes();
+    statusBar()->showMessage("Feature reordered – model updated", 3000);
+    return;
   }
 
-  // TODO: Implement FeatureTree::reorderFeatures with dependency validation
-  // For now, just regenerate
-  m_document->regenerate();
-  displayAllShapes();
+  // Move the record: remove from src, insert at dst.
+  core::FeatureRecord moved = m_featureRecords.takeAt(recSrc);
+  m_featureRecords.insert(recDst, moved);
 
-  m_document->checkpoint("Reorder Features");
-  statusBar()->showMessage("Features reordered");
+  // Replay from scratch – this rebuilds the 3D model AND re-tags all items.
+  saveUndoState("Reorder Feature");
+  replayFeaturesFrom(0);
+  displayAllShapes();
+  statusBar()->showMessage(
+      QString("Feature moved to position %1 – model updated").arg(recDst + 1), 3000);
 }
 
 void MainWindow::onNewAssembly() {
@@ -6653,11 +6920,20 @@ std::shared_ptr<core::Document> MainWindow::createNewTab(const QString &title) {
 
 void MainWindow::onTabChanged(int index) {
   if (index < 0) {
+    // ── Save current document state before clearing ──────────────────────
+    if (m_document)
+      saveFeatureStateForDocument(m_document.get());
+
     m_document = nullptr;
     m_viewport = nullptr;
     return;
   }
 
+  // ── 1. Save state of the document we are LEAVING ─────────────────────
+  if (m_document)
+    saveFeatureStateForDocument(m_document.get());
+
+  // ── 2. Switch to the new document ────────────────────────────────────
   QWidget *widget = m_tabWidget->widget(index);
   m_viewport = qobject_cast<Viewport3D *>(widget);
 
@@ -6668,6 +6944,10 @@ void MainWindow::onTabChanged(int index) {
   } else {
     m_document = nullptr;
   }
+
+  // ── 3. Restore feature state for the document we are ENTERING ────────
+  if (m_document)
+    restoreFeatureStateForDocument(m_document.get());
 
   // Update UI components
   if (m_assemblyTree && m_document) {
@@ -6691,6 +6971,22 @@ void MainWindow::onTabChanged(int index) {
             this, &MainWindow::updateFeatureList, Qt::UniqueConnection);
     connect(m_document->featureTree(), &core::FeatureTree::treeStructureChanged,
             this, &MainWindow::updateFeatureList, Qt::UniqueConnection);
+    connect(m_document.get(), &core::Document::featureListRestored, this,
+            [this](const QStringList& items) {
+                if (!m_featureList) return;
+                m_rollbackBar = nullptr; // will be dangling after clear
+                m_featureList->model()->blockSignals(true);
+                m_featureList->clear();
+                for (const auto& str : items) {
+                    auto *itm = new QListWidgetItem(str);
+                    itm->setFlags(itm->flags() & ~Qt::ItemIsDragEnabled);
+                    m_featureList->addItem(itm);
+                }
+                // Re-add rollback bar at the bottom
+                m_rollbackBar = createRollbackBarItem();
+                m_featureList->addItem(m_rollbackBar);
+                m_featureList->model()->blockSignals(false);
+            }, Qt::UniqueConnection);
   }
 
   updateFeatureList();
@@ -6832,5 +7128,595 @@ void MainWindow::onCopyGeometryToNewPart() {
   }
 }
 
+// ============================================================================
+// Edit Feature (SolidWorks-style)
+// ============================================================================
+
+int MainWindow::findSketchIndex(
+    const std::shared_ptr<sketch::Sketch> &sketch) const {
+  if (!m_document || !sketch)
+    return -1;
+  const auto &sketches = m_document->sketches();
+  for (size_t i = 0; i < sketches.size(); ++i) {
+    if (sketches[i] == sketch)
+      return static_cast<int>(i);
+  }
+  return -1;
+}
+
+void MainWindow::onFeatureListContextMenu(const QPoint &pos) {
+  if (!m_featureList)
+    return;
+
+  QListWidgetItem *item = m_featureList->itemAt(pos);
+  if (!item)
+    return;
+
+  int row = m_featureList->row(item);
+  // Skip non-feature items (Origin, Planes are first 4 items)
+  // Feature records start after the default items
+  // The default items are: Origin, XY Plane, XZ Plane, YZ Plane (indices 0-3)
+  int featureIndex = row - 4; // Offset by default items count
+
+  if (featureIndex < 0 || featureIndex >= m_featureRecords.size())
+    return;
+
+  QMenu contextMenu(this);
+  QAction *editAction = contextMenu.addAction(
+      QIcon::fromTheme("document-edit"), "Edit Feature");
+  QAction *deleteAction = contextMenu.addAction(
+      QIcon::fromTheme("edit-delete"), "Delete Feature");
+
+  QAction *selectedAction = contextMenu.exec(m_featureList->mapToGlobal(pos));
+
+  if (selectedAction == editAction) {
+    onEditFeature(featureIndex);
+  } else if (selectedAction == deleteAction) {
+    onDeleteFeature(featureIndex);
+  }
+}
+
+void MainWindow::onEditFeature(int index) {
+  if (index < 0 || index >= m_featureRecords.size())
+    return;
+
+  core::FeatureRecord &record = m_featureRecords[index];
+
+  // Show a parameter edit dialog based on feature type
+  if (record.type == "Extrude") {
+    bool ok = false;
+    double oldDepth = record.depth();
+    bool oldSymmetric = record.symmetric();
+    double oldDraft = record.draftAngle();
+
+    // Use a simple QDialog with spinboxes
+    QDialog dialog(this);
+    dialog.setWindowTitle("Edit Extrude");
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+    QLabel *depthLabel = new QLabel("Depth:");
+    QDoubleSpinBox *depthSpin = new QDoubleSpinBox();
+    depthSpin->setRange(0.01, 10000.0);
+    depthSpin->setDecimals(2);
+    depthSpin->setValue(oldDepth);
+    layout->addWidget(depthLabel);
+    layout->addWidget(depthSpin);
+
+    QCheckBox *symmetricCheck = new QCheckBox("Symmetric (Mid-Plane)");
+    symmetricCheck->setChecked(oldSymmetric);
+    layout->addWidget(symmetricCheck);
+
+    QLabel *draftLabel = new QLabel("Draft Angle (°):");
+    QDoubleSpinBox *draftSpin = new QDoubleSpinBox();
+    draftSpin->setRange(-45.0, 45.0);
+    draftSpin->setDecimals(1);
+    draftSpin->setValue(oldDraft);
+    layout->addWidget(draftLabel);
+    layout->addWidget(draftSpin);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted)
+      return;
+
+    // Update record with new values
+    record.parameters["depth"] = depthSpin->value();
+    record.parameters["symmetric"] = symmetricCheck->isChecked();
+    record.parameters["draftAngle"] = draftSpin->value();
+
+  } else if (record.type == "Cut") {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Edit Cut");
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+    QLabel *depthLabel = new QLabel("Depth:");
+    QDoubleSpinBox *depthSpin = new QDoubleSpinBox();
+    depthSpin->setRange(0.01, 10000.0);
+    depthSpin->setDecimals(2);
+    depthSpin->setValue(record.depth());
+    layout->addWidget(depthLabel);
+    layout->addWidget(depthSpin);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted)
+      return;
+
+    record.parameters["depth"] = depthSpin->value();
+
+  } else if (record.type == "Revolve") {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Edit Revolve");
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+    QLabel *angleLabel = new QLabel("Angle (°):");
+    QDoubleSpinBox *angleSpin = new QDoubleSpinBox();
+    angleSpin->setRange(0.1, 360.0);
+    angleSpin->setDecimals(1);
+    angleSpin->setValue(record.revolveAngle());
+    layout->addWidget(angleLabel);
+    layout->addWidget(angleSpin);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted)
+      return;
+
+    record.parameters["revolveAngle"] = angleSpin->value();
+
+  } else {
+    QMessageBox::information(
+        this, "Edit Feature",
+        QString("Edit is not yet supported for '%1' features.").arg(record.type));
+    return;
+  }
+
+  // Save undo state before replaying
+  saveUndoState("Edit Feature");
+
+  // Replay all features from the beginning to rebuild geometry
+  replayFeaturesFrom(0);
+
+  displayAllShapes();
+  statusBar()->showMessage(
+      QString("Edited %1 feature").arg(record.type), 3000);
+}
+
+void MainWindow::onDeleteFeature(int index) {
+  if (index < 0 || index >= m_featureRecords.size())
+    return;
+
+  QMessageBox::StandardButton ret = QMessageBox::question(
+      this, "Delete Feature",
+      QString("Are you sure you want to delete '%1'?")
+          .arg(m_featureRecords[index].displayString()),
+      QMessageBox::Yes | QMessageBox::No);
+
+  if (ret != QMessageBox::Yes)
+    return;
+
+  saveUndoState("Delete Feature");
+
+  // Remove the record
+  m_featureRecords.removeAt(index);
+
+  // Replay all features from scratch
+  replayFeaturesFrom(0);
+
+  displayAllShapes();
+  statusBar()->showMessage("Feature deleted", 3000);
+}
+
+TopoDS_Shape MainWindow::replayFeature(const core::FeatureRecord &record,
+                                       const TopoDS_Shape &baseShape) {
+  if (!m_document)
+    return baseShape;
+
+  // Get the sketch for this feature
+  std::shared_ptr<sketch::Sketch> sketch;
+  if (record.sketchIndex >= 0 &&
+      record.sketchIndex < static_cast<int>(m_document->sketches().size())) {
+    sketch = m_document->sketches()[record.sketchIndex];
+  }
+
+  if (!sketch) {
+    qDebug() << "replayFeature: No sketch found for index" << record.sketchIndex;
+    return baseShape;
+  }
+
+  // Build profile faces from sketch
+  auto profileFaces = sketch->buildProfileFaces();
+  if (record.profileIndex < 0 ||
+      record.profileIndex >= static_cast<int>(profileFaces.size())) {
+    qDebug() << "replayFeature: Invalid profile index" << record.profileIndex;
+    return baseShape;
+  }
+
+  TopoDS_Shape profileShape = profileFaces[record.profileIndex];
+  if (profileShape.ShapeType() != TopAbs_FACE) {
+    qDebug() << "replayFeature: Profile is not a face";
+    return baseShape;
+  }
+  TopoDS_Face profileFace = TopoDS::Face(profileShape);
+  profileFace = enforceFaceHoles(profileFace);
+
+  if (record.type == "Extrude") {
+    double depth = record.depth();
+    bool symmetric = record.symmetric();
+    double draftAngle = record.draftAngle();
+
+    gp_Dir dir = sketch->plane().normal();
+    gp_Vec vec(dir);
+    vec.Scale(depth);
+
+    TopoDS_Shape extrudedShape;
+    try {
+      if (symmetric) {
+        gp_Vec halfVec = vec;
+        halfVec.Scale(0.5);
+        gp_Vec backVec = halfVec.Reversed();
+        gp_Trsf moveBack;
+        moveBack.SetTranslation(backVec);
+        BRepBuilderAPI_Transform transform(profileFace, moveBack, true);
+        TopoDS_Face movedFace = TopoDS::Face(transform.Shape());
+        BRepPrimAPI_MakePrism prism(movedFace, vec);
+        if (prism.IsDone())
+          extrudedShape = prism.Shape();
+      } else {
+        BRepPrimAPI_MakePrism prism(profileFace, vec);
+        if (prism.IsDone())
+          extrudedShape = prism.Shape();
+      }
+
+      // Apply draft angle
+      if (!extrudedShape.IsNull() && std::abs(draftAngle) > 0.001) {
+        double angleRad = draftAngle * M_PI / 180.0;
+        gp_Dir draftDir = dir;
+        gp_Pln neutralPlane = sketch->plane().plane();
+        BRepOffsetAPI_DraftAngle draftOp(extrudedShape);
+        TopExp_Explorer explorer(extrudedShape, TopAbs_FACE);
+        while (explorer.More()) {
+          TopoDS_Face face = TopoDS::Face(explorer.Current());
+          try {
+            draftOp.Add(face, draftDir, angleRad, neutralPlane);
+          } catch (...) {
+          }
+          explorer.Next();
+        }
+        draftOp.Build();
+        if (draftOp.IsDone()) {
+          extrudedShape = draftOp.Shape();
+        }
+      }
+    } catch (...) {
+      return baseShape;
+    }
+
+    if (extrudedShape.IsNull())
+      return baseShape;
+
+    // Fuse or set
+    if (baseShape.IsNull()) {
+      return extrudedShape;
+    } else {
+      try {
+        BRepAlgoAPI_Fuse fuseOp(baseShape, extrudedShape);
+        if (fuseOp.IsDone())
+          return fuseOp.Shape();
+      } catch (...) {
+      }
+      return baseShape;
+    }
+
+  } else if (record.type == "Cut") {
+    if (baseShape.IsNull())
+      return baseShape;
+
+    double depth = record.depth();
+    gp_Dir cutDir = sketch->plane().normal();
+    gp_Vec cutVec(cutDir);
+    cutVec.Scale(-depth);
+
+    try {
+      BRepPrimAPI_MakePrism prism(profileFace, cutVec);
+      if (prism.IsDone()) {
+        TopoDS_Shape cutTool = prism.Shape();
+        BRepAlgoAPI_Cut cutOp(baseShape, cutTool);
+        if (cutOp.IsDone())
+          return cutOp.Shape();
+      }
+    } catch (...) {
+    }
+    return baseShape;
+
+  } else if (record.type == "Revolve") {
+    double angle = record.revolveAngle();
+    int axisIndex = record.parameters.value("axisIndex", 1).toInt();
+
+    gp_Ax1 axis;
+    gp_Pnt origin(0, 0, 0);
+    switch (axisIndex) {
+    case 0:
+      axis = gp_Ax1(origin, gp_Dir(1, 0, 0));
+      break;
+    case 1:
+      axis = gp_Ax1(origin, gp_Dir(0, 1, 0));
+      break;
+    case 2:
+      axis = gp_Ax1(origin, gp_Dir(0, 0, 1));
+      break;
+    default:
+      axis = gp_Ax1(origin, gp_Dir(0, 1, 0));
+      break;
+    }
+
+    try {
+      part::RevolveFeature revolve;
+      TopoDS_Shape revolvedShape = revolve.executeFace(profileFace, axis, angle);
+      if (revolvedShape.IsNull())
+        return baseShape;
+
+      if (baseShape.IsNull()) {
+        return revolvedShape;
+      } else {
+        try {
+          BRepAlgoAPI_Fuse fuseOp(baseShape, revolvedShape);
+          if (fuseOp.IsDone())
+            return fuseOp.Shape();
+        } catch (...) {
+        }
+        return baseShape;
+      }
+    } catch (...) {
+      return baseShape;
+    }
+  }
+
+  return baseShape;
+}
+
+
+void MainWindow::replayFeaturesFrom(int startIndex) {
+  if (!m_document || m_featureRecords.isEmpty())
+    return;
+
+  TopoDS_Shape currentShape;
+  m_document->temporaryShapes().clear();
+
+  // Determine replay limit: respect m_rollbackPosition.
+  // -1 means "show all", otherwise replay only up to that many features.
+  int endIndex = m_featureRecords.size();
+  if (m_rollbackPosition >= 0 && m_rollbackPosition < endIndex)
+    endIndex = m_rollbackPosition;
+
+  for (int i = startIndex; i < endIndex; ++i) {
+    currentShape = replayFeature(m_featureRecords[i], currentShape);
+  }
+
+  if (!currentShape.IsNull()) {
+    m_document->addTemporaryShape(currentShape);
+  }
+
+  // ── Rebuild the feature list UI ──────────────────────────────────────────
+  if (m_featureList) {
+    m_rollbackBar = nullptr; // null BEFORE clear() so any signal during clear can't crash
+    m_featureList->model()->blockSignals(true);
+    m_featureList->clear(); // deletes all items including old rollback bar
+
+    // Fixed origin items (non-draggable)
+    auto addOriginItem = [this](const QString &text) {
+      auto *itm = new QListWidgetItem(text);
+      itm->setFlags(itm->flags() & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsDropEnabled);
+      m_featureList->addItem(itm);
+    };
+    addOriginItem(QString::fromUtf8("\U0001F310 Origin"));
+    addOriginItem(QString::fromUtf8("  \u2514 XY Plane"));
+    addOriginItem(QString::fromUtf8("  \u2514 XZ Plane"));
+    addOriginItem(QString::fromUtf8("  \u2514 YZ Plane"));
+
+    // The bar sits AFTER the first `barPos` feature records.
+    // barPos == -1 or >= size  →  bar at the very bottom (all features active).
+    const int barPos = (m_rollbackPosition >= 0 && m_rollbackPosition <= m_featureRecords.size())
+                           ? m_rollbackPosition
+                           : m_featureRecords.size();
+
+    for (int ri = 0; ri < m_featureRecords.size(); ++ri) {
+      // Insert rollback bar BEFORE recording ri if that's where barPos is.
+      if (ri == barPos) {
+        m_rollbackBar = createRollbackBarItem();
+        m_featureList->addItem(m_rollbackBar);
+      }
+
+      bool rolledBack = (ri >= barPos);
+      auto *itm = new QListWidgetItem(m_featureRecords[ri].displayString());
+      itm->setData(Qt::UserRole + 1, ri);
+      itm->setFlags(itm->flags() & ~Qt::ItemIsDragEnabled); // not draggable
+
+      if (rolledBack) {
+        itm->setForeground(QColor(130, 130, 130));
+        QFont f = itm->font();
+        f.setItalic(true);
+        itm->setFont(f);
+      }
+      m_featureList->addItem(itm);
+    }
+
+    // If bar belongs at the very end (all features active), add it now.
+    if (barPos >= m_featureRecords.size()) {
+      m_rollbackBar = createRollbackBarItem();
+      m_featureList->addItem(m_rollbackBar);
+    }
+
+    m_featureList->model()->blockSignals(false);
+  }
+
+  m_modified = true;
+  updateWindowTitle();
+  // Always keep the per-document map in sync so tab switching
+  // restores the correct feature list and rollback position.
+  if (m_document)
+    saveFeatureStateForDocument(m_document.get());
+}
+
+// ── Rollback Bar helpers ──────────────────────────────────────────────────
+
+QListWidgetItem *MainWindow::createRollbackBarItem() {
+  auto *bar = new QListWidgetItem(
+      QString::fromUtf8("\u23EC \u2500\u2500\u2500\u2500\u2500 Rollback Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
+  QFont f = bar->font();
+  f.setBold(true);
+  bar->setFont(f);
+  bar->setBackground(QColor(190, 140, 0)); // amber / gold
+  bar->setForeground(Qt::white);
+  bar->setData(Qt::UserRole, QString("ROLLBACK_BAR")); // marker
+  // Make draggable but not editable. Keep ItemIsSelectable so Qt's
+  // InternalMove drag-drop does NOT crash (non-selectable + draggable = crash).
+  bar->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled);
+  return bar;
+}
+
+void MainWindow::addFeatureListItem(const QString &text) {
+  if (!m_featureList) return;
+
+  auto *itm = new QListWidgetItem(text);
+  itm->setFlags(itm->flags() & ~Qt::ItemIsDragEnabled); // not draggable
+
+  // Always SCAN for the rollback bar — never trust the stored pointer which
+  // may have been invalidated by a m_featureList->clear() elsewhere.
+  int barRow = m_featureList->count(); // default: end of list
+  if (QListWidgetItem *bar = findRollbackBar()) {
+    int found = m_featureList->row(bar);
+    if (found >= 0) barRow = found;
+  }
+
+  m_featureList->model()->blockSignals(true);
+  m_featureList->insertItem(barRow, itm);
+  m_featureList->model()->blockSignals(false);
+
+  // Sync per-document map immediately (don't wait for tab switch).
+  if (m_document)
+    saveFeatureStateForDocument(m_document.get());
+}
+
+void MainWindow::ensureRollbackBarAtBottom() {
+  if (!m_featureList) return;
+  // Use scan to avoid dangling pointer.
+  QListWidgetItem *bar = findRollbackBar();
+  if (!bar) return;
+  m_featureList->model()->blockSignals(true);
+  int row = m_featureList->row(bar);
+  if (row >= 0 && row != m_featureList->count() - 1) {
+    m_featureList->takeItem(row);
+    m_featureList->addItem(bar);
+  }
+  m_featureList->model()->blockSignals(false);
+}
+
+QListWidgetItem *MainWindow::findRollbackBar() const {
+  if (!m_featureList) return nullptr;
+  for (int i = 0; i < m_featureList->count(); ++i) {
+    auto *itm = m_featureList->item(i);
+    if (itm && itm->data(Qt::UserRole).toString() == QLatin1String("ROLLBACK_BAR"))
+      return itm;
+  }
+  return nullptr;
+}
+
+void MainWindow::onRollbackBarMoved(int srcRow, int dstRow) {
+  // -----------------------------------------------------------------------
+  // IMPORTANT: This is called from inside a rowsMoved signal, while Qt's
+  // drag-drop system is still running. We must NOT clear or rebuild the
+  // QListWidget synchronously here — doing so causes a crash because Qt
+  // holds internal pointers to list items.
+  //
+  // Solution: calculate the desired rollback position, store it, then
+  // defer the actual model/UI rebuild to the next event-loop tick via
+  // QTimer::singleShot(0, ...).
+  // -----------------------------------------------------------------------
+
+  static const int kOriginItems = 4; // Origin + 3 planes
+
+  if (!m_featureList) return;
+
+  // Qt rowsMoved semantics:
+  //   srcRow  = row the item was at BEFORE the move
+  //   dstRow  = row BEFORE which the item was inserted AFTER the move
+  //   When moving downward dstRow > srcRow, actual final row = dstRow - 1.
+  int actualDst = (dstRow > srcRow) ? dstRow - 1 : dstRow;
+  actualDst = qMax(kOriginItems, actualDst); // bar can't go above origin rows
+
+  // How many feature records are above the bar?
+  int featuresAboveBar = actualDst - kOriginItems;
+  featuresAboveBar = qMax(0, qMin(featuresAboveBar, m_featureRecords.size()));
+
+  const bool allActive = (featuresAboveBar >= m_featureRecords.size());
+  m_rollbackPosition = allActive ? -1 : featuresAboveBar;
+
+  // Defer the rebuild to avoid crashing inside the rowsMoved handler.
+  QTimer::singleShot(0, this, [this, featuresAboveBar, allActive]() {
+    // By now Qt's drag-drop internals have finished — safe to clear & rebuild.
+    if (!m_featureRecords.isEmpty()) {
+      replayFeaturesFrom(0);
+    } else {
+      // No feature records: just update the bar visuals (nothing to rebuild).
+      if (m_rollbackBar && m_featureList) {
+        ensureRollbackBarAtBottom();
+      }
+    }
+    displayAllShapes();
+
+    if (allActive) {
+      statusBar()->showMessage("Rollback bar at end \u2013 all features active", 3000);
+    } else {
+      statusBar()->showMessage(
+          QString("Rollback: showing %1 of %2 features")
+              .arg(featuresAboveBar)
+              .arg(m_featureRecords.size()),
+          3000);
+    }
+  });
+}
+
+// ── Per-document feature state save / restore ─────────────────────────────
+
+void MainWindow::saveFeatureStateForDocument(core::Document *doc) {
+  if (!doc) return;
+  DocumentFeatureState state;
+  state.featureRecords  = m_featureRecords;
+  state.rollbackPosition = m_rollbackPosition;
+  m_documentFeatureState[doc] = state;
+}
+
+void MainWindow::restoreFeatureStateForDocument(core::Document *doc) {
+  if (!doc) return;
+
+  auto it = m_documentFeatureState.find(doc);
+  if (it != m_documentFeatureState.end()) {
+    // Restore saved state for this document
+    m_featureRecords   = it->featureRecords;
+    m_rollbackPosition = it->rollbackPosition;
+  } else {
+    // First time we visit this document — start clean
+    m_featureRecords.clear();
+    m_rollbackPosition = -1;
+  }
+  // m_rollbackBar will be re-created by the updateFeatureList() / replayFeaturesFrom()
+  // call that follows in onTabChanged.
+  m_rollbackBar = nullptr;
+}
+
 } // namespace ui
 } // namespace opencad
+

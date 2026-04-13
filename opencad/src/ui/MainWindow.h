@@ -22,6 +22,8 @@
 #include <memory>
 #include <vector>
 
+#include "../core/FeatureRecord.h"
+
 class QStackedWidget; // Forward declaration
 
 // Forward declarations
@@ -92,6 +94,11 @@ private slots:
   void onRedo();
   void onDelete();
 
+  // Edit Feature (SolidWorks-style)
+  void onFeatureListContextMenu(const QPoint &pos);
+  void onEditFeature(int index);
+  void onDeleteFeature(int index);
+
   // View menu
   void onViewFit();
   void onViewFront();
@@ -101,6 +108,7 @@ private slots:
   void onViewLeft();
   void onViewRight();
   void onViewIsometric();
+  void onSectionView(); // Added
 
   // Create menu (primitives)
   void onCreateBox();
@@ -208,7 +216,8 @@ private slots:
   void onFeatureSelected(QListWidgetItem *item);
   void onFeatureContextMenu(const QPoint &pos);
   void onToggleFeatureSuppression();
-  void onFeatureReordered();
+  void onFeatureReordered(int srcRow, int dstRow);
+  void onRollbackBarMoved(int srcRow, int dstRow);
 
   // Assembly tree interaction
   void onAssemblyTreeSelection(std::shared_ptr<assembly::Component> component);
@@ -223,6 +232,7 @@ private:
   void updateInterfaceMode();
   void updateSketchToolsEnabled(bool enabled);
   void showSketchEditor();
+  void updateSectionViewPreview();
 
   // Central document (managed by tabs now)
   // std::unique_ptr<core::Document> m_document; // REMOVED
@@ -258,6 +268,7 @@ private:
   QToolBar *m_constraintToolbar = nullptr;
   QToolBar *m_featureToolbar = nullptr;
   QToolBar *m_assemblyToolbar = nullptr;
+  QAction *m_actionSectionView = nullptr;
 
   // Profile selection state (for visual Extrude/Cut)
   enum class PendingOperation { None, Extrude, Cut, Revolve, Sweep };
@@ -328,6 +339,7 @@ private:
     Project,    // Added
     Gear,       // Added
     HoleWizard, // Added
+    SectionView, // Added
     SketchLinearPattern,
     SketchCircularPattern
   };
@@ -336,6 +348,35 @@ private:
   // Hole Wizard points cache
   std::vector<gp_Pnt> m_holePoints;
   void clearHoleSelection();
+
+  // Edit Feature support
+  QVector<core::FeatureRecord> m_featureRecords;
+  int m_editingFeatureIndex = -1; // -1 = not editing
+  TopoDS_Shape replayFeature(const core::FeatureRecord &record,
+                             const TopoDS_Shape &baseShape);
+  void replayFeaturesFrom(int startIndex);
+  int findSketchIndex(const std::shared_ptr<sketch::Sketch> &sketch) const;
+
+  // ── Per-document feature state (for correct tab switching) ───────────────
+  struct DocumentFeatureState {
+    QVector<core::FeatureRecord> featureRecords;
+    int rollbackPosition = -1;
+  };
+  QMap<core::Document *, DocumentFeatureState> m_documentFeatureState;
+  void saveFeatureStateForDocument(core::Document *doc);
+  void restoreFeatureStateForDocument(core::Document *doc);
+
+  // ── Rollback Bar (SolidWorks-style) ──────────────────────────────────────
+  QListWidgetItem *m_rollbackBar = nullptr;
+  int m_rollbackPosition = -1; // -1 = all active; N = show first N features
+
+  QListWidgetItem *createRollbackBarItem();
+  /// Scan the list to find the rollback bar item safely (no dangling pointer risk).
+  QListWidgetItem *findRollbackBar() const;
+  /// Insert a feature item into the list, always ABOVE the rollback bar.
+  void addFeatureListItem(const QString &text);
+  /// Make sure the rollback bar is the last item (call after addItem paths).
+  void ensureRollbackBarAtBottom();
 
   // Assembly
   bool m_assemblyMode = false;

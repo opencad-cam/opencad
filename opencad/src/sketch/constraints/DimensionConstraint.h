@@ -49,7 +49,10 @@ public:
     
     // Angle between lines
     static Ptr createAngle(SketchLine::Ptr line1, SketchLine::Ptr line2, double angleDegrees);
-    
+
+    // Distance between two lines (midpoint of line1 to infinite line2)
+    static Ptr createLineToLine(SketchLine::Ptr line1, SketchLine::Ptr line2, double distance);
+
     ConstraintType type() const override { return ConstraintType::Distance; }
     std::string typeName() const override;
     

@@ -21,6 +21,7 @@ namespace core {
  */
 struct Snapshot {
   std::string description;
+  std::vector<std::string> featureListItems; // Added for UI synchronization
   virtual ~Snapshot() = default;
 };
 

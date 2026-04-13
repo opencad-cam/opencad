@@ -13,8 +13,8 @@
 #include "UndoRedoManager.h"
 #include "assembly/Assembly.h"
 #include <QDateTime>
-#include <QObject>
 #include <QString>
+#include <QStringList>
 #include <TopoDS_Shape.hxx>
 #include <memory>
 #include <vector>
@@ -102,8 +102,9 @@ public:
   /**
    * @brief Create a checkpoint for undo/redo
    * @param description Description of the operation
+   * @param featureList Current state of the UI feature list
    */
-  void checkpoint(const QString &description);
+  void checkpoint(const QString &description, const QStringList &featureList = QStringList());
 
   /**
    * @brief Undo last operation
@@ -215,6 +216,11 @@ signals:
    * @brief Emitted when regeneration completes
    */
   void regenerationCompleted(bool success);
+
+  /**
+   * @brief Emitted when feature list UI needs to be restored from undo/redo
+   */
+  void featureListRestored(const QStringList &featureList);
 
 private slots:
   void onFeatureTreeChanged();

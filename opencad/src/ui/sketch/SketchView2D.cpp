@@ -92,6 +92,7 @@ void SketchView2D::setTool(SketchToolType tool) {
     cancelCurrentEntity();
     m_currentTool = tool;
     m_escPressedOnce = false; // Reset ESC flag when switching tools
+    m_dimFirstEntity = nullptr; // Reset two-entity dimension selection
     emit toolChanged(tool);
     update();
   }
@@ -676,6 +677,11 @@ void SketchView2D::drawEntity(QPainter &painter,
   if (entity == m_selectedEntity) {
     color = m_selectedColor;
     lineWidth = 3;
+  } else if (entity == m_dimFirstEntity &&
+             m_currentTool == SketchToolType::Dimension) {
+    // Highlight the first selected entity in two-entity dimension mode
+    color = QColor(255, 165, 0); // Orange
+    lineWidth = 3;
   } else if (entity == m_hoveredEntity) {
     color = QColor(100, 150, 255);
     lineWidth = 2;
@@ -686,6 +692,7 @@ void SketchView2D::drawEntity(QPainter &painter,
   } else {
     painter.setPen(QPen(color, lineWidth));
   }
+
 
   // Draw based on entity type
   switch (entity->type()) {
@@ -1364,7 +1371,11 @@ void SketchView2D::drawCursor(QPainter &painter) {
     toolText = "Select Point";
     break;
   case SketchToolType::Dimension:
-    toolText = "Dimension (Click entity)";
+    if (m_dimFirstEntity) {
+      toolText = "Dimension (2. nesneye tıkla | Boşluğa tıkla: İptal)";
+    } else {
+      toolText = "Dimension (Nesneye tıkla | Shift+tıkla: 2-nesne modu)";
+    }
     break;
   default:
     toolText = "";
@@ -1589,129 +1600,274 @@ void SketchView2D::mousePressEvent(QMouseEvent *event) {
       sketch::SketchEntity *clickedEntity =
           findEntityAtPoint(worldPos, tolerance);
 
-      if (clickedEntity) {
-        if (clickedEntity->type() == sketch::EntityType::Line) {
-          auto line = std::dynamic_pointer_cast<sketch::SketchLine>(
-              m_sketch->getEntity(clickedEntity->id()));
-          if (line) {
-            bool ok;
-            double currentLen = line->length();
-            double newLen = QInputDialog::getDouble(this, "Smart Dimension",
-                                                    "Length:", currentLen,
-                                                    0.001, 1000000.0, 3, &ok);
-            if (ok && newLen > 0) {
-              std::shared_ptr<sketch::DimensionConstraint> existingDim;
-              for (const auto &c : m_sketch->constraints()) {
-                if (c->hasDimension()) {
-                  auto dimC =
-                      std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
-                  if (dimC && dimC->dimensionType() ==
-                                  sketch::DimensionType::LineLength) {
-                    auto ents = dimC->entities();
-                    if (ents.size() == 1 && ents[0]->id() == line->id()) {
-                      existingDim = dimC;
-                      break;
-                    }
-                  }
-                }
-              }
-
-              if (existingDim) {
-                existingDim->setDimension(newLen);
-              } else {
-                m_sketch->addLength(line, newLen);
-              }
-              m_sketch->solve();
-              saveSketchCheckpoint("Add Length Dimension");
-              update();
-            }
-          }
-        } else if (clickedEntity->type() == sketch::EntityType::Circle) {
-          auto circle = std::dynamic_pointer_cast<sketch::SketchCircle>(
-              m_sketch->getEntity(clickedEntity->id()));
-          if (circle) {
-            bool ok;
-            double currentRad = circle->radius();
-            double newRad = QInputDialog::getDouble(this, "Smart Dimension",
-                                                    "Radius:", currentRad,
-                                                    0.001, 1000000.0, 3, &ok);
-            if (ok && newRad > 0) {
-              std::shared_ptr<sketch::DimensionConstraint> existingDim;
-              for (const auto &c : m_sketch->constraints()) {
-                if (c->hasDimension()) {
-                  auto dimC =
-                      std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
-                  if (dimC &&
-                      dimC->dimensionType() == sketch::DimensionType::Radius) {
-                    auto ents = dimC->entities();
-                    if (ents.size() == 1 && ents[0]->id() == circle->id()) {
-                      existingDim = dimC;
-                      break;
-                    }
-                  }
-                }
-              }
-
-              if (existingDim) {
-                existingDim->setDimension(newRad);
-              } else {
-                m_sketch->addRadius(circle, newRad);
-              }
-              m_sketch->solve();
-              saveSketchCheckpoint("Add Radius Dimension (Circle)");
-              update();
-            }
-          }
-        } else if (clickedEntity->type() == sketch::EntityType::Arc) {
-          auto arc = std::dynamic_pointer_cast<sketch::SketchArc>(
-              m_sketch->getEntity(clickedEntity->id()));
-          if (arc) {
-            bool ok;
-            double currentRad = arc->radius();
-            double newRad = QInputDialog::getDouble(this, "Smart Dimension",
-                                                    "Radius:", currentRad,
-                                                    0.001, 1000000.0, 3, &ok);
-            if (ok && newRad > 0) {
-              std::shared_ptr<sketch::DimensionConstraint> existingDim;
-              for (const auto &c : m_sketch->constraints()) {
-                if (c->hasDimension()) {
-                  auto dimC =
-                      std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
-                  if (dimC &&
-                      dimC->dimensionType() == sketch::DimensionType::Radius) {
-                    auto ents = dimC->entities();
-                    if (ents.size() == 1 && ents[0]->id() == arc->id()) {
-                      existingDim = dimC;
-                      break;
-                    }
-                  }
-                }
-              }
-
-              if (existingDim) {
-                existingDim->setDimension(newRad);
-              } else {
-                m_sketch->addRadius(arc, newRad);
-              }
-              m_sketch->solve();
-              saveSketchCheckpoint("Add Radius Dimension (Arc)");
-              update();
-            }
-          }
-        } else {
-          // Not a measurable entity
+      // Helper: get the "best reference point" on an entity nearest to a click
+      auto entityRefPoint =
+          [](sketch::SketchEntity *ent,
+             const gp_Pnt2d &click) -> gp_Pnt2d {
+        switch (ent->type()) {
+        case sketch::EntityType::Line: {
+          auto *line = static_cast<sketch::SketchLine *>(ent);
+          double dS = click.Distance(line->startPoint());
+          double dE = click.Distance(line->endPoint());
+          return (dS <= dE) ? line->startPoint() : line->endPoint();
         }
-      } else {
-        // Clicked on empty space
+        case sketch::EntityType::Circle: {
+          auto *c = static_cast<sketch::SketchCircle *>(ent);
+          return c->center();
+        }
+        case sketch::EntityType::Arc: {
+          auto *a = static_cast<sketch::SketchArc *>(ent);
+          return a->center();
+        }
+        case sketch::EntityType::Point: {
+          auto *p = static_cast<sketch::SketchPoint *>(ent);
+          return p->position();
+        }
+        default:
+          return ent->startPoint();
+        }
+      };
+
+      // Helper: apply a single-entity dimension (line length / radius)
+      auto applySingleDimension = [&](sketch::SketchEntity *ent) {
+        if (!ent) return;
+        if (ent->type() == sketch::EntityType::Line) {
+          auto line = std::dynamic_pointer_cast<sketch::SketchLine>(
+              m_sketch->getEntity(ent->id()));
+          if (!line) return;
+          bool ok;
+          double currentLen = line->length();
+          double newLen =
+              QInputDialog::getDouble(this, "Smart Dimension", "Length:",
+                                      currentLen, 0.001, 1000000.0, 3, &ok);
+          if (ok && newLen > 0) {
+            // Update or add LineLength constraint
+            std::shared_ptr<sketch::DimensionConstraint> existing;
+            for (const auto &c : m_sketch->constraints()) {
+              auto dc =
+                  std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+              if (dc &&
+                  dc->dimensionType() == sketch::DimensionType::LineLength) {
+                auto ents = dc->entities();
+                if (ents.size() == 1 && ents[0]->id() == line->id()) {
+                  existing = dc;
+                  break;
+                }
+              }
+            }
+            if (existing)
+              existing->setDimension(newLen);
+            else
+              m_sketch->addLength(line, newLen);
+            m_sketch->solve();
+            saveSketchCheckpoint("Add Length Dimension");
+            update();
+          }
+        } else if (ent->type() == sketch::EntityType::Circle) {
+          auto circle = std::dynamic_pointer_cast<sketch::SketchCircle>(
+              m_sketch->getEntity(ent->id()));
+          if (!circle) return;
+          bool ok;
+          double newRad =
+              QInputDialog::getDouble(this, "Smart Dimension", "Radius:",
+                                      circle->radius(), 0.001, 1000000.0, 3, &ok);
+          if (ok && newRad > 0) {
+            std::shared_ptr<sketch::DimensionConstraint> existing;
+            for (const auto &c : m_sketch->constraints()) {
+              auto dc =
+                  std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+              if (dc && dc->dimensionType() == sketch::DimensionType::Radius) {
+                auto ents = dc->entities();
+                if (ents.size() == 1 && ents[0]->id() == circle->id()) {
+                  existing = dc;
+                  break;
+                }
+              }
+            }
+            if (existing)
+              existing->setDimension(newRad);
+            else
+              m_sketch->addRadius(circle, newRad);
+            m_sketch->solve();
+            saveSketchCheckpoint("Add Radius Dimension (Circle)");
+            update();
+          }
+        } else if (ent->type() == sketch::EntityType::Arc) {
+          auto arc = std::dynamic_pointer_cast<sketch::SketchArc>(
+              m_sketch->getEntity(ent->id()));
+          if (!arc) return;
+          bool ok;
+          double newRad =
+              QInputDialog::getDouble(this, "Smart Dimension", "Radius:",
+                                      arc->radius(), 0.001, 1000000.0, 3, &ok);
+          if (ok && newRad > 0) {
+            std::shared_ptr<sketch::DimensionConstraint> existing;
+            for (const auto &c : m_sketch->constraints()) {
+              auto dc =
+                  std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+              if (dc && dc->dimensionType() == sketch::DimensionType::Radius) {
+                auto ents = dc->entities();
+                if (ents.size() == 1 && ents[0]->id() == arc->id()) {
+                  existing = dc;
+                  break;
+                }
+              }
+            }
+            if (existing)
+              existing->setDimension(newRad);
+            else
+              m_sketch->addRadius(arc, newRad);
+            m_sketch->solve();
+            saveSketchCheckpoint("Add Radius Dimension (Arc)");
+            update();
+          }
+        }
+      };
+
+      // -----------------------------------------------------------------
+      // PHASE 2: A first entity is already waiting → decide what to do
+      // -----------------------------------------------------------------
+      if (m_dimFirstEntity) {
+        if (!clickedEntity ||
+            clickedEntity->id() == m_dimFirstEntity->id()) {
+          // Same entity or empty space → single-entity dimension
+          applySingleDimension(m_dimFirstEntity);
+          m_dimFirstEntity = nullptr;
+          update();
+          break;
+        }
+
+        // Different entity → TWO-ENTITY DISTANCE
+        bool ent1IsLine = (m_dimFirstEntity->type() == sketch::EntityType::Line);
+        bool ent2IsLine = (clickedEntity->type() == sketch::EntityType::Line);
+
+        // Compute reference distance to show in dialog
+        gp_Pnt2d refP1 = entityRefPoint(m_dimFirstEntity, m_dimFirstClickPos);
+        gp_Pnt2d refP2 = entityRefPoint(clickedEntity, worldPos);
+        double currentDist = refP1.Distance(refP2);
+
+        bool ok;
+        double newDist = QInputDialog::getDouble(
+            this, "Smart Dimension (İki Nesne Arası)",
+            "Mesafe (Distance):", currentDist, 0.0, 1000000.0, 3, &ok);
+
+        if (ok && newDist >= 0) {
+
+          // ► LINE ↔ LINE: use dedicated LineToLine constraint
+          //   → solver directly moves the line endpoints
+          if (ent1IsLine && ent2IsLine) {
+            auto line1 = std::dynamic_pointer_cast<sketch::SketchLine>(
+                m_sketch->getEntity(m_dimFirstEntity->id()));
+            auto line2 = std::dynamic_pointer_cast<sketch::SketchLine>(
+                m_sketch->getEntity(clickedEntity->id()));
+            if (line1 && line2) {
+              // Check for existing LineToLine between same lines
+              std::shared_ptr<sketch::DimensionConstraint> existingDim;
+              for (const auto &c : m_sketch->constraints()) {
+                auto dc =
+                    std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+                if (dc && dc->dimensionType() ==
+                              sketch::DimensionType::LineToLine) {
+                  auto ents = dc->entities();
+                  if (ents.size() == 2 &&
+                      ((ents[0]->id() == line1->id() &&
+                        ents[1]->id() == line2->id()) ||
+                       (ents[0]->id() == line2->id() &&
+                        ents[1]->id() == line1->id()))) {
+                    existingDim = dc;
+                    break;
+                  }
+                }
+              }
+              if (existingDim)
+                existingDim->setDimension(newDist);
+              else
+                m_sketch->addLineDistance(line1, line2, newDist);
+
+              m_sketch->solve();
+              saveSketchCheckpoint("Add Line-to-Line Distance");
+              update();
+            }
+          } else {
+            // ► OTHER COMBOS: PointToPoint via construction points
+            //   (Point↔Point, Line↔Circle, etc.)
+            auto resolvePoint =
+                [&](sketch::SketchEntity *ent,
+                    const gp_Pnt2d &refPos) -> sketch::SketchPoint::Ptr {
+              if (ent->type() == sketch::EntityType::Point) {
+                return std::dynamic_pointer_cast<sketch::SketchPoint>(
+                    m_sketch->getEntity(ent->id()));
+              }
+              for (const auto &e : m_sketch->entities()) {
+                if (e->type() == sketch::EntityType::Point) {
+                  auto *pt = static_cast<sketch::SketchPoint *>(e.get());
+                  if (pt->position().Distance(refPos) < 1e-3) {
+                    return std::dynamic_pointer_cast<sketch::SketchPoint>(e);
+                  }
+                }
+              }
+              auto newPt = m_sketch->addPoint(refPos.X(), refPos.Y());
+              if (newPt) newPt->setConstruction(true);
+              return newPt;
+            };
+
+            auto sp1 = resolvePoint(m_dimFirstEntity, refP1);
+            auto sp2 = resolvePoint(clickedEntity, refP2);
+
+            if (sp1 && sp2) {
+              std::shared_ptr<sketch::DimensionConstraint> existingDim;
+              for (const auto &c : m_sketch->constraints()) {
+                auto dc =
+                    std::dynamic_pointer_cast<sketch::DimensionConstraint>(c);
+                if (dc && dc->dimensionType() ==
+                              sketch::DimensionType::PointToPoint) {
+                  auto ents = dc->entities();
+                  if (ents.size() == 2 &&
+                      ((ents[0]->id() == sp1->id() &&
+                        ents[1]->id() == sp2->id()) ||
+                       (ents[0]->id() == sp2->id() &&
+                        ents[1]->id() == sp1->id()))) {
+                    existingDim = dc;
+                    break;
+                  }
+                }
+              }
+              if (existingDim)
+                existingDim->setDimension(newDist);
+              else
+                m_sketch->addDistance(sp1, sp2, newDist);
+
+              m_sketch->solve();
+              saveSketchCheckpoint("Add Distance Dimension");
+              update();
+            }
+          }
+        }
+
+        m_dimFirstEntity = nullptr;
+        update();
+        break;
       }
+
+      // -----------------------------------------------------------------
+      // PHASE 1: No first entity yet → SELECT and WAIT (no dialog)
+      // -----------------------------------------------------------------
+      if (clickedEntity) {
+        // Select and highlight; wait for second click
+        m_dimFirstEntity = clickedEntity;
+        m_dimFirstClickPos = worldPos;
+        update();
+      }
+      // Clicking empty space with no prior selection → do nothing
       break;
-    }
+    } // end case SketchToolType::Dimension
 
     default:
       break;
     }
   }
 }
+
 
 void SketchView2D::mouseMoveEvent(QMouseEvent *event) {
   QPointF delta = event->pos() - m_lastMousePos;

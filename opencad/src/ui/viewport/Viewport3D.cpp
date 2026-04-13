@@ -891,5 +891,34 @@ TopoDS_Shape Viewport3D::getSelectedParentShape() {
   return TopoDS_Shape();
 }
 
+void Viewport3D::setSectionView(bool enable, const gp_Pln& plane, bool capping) {
+  if (m_view.IsNull())
+    return;
+
+  // Remove existing plane if any
+  if (!m_clipPlane.IsNull()) {
+    m_view->RemoveClipPlane(m_clipPlane);
+    m_clipPlane.Nullify();
+  }
+
+  m_sectionViewActive = enable;
+
+  if (enable) {
+    m_clipPlane = new Graphic3d_ClipPlane(plane);
+    m_clipPlane->SetOn(Standard_True);
+    
+    if (capping) {
+      m_clipPlane->SetCapping(Standard_True);
+      m_clipPlane->SetCappingColor(Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB));
+    } else {
+      m_clipPlane->SetCapping(Standard_False);
+    }
+
+    m_view->AddClipPlane(m_clipPlane);
+  }
+
+  m_view->Redraw();
+}
+
 } // namespace ui
 } // namespace opencad

@@ -150,7 +150,7 @@ void Document::clearTemporaryShapes() {
   setModified(true);
 }
 
-void Document::checkpoint(const QString &description) {
+void Document::checkpoint(const QString &description, const QStringList &featureList) {
   // Determine if we are in Part or Assembly mode
   // For now, simpler heuristic: if assembly has components, snap assembly.
   // Ideally checking active document type.
@@ -159,9 +159,15 @@ void Document::checkpoint(const QString &description) {
   bool isAssembly = !m_assembly->getComponents().empty() ||
                     !m_assembly->getConstraints().empty();
 
+  std::vector<std::string> featureListStd;
+  for (const QString& str : featureList) {
+    featureListStd.push_back(str.toStdString());
+  }
+
   if (isAssembly) {
     auto snapshot = std::make_shared<AssemblySnapshot>();
     snapshot->description = description.toStdString();
+    snapshot->featureListItems = featureListStd;
 
     // Snapshot Components
     for (const auto &comp : m_assembly->getComponents()) {
@@ -190,6 +196,7 @@ void Document::checkpoint(const QString &description) {
     auto shapes = getAllShapes();
     auto snapshot = std::make_shared<ShapeSnapshot>();
     snapshot->description = description.toStdString();
+    snapshot->featureListItems = featureListStd;
     snapshot->shapes = shapes;
 
     m_undoRedoManager->checkpoint(snapshot);
@@ -204,6 +211,13 @@ bool Document::undo() {
   if (auto partSnap = std::dynamic_pointer_cast<ShapeSnapshot>(snapshot)) {
     // Restore Part
     m_temporaryShapes = partSnap->shapes; // Simplified restoration
+    
+    QStringList featureList;
+    for (const auto& str : partSnap->featureListItems) {
+      featureList.append(QString::fromStdString(str));
+    }
+    emit featureListRestored(featureList);
+
     setModified(true);
     return true;
   } else if (auto asmSnap =
@@ -256,6 +270,12 @@ bool Document::undo() {
       }
     }
 
+    QStringList featureList;
+    for (const auto& str : asmSnap->featureListItems) {
+      featureList.append(QString::fromStdString(str));
+    }
+    emit featureListRestored(featureList);
+
     setModified(true);
     return true;
   }
@@ -270,6 +290,13 @@ bool Document::redo() {
 
   if (auto partSnap = std::dynamic_pointer_cast<ShapeSnapshot>(snapshot)) {
     m_temporaryShapes = partSnap->shapes;
+    
+    QStringList featureList;
+    for (const auto& str : partSnap->featureListItems) {
+      featureList.append(QString::fromStdString(str));
+    }
+    emit featureListRestored(featureList);
+
     setModified(true);
     return true;
   } else if (auto asmSnap =
@@ -303,6 +330,12 @@ bool Document::redo() {
         m_assembly->addConstraint(constraint);
       }
     }
+
+    QStringList featureList;
+    for (const auto& str : asmSnap->featureListItems) {
+      featureList.append(QString::fromStdString(str));
+    }
+    emit featureListRestored(featureList);
 
     setModified(true);
     return true;

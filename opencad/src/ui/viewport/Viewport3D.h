@@ -19,6 +19,7 @@
 #include <TopoDS_Shape.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
+#include <Graphic3d_ClipPlane.hxx>
 #include <gp_Pln.hxx>
 #include <vector>
 
@@ -108,6 +109,19 @@ public:
    * @brief Get the V3d view
    */
   Handle(V3d_View) view() const { return m_view; }
+
+  /**
+   * @brief Enable or disable section view clipping plane
+   * @param enable True to enable, false to disable
+   * @param plane The plane for the section view
+   * @param capping True to fill the solid cut (default: true)
+   */
+  void setSectionView(bool enable, const gp_Pln& plane = gp_Pln(), bool capping = true);
+
+  /**
+   * @brief Check if section view is active
+   */
+  bool isSectionViewActive() const { return m_sectionViewActive; }
 
   /**
    * @brief Set selection mode
@@ -226,6 +240,10 @@ private:
   QPoint m_lastMousePos;
   bool m_rotating = false;
   bool m_panning = false;
+
+  // Section View
+  Handle(Graphic3d_ClipPlane) m_clipPlane;
+  bool m_sectionViewActive = false;
 
   // Selection
   SelectionMode m_selectionMode = SelectionMode::Shape;

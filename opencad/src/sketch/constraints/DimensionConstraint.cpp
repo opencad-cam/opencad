@@ -67,6 +67,16 @@ DimensionConstraint::Ptr DimensionConstraint::createAngle(
     return c;
 }
 
+DimensionConstraint::Ptr DimensionConstraint::createLineToLine(
+    SketchLine::Ptr line1, SketchLine::Ptr line2, double distance) {
+    auto c = std::make_shared<DimensionConstraint>();
+    c->m_dimType = DimensionType::LineToLine;
+    c->m_line1 = line1;
+    c->m_line2 = line2;
+    c->m_dimension = distance;
+    return c;
+}
+
 std::string DimensionConstraint::typeName() const {
     switch (m_dimType) {
         case DimensionType::PointToPoint: return "Distance";
@@ -128,6 +138,24 @@ double DimensionConstraint::measuredValue() const {
                 return std::abs(a2 - a1);
             }
             break;
+
+        case DimensionType::LineToLine:
+            if (m_line1 && m_line2) {
+                // Midpoint of line1
+                double mx = (m_line1->startPoint().X() + m_line1->endPoint().X()) / 2.0;
+                double my = (m_line1->startPoint().Y() + m_line1->endPoint().Y()) / 2.0;
+                // Direction vector of line2
+                double ux = m_line2->endPoint().X() - m_line2->startPoint().X();
+                double uy = m_line2->endPoint().Y() - m_line2->startPoint().Y();
+                double len = std::sqrt(ux*ux + uy*uy);
+                if (len < 1e-10) return 0.0;
+                // Perpendicular distance from midpoint of line1 to infinite line2
+                double px = m_line2->startPoint().X();
+                double py = m_line2->startPoint().Y();
+                double cross = (mx - px)*uy - (my - py)*ux;
+                return std::abs(cross / len);
+            }
+            break;
             
         default:
             break;
@@ -140,7 +168,6 @@ double DimensionConstraint::error() const {
 }
 
 std::vector<double> DimensionConstraint::jacobian() const {
-    // Simplified - full implementation requires chain rule through entities
     switch (m_dimType) {
         case DimensionType::PointToPoint:
             if (m_point1 && m_point2) {
@@ -148,7 +175,6 @@ std::vector<double> DimensionConstraint::jacobian() const {
                 double dy = m_point2->y() - m_point1->y();
                 double d = std::sqrt(dx*dx + dy*dy);
                 if (d < 1e-10) d = 1e-10;
-                // d(dist)/d(x1,y1,x2,y2)
                 return {-dx/d, -dy/d, dx/d, dy/d};
             }
             break;
@@ -164,8 +190,80 @@ std::vector<double> DimensionConstraint::jacobian() const {
             break;
             
         case DimensionType::Radius:
-            // d(radius)/d(cx, cy, r) = (0, 0, 1)
             return {0.0, 0.0, 1.0};
+
+        case DimensionType::LineToLine:
+            if (m_line1 && m_line2) {
+                // Variables: [l1.sx, l1.sy, l1.ex, l1.ey,  l2.sx, l2.sy, l2.ex, l2.ey]
+                // Error = |cross| / L   where:
+                //   mx = (l1.sx + l1.ex)/2,  my = (l1.sy + l1.ey)/2
+                //   ux = l2.ex - l2.sx,  uy = l2.ey - l2.sy
+                //   L  = sqrt(ux^2 + uy^2)
+                //   cross = (mx - l2.sx)*uy - (my - l2.sy)*ux
+                double ax = m_line1->startPoint().X(), ay = m_line1->startPoint().Y();
+                double bx = m_line1->endPoint().X(),  by = m_line1->endPoint().Y();
+                double px = m_line2->startPoint().X(), py = m_line2->startPoint().Y();
+                double rx = m_line2->endPoint().X(),   ry = m_line2->endPoint().Y();
+
+                double mx = (ax + bx) / 2.0;
+                double my = (ay + by) / 2.0;
+                double ux = rx - px;
+                double uy = ry - py;
+                double L  = std::sqrt(ux*ux + uy*uy);
+                if (L < 1e-10) return {};
+
+                double cross = (mx - px)*uy - (my - py)*ux;
+                double s     = (cross >= 0) ? 1.0 : -1.0;  // sign(cross)
+                double L2    = L * L;
+                double L3    = L2 * L;
+
+                // Partial derivatives of |cross|/L with respect to each param:
+                // For line1 endpoints (cross depends linearly on mx,my = average of line1 endpoints):
+                double dJ_ax = s * uy / (2.0 * L);
+                double dJ_ay = -s * ux / (2.0 * L);
+                double dJ_bx = s * uy / (2.0 * L);
+                double dJ_by = -s * ux / (2.0 * L);
+
+                // For line2 start point (px, py):
+                // ∂cross/∂px = -uy + (my-py)  -- wait: cross=(mx-px)*uy-(my-py)*ux
+                //              = -uy
+                // (my-py) term: ∂(-( my-py)*ux)/∂px = -(my-py)*(-1) = (my-py)  <-- ux=rx-px, ∂ux/∂px=-1
+                // So ∂cross/∂px = (-1)*uy - (my-py)*(-1) = -uy + (my-py)
+                // ∂L/∂px = -ux/L
+                double dCross_dpx = -uy + (my - py);
+                double dL_dpx     = -ux / L;
+                double dJ_px = s * (dCross_dpx * L - cross * dL_dpx * L / L) / L2;
+                // simplify: s*(dCross_dpx/L + cross*ux/L3)
+                dJ_px = s * (dCross_dpx / L + cross * ux / L3);
+
+                // ∂cross/∂py = (mx-px)*(-1) + ux  [uy=ry-py, ∂uy/∂py=-1; ux=rx-px, ∂ux/∂py=0]
+                //             But wait: ∂(-( my-py)*ux)/∂py = -(-1)*ux = ux
+                //             ∂((mx-px)*uy)/∂py = (mx-px)*(-1)
+                //             So ∂cross/∂py = -(mx-px) + ux
+                double dCross_dpy = -(mx - px) + ux;
+                double dL_dpy     = -uy / L;
+                dJ_px = s * (dCross_dpx / L + cross * ux / L3);
+                double dJ_py = s * (dCross_dpy / L + cross * uy / L3);
+
+                // For line2 end point (rx, ry):
+                // ∂cross/∂rx: ux=rx-px, ∂ux/∂rx=1; uy=ry-py, ∂uy/∂rx=0
+                //   ∂cross/∂rx = -(my-py)*1 = -(my-py)
+                // ∂L/∂rx = ux/L
+                double dCross_drx = -(my - py);
+                double dL_drx     = ux / L;
+                double dJ_rx = s * (dCross_drx / L - cross * ux / L3);
+
+                // ∂cross/∂ry: uy=ry-py, ∂uy/∂ry=1; ux unchanged
+                //   ∂cross/∂ry = (mx-px)*1 = (mx-px)
+                // ∂L/∂ry = uy/L
+                double dCross_dry = (mx - px);
+                double dL_dry     = uy / L;
+                double dJ_ry = s * (dCross_dry / L - cross * uy / L3);
+
+                // Return order: [l1.sx, l1.sy, l1.ex, l1.ey, l2.sx, l2.sy, l2.ex, l2.ey]
+                return {dJ_ax, dJ_ay, dJ_bx, dJ_by, dJ_px, dJ_py, dJ_rx, dJ_ry};
+            }
+            break;
             
         default:
             break;

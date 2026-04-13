@@ -62,6 +62,7 @@ public:
   void showSplitSettings();
   void showSketchPlaneSettings();
   void showScaleSettings();
+  void showSectionViewSettings();
 
   void showHoleSettings();
   void showGearSettings();
@@ -137,6 +138,11 @@ public:
   int sketchPlaneType() const;
   double sketchPlaneOffsetDistance() const;
   double sketchPlaneAngle() const;
+
+  // Section View settings
+  int sectionPlane() const;
+  double sectionOffset() const;
+  bool sectionFlip() const;
 
   // Rib settings
   double ribThickness() const;
@@ -297,6 +303,12 @@ private:
   QRadioButton *m_sketchPlaneFace;
   QDoubleSpinBox *m_sketchPlaneOffsetSpin;
   QDoubleSpinBox *m_sketchPlaneAngleSpin;
+
+  // Section View settings
+  QGroupBox *m_sectionGroup;
+  QComboBox *m_sectionPlaneCombo;
+  QDoubleSpinBox *m_sectionOffsetSpin;
+  QCheckBox *m_sectionFlipCheck;
 
   // Constraint info
   QGroupBox *m_constraintGroup;

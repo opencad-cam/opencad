@@ -14,14 +14,18 @@ UndoRedoManager::UndoRedoManager(size_t maxHistory)
     : m_maxHistory(maxHistory) {}
 
 void UndoRedoManager::checkpoint(std::shared_ptr<Snapshot> snapshot) {
-  // If we're not at the end of history, remove all future states
-  while (m_currentIndex < static_cast<int>(m_history.size()) - 1) {
-    m_history.pop_back();
-  }
+  // If we're not at the end of history, instead of removing future states, we insert
+  // doing this preserves the "future tree" (redo stack)
+  // We increment index and insert instead of replacing.
+  // Actually, we don't need the empty while loop, just change the index management below.
 
-  // Add to history
-  m_history.push_back(snapshot);
-  m_currentIndex = static_cast<int>(m_history.size()) - 1;
+  // Add to history (insert if we are editing a past state)
+  m_currentIndex++;
+  if (m_currentIndex < static_cast<int>(m_history.size())) {
+    m_history.insert(m_history.begin() + m_currentIndex, snapshot);
+  } else {
+    m_history.push_back(snapshot);
+  }
 
   // Limit history size
   while (m_history.size() > m_maxHistory) {

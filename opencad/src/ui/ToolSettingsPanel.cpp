@@ -280,6 +280,28 @@ void ToolSettingsPanel::setupUI() {
   mainLayout->addWidget(m_sketchPlaneGroup);
   m_sketchPlaneGroup->hide();
 
+  // Section View Settings
+  m_sectionGroup = new QGroupBox("🔍 Section View", this);
+  m_sectionGroup->setStyleSheet("QGroupBox { font-weight: bold; }");
+  auto *sectionLayout = new QFormLayout(m_sectionGroup);
+  
+  m_sectionPlaneCombo = new QComboBox(this);
+  m_sectionPlaneCombo->addItems({"XY Plane (Top)", "XZ Plane (Front)", "YZ Plane (Right)"});
+  m_sectionPlaneCombo->setCurrentIndex(1); // Default to Front
+  sectionLayout->addRow("Plane:", m_sectionPlaneCombo);
+
+  m_sectionOffsetSpin = new QDoubleSpinBox(this);
+  m_sectionOffsetSpin->setRange(-10000.0, 10000.0);
+  m_sectionOffsetSpin->setValue(0.0);
+  m_sectionOffsetSpin->setSuffix(" mm");
+  sectionLayout->addRow("Offset:", m_sectionOffsetSpin);
+
+  m_sectionFlipCheck = new QCheckBox("Flip Direction", this);
+  sectionLayout->addRow(m_sectionFlipCheck);
+
+  mainLayout->addWidget(m_sectionGroup);
+  m_sectionGroup->hide();
+
   // Constraint info
   m_constraintGroup = new QGroupBox("📏 Constraint", this);
   m_constraintGroup->setStyleSheet("QGroupBox { font-weight: bold; }");
@@ -560,6 +582,11 @@ void ToolSettingsPanel::setupUI() {
   connect(m_gearThicknessSpin,
           QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
           &ToolSettingsPanel::onSettingsChanged);
+
+  // Section View signals
+  connect(m_sectionPlaneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ToolSettingsPanel::onSettingsChanged);
+  connect(m_sectionOffsetSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ToolSettingsPanel::onSettingsChanged);
+  connect(m_sectionFlipCheck, &QCheckBox::toggled, this, &ToolSettingsPanel::onSettingsChanged);
 }
 
 void ToolSettingsPanel::setSketchView(SketchView2D *view) {
@@ -675,6 +702,7 @@ void ToolSettingsPanel::hideAllSettings() {
   if (m_holeGroup)
     m_holeGroup->hide();
   m_sketchPlaneGroup->hide();
+  m_sectionGroup->hide();
   m_constraintGroup->hide();
   m_applyButton->hide();
 }
@@ -1109,6 +1137,14 @@ void ToolSettingsPanel::showGearSettings() {
   m_applyButton->show();
 }
 
+void ToolSettingsPanel::showSectionViewSettings() {
+  hideAllSettings();
+  m_toolLabel->setText("🔍 Section View");
+  m_descriptionLabel->setText("Configure clipping plane to see inside the model. Changes apply live.");
+  m_sectionGroup->show();
+  m_applyButton->show();
+}
+
 bool ToolSettingsPanel::patternIsLinear() const {
   return m_patternTypeCombo && m_patternTypeCombo->currentIndex() == 0;
 }
@@ -1135,6 +1171,18 @@ bool ToolSettingsPanel::ribFlipDirection() const {
 
 double ToolSettingsPanel::ribDraftAngle() const {
   return m_ribDraftSpin ? m_ribDraftSpin->value() : 0.0;
+}
+
+int ToolSettingsPanel::sectionPlane() const {
+  return m_sectionPlaneCombo ? m_sectionPlaneCombo->currentIndex() : 1;
+}
+
+double ToolSettingsPanel::sectionOffset() const {
+  return m_sectionOffsetSpin ? m_sectionOffsetSpin->value() : 0.0;
+}
+
+bool ToolSettingsPanel::sectionFlip() const {
+  return m_sectionFlipCheck && m_sectionFlipCheck->isChecked();
 }
 
 void ToolSettingsPanel::setSweepProfileText(const QString &text) {
