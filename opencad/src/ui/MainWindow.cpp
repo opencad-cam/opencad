@@ -7034,22 +7034,100 @@ void MainWindow::onNewFile() { createNewTab("Untitled"); }
 void MainWindow::onOpenFile() {
   QString fileName = QFileDialog::getOpenFileName(
       this, "Open File", "",
-      "OpenCAD Files (*.ocad);;STEP Files (*.step *.stp);;All Files (*.*)");
+      "All Supported Files (*.ocad *.step *.stp *.iges *.igs *.brep *.stl *.sldprt *.sldasm);;OpenCAD Files (*.ocad);;STEP Files (*.step *.stp);;IGES Files (*.iges *.igs);;BRep Files (*.brep);;STL Files (*.stl);;SolidWorks Files (*.sldprt *.sldasm);;All Files (*.*)");
 
   if (fileName.isEmpty())
     return;
 
   QFileInfo fileInfo(fileName);
+  QString ext = fileInfo.suffix().toLower();
   createNewTab(fileInfo.fileName());
 
-  if (m_document) {
-    if (m_document->load(fileName)) {
-      statusBar()->showMessage("File loaded", 2000);
+  if (ext == "ocad") {
+    if (m_document) {
+      if (m_document->load(fileName)) {
+        statusBar()->showMessage("File loaded", 2000);
+        displayAllShapes();
+        onViewFit();
+      } else {
+        statusBar()->showMessage("Failed to load file");
+        onCloseTab(m_tabWidget->currentIndex());
+      }
+    }
+  } else if (ext == "step" || ext == "stp") {
+    opencad::io::StepReader reader;
+    if (reader.read(fileName.toStdString())) {
+      addShape(reader.getShape().occShape());
       displayAllShapes();
       onViewFit();
+      statusBar()->showMessage("STEP file imported", 2000);
     } else {
-      statusBar()->showMessage("Failed to load file");
+      statusBar()->showMessage("Failed to import STEP file: " + QString::fromStdString(reader.errorMessage()));
       onCloseTab(m_tabWidget->currentIndex());
+    }
+  } else if (ext == "iges" || ext == "igs") {
+    opencad::io::IgesReader reader;
+    if (reader.read(fileName.toStdString())) {
+      addShape(reader.getShape().occShape());
+      displayAllShapes();
+      onViewFit();
+      statusBar()->showMessage("IGES file imported", 2000);
+    } else {
+      statusBar()->showMessage("Failed to import IGES file: " + QString::fromStdString(reader.errorMessage()));
+      onCloseTab(m_tabWidget->currentIndex());
+    }
+  } else if (ext == "brep") {
+    opencad::core::Shape s = opencad::io::BRepReader::readFile(fileName.toStdString());
+    if (!s.occShape().IsNull()) {
+      addShape(s.occShape());
+      displayAllShapes();
+      onViewFit();
+      statusBar()->showMessage("BRep file imported", 2000);
+    } else {
+      statusBar()->showMessage("Failed to import BRep file");
+      onCloseTab(m_tabWidget->currentIndex());
+    }
+  } else if (ext == "stl") {
+    TopoDS_Shape stlShape = opencad::io::StlReader::readFile(fileName);
+    if (!stlShape.IsNull()) {
+      addShape(stlShape);
+      displayAllShapes();
+      onViewFit();
+      statusBar()->showMessage("STL file imported", 2000);
+    } else {
+      statusBar()->showMessage("Failed to import STL file");
+      onCloseTab(m_tabWidget->currentIndex());
+    }
+  } else if (ext == "sldprt" || ext == "sldasm") {
+    opencad::io::SolidWorksReader reader;
+    if (reader.read(fileName.toStdString())) {
+      auto shapes = reader.getAllShapes();
+      if (!shapes.empty()) {
+        for (const auto& s : shapes) {
+           addShape(s.occShape());
+        }
+        displayAllShapes();
+        onViewFit();
+        statusBar()->showMessage("SolidWorks file imported", 2000);
+      } else {
+        statusBar()->showMessage("SolidWorks file imported but no shapes found");
+        onCloseTab(m_tabWidget->currentIndex());
+      }
+    } else {
+      statusBar()->showMessage("Failed to import SolidWorks file: " + QString::fromStdString(reader.errorMessage()));
+      onCloseTab(m_tabWidget->currentIndex());
+    }
+  } else {
+    // Fallback: try as ocad file
+    if (m_document) {
+      if (m_document->load(fileName)) {
+        statusBar()->showMessage("File loaded", 2000);
+        displayAllShapes();
+        onViewFit();
+      } else {
+        statusBar()->showMessage("Failed to load file");
+        onCloseTab(m_tabWidget->currentIndex());
+      }
     }
   }
 }
