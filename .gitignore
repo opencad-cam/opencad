@@ -20,10 +20,7 @@ cmake_install.cmake
 Makefile
 
 # Large third-party source trees (not submodules)
-Blender/
-ElmerFEM/
 OpenFOAM-11/
-OpenModelica/
 opencascade-7.9.3-vc14-64/
 
 # Logs & temp files
