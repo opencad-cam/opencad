@@ -13,3 +13,6 @@
 [submodule "OpenModelica"]
 	path = OpenModelica
 	url = https://github.com/OpenModelica/OpenModelica.git
+[submodule "blender"]
+	path = blender
+	url = https://projects.blender.org/blender/blender.git
