@@ -2,16 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_base.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
-
-#include "UI_resources.hh"
 
 #include "GPU_shader.hh"
 
@@ -20,33 +14,33 @@
 
 #include "node_composite_util.hh"
 
-/* **************** FILTER  ******************** */
-
 namespace blender::nodes::node_composite_despeckle_cc {
 
-static void cmp_node_despeckle_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("Factor", "Fac")
+  b.add_input<decl::Float>("Factor"_ustr, "Fac"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Color Threshold")
+  b.add_input<decl::Float>("Color Threshold"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .description(
           "Pixels are despeckled only if their color difference from the average color of their "
           "neighbors exceeds this threshold");
-  b.add_input<decl::Float>("Neighbor Threshold")
+  b.add_input<decl::Float>("Neighbor Threshold"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -195,30 +189,28 @@ class DespeckleOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new DespeckleOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_despeckle_cc
-
-static void register_node_type_cmp_despeckle()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_despeckle_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeDespeckle", CMP_NODE_DESPECKLE);
+  cmp_node_type_base(&ntype, "CompositorNodeDespeckle"_ustr, CMP_NODE_DESPECKLE);
   ntype.ui_name = "Despeckle";
   ntype.ui_description =
       "Smooth areas of an image in which noise is noticeable, while leaving complex areas "
       "untouched";
   ntype.enum_name_legacy = "DESPECKLE";
   ntype.nclass = NODE_CLASS_OP_FILTER;
-  ntype.declare = file_ns::cmp_node_despeckle_declare;
+  ntype.declare = node_declare;
   ntype.flag |= NODE_PREVIEW;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_despeckle)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_despeckle_cc

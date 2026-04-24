@@ -16,11 +16,13 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_value_cc {
+namespace blender {
+
+namespace nodes::node_shader_value_cc {
 
 static void sh_node_value_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Float>("Value").custom_draw([](CustomSocketDrawParams &params) {
+  b.add_output<decl::Float>("Value"_ustr).custom_draw([](CustomSocketDrawParams &params) {
     params.layout.alignment_set(ui::LayoutAlign::Expand);
     ui::Layout &row = params.layout.row(true);
     row.prop(&params.socket_ptr, "default_value", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
@@ -43,8 +45,9 @@ static int gpu_shader_value(GPUMaterial *mat,
 
 static void sh_node_value_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
-  const bNodeSocket *bsocket = (bNodeSocket *)builder.node().outputs.first;
-  const bNodeSocketValueFloat *value = (const bNodeSocketValueFloat *)bsocket->default_value;
+  const bNodeSocket *bsocket = static_cast<bNodeSocket *>(builder.node().outputs.first);
+  const bNodeSocketValueFloat *value = static_cast<const bNodeSocketValueFloat *>(
+      bsocket->default_value);
   builder.construct_and_set_matching_fn<mf::CustomMF_Constant<float>>(value->value);
 }
 
@@ -57,15 +60,15 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_value_cc
+}  // namespace nodes::node_shader_value_cc
 
 void register_node_type_sh_value()
 {
-  namespace file_ns = blender::nodes::node_shader_value_cc;
+  namespace file_ns = nodes::node_shader_value_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeValue", SH_NODE_VALUE);
+  common_node_type_base(&ntype, "ShaderNodeValue"_ustr, SH_NODE_VALUE);
   ntype.ui_name = "Value";
   ntype.ui_description = "Input numerical values to other nodes in the tree";
   ntype.enum_name_legacy = "VALUE";
@@ -75,5 +78,7 @@ void register_node_type_sh_value()
   ntype.build_multi_function = file_ns::sh_node_value_build_multi_function;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

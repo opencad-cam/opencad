@@ -64,6 +64,8 @@
 
 #include "wm_files.hh"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"blend.link"};
 
 /* -------------------------------------------------------------------- */
@@ -267,7 +269,7 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
   /* From here down, no error returns. */
 
   if (view_layer && RNA_boolean_get(op->ptr, "autoselect")) {
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
   }
 
   /* Sanity checks for flag. */
@@ -297,7 +299,7 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
       lapp_context, datatoc_startup_blend, datatoc_startup_blend_size);
 
   if (totfiles != 0) {
-    blender::Map<std::string, int> libraries;
+    Map<std::string, int> libraries;
     int lib_idx = 0;
 
     RNA_BEGIN (op->ptr, itemptr, "files") {
@@ -615,7 +617,7 @@ static wmOperatorStatus wm_id_linked_relocate_exec(bContext *C, wmOperator *op)
   /* From here down, no error returns. */
 
   if (view_layer && RNA_boolean_get(op->ptr, "autoselect")) {
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
   }
 
   /* Never enforce instantiation of anything when relocating. */
@@ -820,7 +822,7 @@ static wmOperatorStatus wm_lib_relocate_invoke(bContext *C,
   char lib_name[MAX_NAME];
 
   RNA_string_get(op->ptr, "library", lib_name);
-  lib = (Library *)BKE_libblock_find_name(CTX_data_main(C), ID_LI, lib_name);
+  lib = id_cast<Library *>(BKE_libblock_find_name(CTX_data_main(C), ID_LI, lib_name));
 
   if (lib) {
     if (lib->runtime->parent) {
@@ -898,7 +900,7 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
   char lib_name[MAX_NAME];
 
   RNA_string_get(op->ptr, "library", lib_name);
-  Library *lib = (Library *)BKE_libblock_find_name(bmain, ID_LI, lib_name);
+  Library *lib = id_cast<Library *>(BKE_libblock_find_name(bmain, ID_LI, lib_name));
   if (lib == nullptr) {
     return OPERATOR_CANCELLED;
   }
@@ -1101,3 +1103,5 @@ void WM_OT_lib_reload(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

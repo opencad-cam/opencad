@@ -24,11 +24,14 @@
 
 #include "BLI_hash.hh"
 #include "BLI_map.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_set.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include <string>
+
+namespace blender {
 
 struct Depsgraph;
 struct DupliObject;
@@ -37,7 +40,7 @@ struct Main;
 struct Object;
 struct ParticleSystem;
 
-namespace blender::io {
+namespace io {
 
 class AbstractHierarchyWriter;
 class DupliParentFinder;
@@ -50,7 +53,7 @@ struct HierarchyContext {
   Object *export_parent;
   Object *duplicator;
   PersistentID persistent_id;
-  float matrix_world[4][4];
+  float4x4 matrix_world;
   std::string export_name;
 
   /* When weak_export=true, the object will be exported only as transform, and only if is an
@@ -98,7 +101,7 @@ struct HierarchyContext {
   bool has_point_instance_ancestor;
 
   /*********** Determined during writer creation: ***************/
-  float parent_matrix_inv_world[4][4]; /* Inverse of the parent's world matrix. */
+  float4x4 parent_matrix_inv_world; /* Inverse of the parent's world matrix. */
   std::string export_path; /* Hierarchical path, such as "/grandparent/parent/object_name". */
   ParticleSystem *particle_system; /* Only set for particle/hair writers. */
 
@@ -394,4 +397,5 @@ class AbstractHierarchyIterator {
   ExportChildren *graph_children(const HierarchyContext *context);
 };
 
-}  // namespace blender::io
+}  // namespace io
+}  // namespace blender

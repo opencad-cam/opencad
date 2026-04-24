@@ -35,7 +35,6 @@
 #include <fstream>
 #include <string>
 
-using namespace blender;
 using namespace blender::gpu;
 
 /* Fire off a single dispatch per encoder. Can make debugging view clearer for texture resources
@@ -78,9 +77,9 @@ int64_t MTLContext::frame_latency[MTL_FRAME_AVERAGE_COUNT] = {0};
 /** \name GHOST Context interaction.
  * \{ */
 
-void MTLContext::set_ghost_context(GHOST_ContextHandle ghostCtxHandle)
+void MTLContext::set_ghost_context(GHOST_IContext *ghostCtxHandle)
 {
-  GHOST_Context *ghost_ctx = reinterpret_cast<GHOST_Context *>(ghostCtxHandle);
+  GHOST_Context *ghost_ctx = static_cast<GHOST_Context *>(ghostCtxHandle);
   BLI_assert(ghost_ctx != nullptr);
 
   /* Release old MTLTexture handle */
@@ -168,10 +167,10 @@ void MTLContext::set_ghost_context(GHOST_ContextHandle ghostCtxHandle)
   }
 }
 
-void MTLContext::set_ghost_window(GHOST_WindowHandle ghostWinHandle)
+void MTLContext::set_ghost_window(GHOST_IWindow *ghostWinHandle)
 {
-  GHOST_Window *ghostWin = reinterpret_cast<GHOST_Window *>(ghostWinHandle);
-  this->set_ghost_context((GHOST_ContextHandle)(ghostWin ? ghostWin->getContext() : nullptr));
+  GHOST_Window *ghostWin = static_cast<GHOST_Window *>(ghostWinHandle);
+  this->set_ghost_context(ghostWin ? ghostWin->getContext() : nullptr);
 }
 
 /** \} */
@@ -181,7 +180,7 @@ void MTLContext::set_ghost_window(GHOST_WindowHandle ghostWinHandle)
  * \{ */
 
 /* Placeholder functions */
-MTLContext::MTLContext(void *ghost_window, void *ghost_context)
+MTLContext::MTLContext(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
     : memory_manager(*this), main_command_buffer(*this)
 {
   /* Init debug. */
@@ -413,10 +412,10 @@ void MTLContext::activate()
 
   /* Re-apply ghost window/context for resizing */
   if (ghost_window_) {
-    this->set_ghost_window((GHOST_WindowHandle)ghost_window_);
+    this->set_ghost_window(ghost_window_);
   }
   else if (ghost_context_) {
-    this->set_ghost_context((GHOST_ContextHandle)ghost_context_);
+    this->set_ghost_context(ghost_context_);
   }
 
   /* Reset UBO bind state. */
@@ -1845,7 +1844,7 @@ void MTLContext::sampler_state_cache_init()
                                    MTLSamplerMipFilterNotMipmapped;
         descriptor.lodMinClamp = -1000;
         descriptor.lodMaxClamp = 1000;
-        float aniso_filter = max_ff(16, U.anisotropic_filter);
+        float aniso_filter = min_ff(float(GPU_anisotropic_samples_get(filtering)), 16.0f);
         descriptor.maxAnisotropy = (filtering & GPU_SAMPLER_FILTERING_MIPMAP) ? aniso_filter : 1;
         descriptor.compareFunction = MTLCompareFunctionAlways;
         descriptor.supportArgumentBuffers = true;

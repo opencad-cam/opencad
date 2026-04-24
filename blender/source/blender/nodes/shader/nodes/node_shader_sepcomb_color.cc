@@ -9,23 +9,25 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
+namespace blender {
+
 static void node_combsep_color_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeCombSepColor *data = MEM_new_for_free<NodeCombSepColor>(__func__);
+  NodeCombSepColor *data = MEM_new<NodeCombSepColor>(__func__);
   data->mode = NODE_COMBSEP_COLOR_RGB;
   node->storage = data;
 }
 
 /* **************** SEPARATE COLOR ******************** */
 
-namespace blender::nodes::node_shader_separate_color_cc {
+namespace nodes::node_shader_separate_color_cc {
 
 NODE_STORAGE_FUNCS(NodeCombSepColor)
 
 static void sh_node_sepcolor_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({0.8f, 0.8f, 0.8f, 1.0f});
-  b.add_output<decl::Float>("Red").label_fn([](bNode node) {
+  b.add_input<decl::Color>("Color"_ustr).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_output<decl::Float>("Red"_ustr).label_fn([](bNode node) {
     switch (node_storage(node).mode) {
       case NODE_COMBSEP_COLOR_RGB:
       default:
@@ -35,7 +37,7 @@ static void sh_node_sepcolor_declare(NodeDeclarationBuilder &b)
         return IFACE_("Hue");
     }
   });
-  b.add_output<decl::Float>("Green").label_fn([](bNode node) {
+  b.add_output<decl::Float>("Green"_ustr).label_fn([](bNode node) {
     switch (node_storage(node).mode) {
       case NODE_COMBSEP_COLOR_RGB:
       default:
@@ -45,7 +47,7 @@ static void sh_node_sepcolor_declare(NodeDeclarationBuilder &b)
         return IFACE_("Saturation");
     }
   });
-  b.add_output<decl::Float>("Blue").label_fn([](bNode node) {
+  b.add_output<decl::Float>("Blue"_ustr).label_fn([](bNode node) {
     switch (node_storage(node).mode) {
       case NODE_COMBSEP_COLOR_RGB:
       default:
@@ -115,38 +117,38 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_separate_color_cc
+}  // namespace nodes::node_shader_separate_color_cc
 
 void register_node_type_sh_sepcolor()
 {
-  namespace file_ns = blender::nodes::node_shader_separate_color_cc;
+  namespace file_ns = nodes::node_shader_separate_color_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeSeparateColor", SH_NODE_SEPARATE_COLOR);
+  sh_node_type_base(&ntype, "ShaderNodeSeparateColor"_ustr, SH_NODE_SEPARATE_COLOR);
   ntype.ui_name = "Separate Color";
   ntype.ui_description = "Split a color into its individual components using multiple models";
   ntype.enum_name_legacy = "SEPARATE_COLOR";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = file_ns::sh_node_sepcolor_declare;
   ntype.initfunc = node_combsep_color_init;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeCombSepColor", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::gpu_shader_sepcolor;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 
 /* **************** COMBINE COLOR ******************** */
 
-namespace blender::nodes::node_shader_combine_color_cc {
+namespace nodes::node_shader_combine_color_cc {
 
 NODE_STORAGE_FUNCS(NodeCombSepColor)
 
 static void sh_node_combcolor_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Red")
+  b.add_input<decl::Float>("Red"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
@@ -161,7 +163,7 @@ static void sh_node_combcolor_declare(NodeDeclarationBuilder &b)
             return IFACE_("Hue");
         }
       });
-  b.add_input<decl::Float>("Green")
+  b.add_input<decl::Float>("Green"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
@@ -176,7 +178,7 @@ static void sh_node_combcolor_declare(NodeDeclarationBuilder &b)
             return IFACE_("Saturation");
         }
       });
-  b.add_input<decl::Float>("Blue")
+  b.add_input<decl::Float>("Blue"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
@@ -192,7 +194,7 @@ static void sh_node_combcolor_declare(NodeDeclarationBuilder &b)
             return CTX_IFACE_(BLT_I18NCONTEXT_COLOR, "Value");
         }
       });
-  b.add_output<decl::Color>("Color");
+  b.add_output<decl::Color>("Color"_ustr);
 }
 
 static const char *gpu_shader_get_name(int mode)
@@ -256,25 +258,27 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_combine_color_cc
+}  // namespace nodes::node_shader_combine_color_cc
 
 void register_node_type_sh_combcolor()
 {
-  namespace file_ns = blender::nodes::node_shader_combine_color_cc;
+  namespace file_ns = nodes::node_shader_combine_color_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeCombineColor", SH_NODE_COMBINE_COLOR);
+  sh_node_type_base(&ntype, "ShaderNodeCombineColor"_ustr, SH_NODE_COMBINE_COLOR);
   ntype.ui_name = "Combine Color";
   ntype.ui_description = "Create a color from individual components using multiple models";
   ntype.enum_name_legacy = "COMBINE_COLOR";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = file_ns::sh_node_combcolor_declare;
   ntype.initfunc = node_combsep_color_init;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeCombSepColor", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::gpu_shader_combcolor;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -44,7 +44,7 @@ static Block *template_search_menu(bContext *C, ARegion *region, void *arg_templ
   static TemplateSearch template_search;
 
   /* arg_template is malloced, can be freed by parent button */
-  template_search = *((TemplateSearch *)arg_template);
+  template_search = *(static_cast<TemplateSearch *>(arg_template));
   PointerRNA active_ptr = RNA_property_pointer_get(&template_search.search_data.target_ptr,
                                                    template_search.search_data.target_prop);
 
@@ -97,7 +97,7 @@ static void template_search_add_button_name(Block *block,
   int iconid = ICON_NONE;
 
   PropertyRNA *name_prop;
-  if (type == &RNA_ActionSlot) {
+  if (type == RNA_ActionSlot) {
     name_prop = RNA_struct_find_property(active_ptr, "name_display");
     /* Also show an icon for the data-block type that each slot is intended for. */
     animrig::Slot &slot = reinterpret_cast<ActionSlot *>(active_ptr->data)->wrap();
@@ -107,7 +107,12 @@ static void template_search_add_button_name(Block *block,
     name_prop = RNA_struct_name_property(type);
   }
 
-  const int width = template_search_textbut_width(active_ptr, name_prop);
+  int width = template_search_textbut_width(active_ptr, name_prop);
+  if (iconid != ICON_NONE) {
+    /* Widen a bit to make room for the icon. #152027. */
+    width += int(18.0f * UI_SCALE_FAC);
+  }
+
   const int height = template_search_textbut_height();
   uiDefAutoButR(block, active_ptr, name_prop, 0, "", iconid, 0, 0, width, height);
 }
@@ -195,7 +200,7 @@ static void template_search_buttons(const bContext *C,
   /* For Blender 4.4, the "New" button is only shown on Action Slot selectors.
    * Blender 4.5 may have this enabled for all uses of this template, in which
    * case this type-specific code will be removed. */
-  const bool may_show_new_button = (type == &RNA_ActionSlot);
+  const bool may_show_new_button = (type == RNA_ActionSlot);
   if (may_show_new_button && !active_ptr.data) {
     template_search_add_button_operator(
         block, newop, wm::OpCallContext::InvokeDefault, ICON_ADD, editable, IFACE_("New"));

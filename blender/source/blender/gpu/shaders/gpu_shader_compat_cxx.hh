@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <cstdio>  // IWYU pragma: export printf
+
 #include "gpu_shader_cxx_builtin.hh"  // IWYU pragma: export
 #include "gpu_shader_cxx_global.hh"   // IWYU pragma: export
 #include "gpu_shader_cxx_image.hh"    // IWYU pragma: export
@@ -35,20 +37,12 @@
 #include "gpu_shader_cxx_vector.hh"   // IWYU pragma: export
 
 #define assert(assertion)
-#define printf(...)
+
+#include "gpu_shader_cxx_attribute.hh"  // IWYU pragma: export
 
 /* -------------------------------------------------------------------- */
 /** \name Keywords
  * \{ */
-
-/* Note: Cannot easily mutate them. Pass every by copy for now. */
-
-/* Pass argument by reference. */
-#define inout DO_NOT_USE
-/* Pass argument by reference but only write to it. Its initial value is undefined. */
-#define out DO_NOT_USE
-/* Pass argument by copy (default). */
-#define in DO_NOT_USE
 
 /* Decorate a variable in global scope that is common to all threads in a thread-group. */
 #define shared
@@ -58,6 +52,25 @@
 /* -------------------------------------------------------------------- */
 /** \name Compatibility
  * \{ */
+
+/**
+ * Member hiding type.
+ * Wrapper type for members of unions in host shared structure.
+ * This is needed to force the accessor syntax in the shader code.
+ */
+template<typename T> struct union_t {
+  char bytes[sizeof(T)];
+
+  const T &operator()() const
+  {
+    return *reinterpret_cast<const T *>(&bytes);
+  }
+
+  T &operator()()
+  {
+    return *reinterpret_cast<T *>(&bytes);
+  }
+};
 
 /* Array syntax compatibility. */
 /* clang-format off */
@@ -109,49 +122,8 @@
 #  define GPU_SHADER
 #endif
 
-#define reserved_keyword(keyword) static_assert(false, keyword " is a reserved keyword")
-/* List of reserved keywords in GLSL. */
-#define common reserved_keyword("common")
-#define partition reserved_keyword("partition")
-#define active reserved_keyword("active")
-// #define class /* Supported. */
-// #define union /* Supported. */
-// #define enum /* Supported. */
-#define typedef reserved_keyword("typedef")
-// #define template /* Needed for Stubs. */
-// #define this /* Needed for Stubs. */
-#define packed reserved_keyword("packed")
-#define resource reserved_keyword("resource")
-#define goto reserved_keyword("goto")
-// #define inline  /* Supported. */
-#define noinline reserved_keyword("noinline")
-// #define public /* Supported. */
-// #define private /* Supported. */
-// #define static /* Supported. */
-// #define extern /* Needed for Stubs. */
-#define external reserved_keyword("external")
-#define interface reserved_keyword("interface")
-#define long reserved_keyword("long")
-// #define short /* Supported. */
-// #define half /* Supported. */
-#define fixed reserved_keyword("fixed")
-#define unsigned reserved_keyword("unsigned")
-#define superp reserved_keyword("superp")
-#define input reserved_keyword("input")
-#define output reserved_keyword("output")
-#define hvec2 reserved_keyword("hvec2")
-#define hvec3 reserved_keyword("hvec3")
-#define hvec4 reserved_keyword("hvec4")
-#define fvec2 reserved_keyword("fvec2")
-#define fvec3 reserved_keyword("fvec3")
-#define fvec4 reserved_keyword("fvec4")
-#define sampler3DRect reserved_keyword("sampler3DRect")
-#define filter reserved_keyword("filter")
-#define sizeof reserved_keyword("sizeof")
-#define cast reserved_keyword("cast")
-// #define namespace /* Needed for Stubs. */
-// #define using /* Needed for Stubs. */
-#define row_major reserved_keyword("row_major")
+/* Reserved keywords in GLSL that are allowed in preprocessor directives for compiling in C++. */
+#define sizeof static_assert(false, "sizeof is a reserved keyword")
 
 #ifdef GPU_SHADER_LIBRARY
 #  define GPU_VERTEX_SHADER
@@ -190,23 +162,6 @@ template<typename T> struct srt_t {
   }
 };
 
-/**
- * Member hiding type.
- * Wrapper type for members of unions in host shared structure.
- * This is needed to force the accessor syntax in the shader code.
- */
-template<typename T> struct union_t {
-  const T &operator()() const
-  {
-    return *reinterpret_cast<const T *>(this);
-  }
-
-  T &operator()()
-  {
-    return *reinterpret_cast<T *>(this);
-  }
-};
-
 struct ShaderCreateInfo {};
 
 struct NoConstants {};
@@ -214,64 +169,132 @@ struct NoConstants {};
 template<typename VertFn,
          typename FragFn,
          typename ConstT1 = NoConstants,
-         typename ConstT2 = ConstT1,
-         typename ConstT3 = ConstT2>
+         typename ConstT2 = NoConstants,
+         typename ConstT3 = NoConstants>
 struct PipelineGraphic {
-  VertFn vertex;
-  FragFn fragment;
+  VertFn vert;
+  FragFn frag;
   /* Constant values. */
   ConstT1 c1;
   ConstT2 c2;
   ConstT3 c3;
 
-  PipelineGraphic(VertFn vertex, FragFn fragment)
-      : vertex(vertex), fragment(fragment), c1({}), c2({}), c3({})
+  PipelineGraphic(VertFn vert, FragFn frag) : vert(vert), frag(frag), c1({}), c2({}), c3({}) {}
+  PipelineGraphic(VertFn vert, FragFn frag, ConstT1 c1)
+      : vert(vert), frag(frag), c1(c1), c2({}), c3({})
   {
   }
-  PipelineGraphic(VertFn vertex, FragFn fragment, ConstT1 c1)
-      : vertex(vertex), fragment(fragment), c1(c1), c2({}), c3({})
+  PipelineGraphic(VertFn vert, FragFn frag, ConstT1 c1, ConstT2 c2)
+      : vert(vert), frag(frag), c1(c1), c2(c2), c3({})
   {
   }
-  PipelineGraphic(VertFn vertex, FragFn fragment, ConstT1 c1, ConstT2 c2)
-      : vertex(vertex), fragment(fragment), c1(c1), c2(c2), c3({})
-  {
-  }
-  PipelineGraphic(VertFn vertex, FragFn fragment, ConstT1 c1, ConstT2 c2, ConstT3 c3)
-      : vertex(vertex), fragment(fragment), c1(c1), c2(c2), c3(c3)
+  PipelineGraphic(VertFn vert, FragFn frag, ConstT1 c1, ConstT2 c2, ConstT3 c3)
+      : vert(vert), frag(frag), c1(c1), c2(c2), c3(c3)
   {
   }
 };
 
+/* For assert support. */
+#if defined(GPU_VERTEX_SHADER)
+#  define GPU_THREAD uint3(0)
+#elif defined(GPU_FRAGMENT_SHADER)
+#  define GPU_THREAD uint3(0)
+#elif defined(GPU_COMPUTE_SHADER)
+#  define GPU_THREAD uint3(0)
+#else
+#  define GPU_THREAD error_not_in_a_shader_question_mark
+#endif
+
 template<typename CompFn,
          typename ConstT1 = NoConstants,
-         typename ConstT2 = ConstT1,
-         typename ConstT3 = ConstT2>
+         typename ConstT2 = NoConstants,
+         typename ConstT3 = NoConstants>
 struct PipelineCompute {
-  CompFn compute;
+  CompFn comp;
   /* Constant values. */
   ConstT1 c1;
   ConstT2 c2;
   ConstT3 c3;
 
-  PipelineCompute(CompFn compute) : compute(compute), c1({}), c2({}), c3({}) {}
-  PipelineCompute(CompFn compute, ConstT1 c1) : compute(compute), c1(c1), c2({}), c3({}) {}
-  PipelineCompute(CompFn compute, ConstT1 c1, ConstT2 c2)
-      : compute(compute), c1(c1), c2(c2), c3({})
-  {
-  }
-  PipelineCompute(CompFn compute, ConstT1 c1, ConstT2 c2, ConstT3 c3)
-      : compute(compute), c1(c1), c2(c2), c3(c3)
+  PipelineCompute(CompFn comp) : comp(comp), c1({}), c2({}), c3({}) {}
+  PipelineCompute(CompFn comp, ConstT1 c1) : comp(comp), c1(c1), c2({}), c3({}) {}
+  PipelineCompute(CompFn comp, ConstT1 c1, ConstT2 c2) : comp(comp), c1(c1), c2(c2), c3({}) {}
+  PipelineCompute(CompFn comp, ConstT1 c1, ConstT2 c2, ConstT3 c3)
+      : comp(comp), c1(c1), c2(c2), c3(c3)
   {
   }
 };
 
 #include "GPU_shader_shared_utils.hh"
 
-#ifdef __GNUC__
-/* Avoid warnings caused by our own unroll attributes. */
-#  ifdef __clang__
-#    pragma GCC diagnostic ignored "-Wunknown-attributes"
-#  else
-#    pragma GCC diagnostic ignored "-Wattributes"
-#  endif
-#endif
+/* -------------------------------------------------------------------- */
+/** \name Enums
+ *
+ * Enums should be defined in the root namespace when used directly in the pipeline, as they will
+ * not be fully qualified when generating the template name substitution. Defining in the root
+ * works around this limitation
+ *
+ * \{ */
+
+/**
+ * TextureWriteFormat.
+ *
+ * We can not use GPU_TEXTURE_WRITE_FORMAT_EXPAND as other parts are included that will intervene
+ * with the compatibility defines.
+ */
+enum TextureWriteFormat : uint32_t {
+  SNORM_8,
+  SNORM_8_8,
+  SNORM_8_8_8_8,
+
+  SNORM_16,
+  SNORM_16_16,
+  SNORM_16_16_16_16,
+
+  UNORM_8,
+  UNORM_8_8,
+  UNORM_8_8_8_8,
+
+  UNORM_16,
+  UNORM_16_16,
+  UNORM_16_16_16_16,
+
+  SINT_8,
+  SINT_8_8,
+  SINT_8_8_8_8,
+
+  SINT_16,
+  SINT_16_16,
+  SINT_16_16_16_16,
+
+  SINT_32,
+  SINT_32_32,
+  SINT_32_32_32_32,
+
+  UINT_8,
+  UINT_8_8,
+  UINT_8_8_8_8,
+
+  UINT_16,
+  UINT_16_16,
+  UINT_16_16_16_16,
+
+  UINT_32,
+  UINT_32_32,
+  UINT_32_32_32_32,
+
+  SFLOAT_16,
+  SFLOAT_16_16,
+  SFLOAT_16_16_16_16,
+
+  SFLOAT_32,
+  SFLOAT_32_32,
+  SFLOAT_32_32_32_32,
+
+  UNORM_10_10_10_2,
+  UINT_10_10_10_2,
+
+  UFLOAT_11_11_10,
+};
+
+/** \} */

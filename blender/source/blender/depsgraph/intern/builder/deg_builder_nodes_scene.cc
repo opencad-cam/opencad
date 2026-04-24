@@ -41,9 +41,9 @@ void DepsgraphNodeBuilder::build_scene_camera(Scene *scene)
   if (scene->camera != nullptr) {
     build_object(-1, scene->camera, DEG_ID_LINKED_INDIRECTLY, true);
   }
-  LISTBASE_FOREACH (TimeMarker *, marker, &scene->markers) {
-    if (!ELEM(marker->camera, nullptr, scene->camera)) {
-      build_object(-1, marker->camera, DEG_ID_LINKED_INDIRECTLY, true);
+  for (TimeMarker &marker : scene->markers) {
+    if (!ELEM(marker.camera, nullptr, scene->camera)) {
+      build_object(-1, marker.camera, DEG_ID_LINKED_INDIRECTLY, true);
     }
   }
 }
@@ -71,8 +71,8 @@ void DepsgraphNodeBuilder::build_scene_parameters(Scene *scene)
    * marginally worse. */
   build_scene_compositor(scene);
 
-  LISTBASE_FOREACH (TimeMarker *, marker, &scene->markers) {
-    build_idproperties(marker->prop);
+  for (TimeMarker &marker : scene->markers) {
+    build_idproperties(marker.prop);
   }
 }
 
@@ -84,6 +84,15 @@ void DepsgraphNodeBuilder::build_scene_compositor(Scene *scene)
   if (scene->compositing_node_group == nullptr) {
     return;
   }
+
+  add_operation_node(&scene->id,
+                     NodeType::COMPOSITOR,
+                     OperationCode::COMPOSITOR_EVAL,
+                     [](blender::Depsgraph * /*depsgraph*/) {
+                       /* Empty evaluate function, but needed to make sure the operation is not
+                        * considered a no-op. */
+                     });
+
   build_nodetree(scene->compositing_node_group);
 }
 

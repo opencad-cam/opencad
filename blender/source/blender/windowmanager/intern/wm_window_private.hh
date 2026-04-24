@@ -7,11 +7,14 @@
  */
 #pragma once
 
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 
 #include "GPU_platform_backend_enum.h"
 
 struct GHOST_CSD_Layout;
+
+namespace blender {
+
 struct bContext;
 struct wmWindow;
 
@@ -80,3 +83,5 @@ int WM_window_csd_layout_callback(const int window_size[2],
                                   GHOST_CSD_Elem *csd_elems);
 
 const GHOST_CSD_Layout *WM_window_csd_layout_get();
+
+}  // namespace blender

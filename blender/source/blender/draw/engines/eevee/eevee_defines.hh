@@ -9,9 +9,7 @@
  * dragging larger headers into the createInfo pipeline which would cause problems.
  */
 
-#ifndef GPU_SHADER
-#  pragma once
-#endif
+#pragma once
 
 #ifndef SQUARE
 #  define SQUARE(x) ((x) * (x))
@@ -194,7 +192,7 @@
 
 /* Utility Texture. */
 #define UTIL_TEX_SIZE 64
-#define UTIL_BTDF_LAYER_COUNT 16
+#define UTIL_BSDF_LAYER_COUNT 16
 /* Scale and bias to avoid interpolation of the border pixel.
  * Remap UVs to the border pixels centers. */
 #define UTIL_TEX_UV_SCALE ((UTIL_TEX_SIZE - 1.0f) / UTIL_TEX_SIZE)
@@ -203,8 +201,8 @@
 #define UTIL_BLUE_NOISE_LAYER 0
 #define UTIL_SSS_TRANSMITTANCE_PROFILE_LAYER 1
 #define UTIL_LTC_MAT_LAYER 2
-#define UTIL_BSDF_LAYER 3
-#define UTIL_BTDF_LAYER 4
+#define UTIL_BRDF_LAYER 3
+#define UTIL_BSDF_LAYER 4
 #define UTIL_DISK_INTEGRAL_LAYER UTIL_SSS_TRANSMITTANCE_PROFILE_LAYER
 #define UTIL_DISK_INTEGRAL_COMP 3
 
@@ -220,6 +218,10 @@
 #    define UTIL_TEXEL float2(0)
 #  endif
 #endif
+
+#define PREPASS_FRAG_OUT_NORMAL 0
+#define PREPASS_FRAG_OUT_OB_ID 1
+#define PREPASS_FRAG_OUT_VELOCITY 2
 
 /* Resource bindings. */
 
@@ -237,9 +239,15 @@
 #define VOLUME_TRANSMITTANCE_TEX_SLOT 9
 #define HIZ_PREVIOUS_LAYER_TEX_SLOT 10
 #define RADIANCE_PREVIOUS_LAYER_TEX_SLOT 11
+#define OBJECT_ID_TEX_SLOT 12
+#define PREPASS_NORMAL_TEX_SLOT 13
 /* Currently only used by ray-tracing, but might become used by forward too. */
-#define PLANAR_PROBE_DEPTH_TEX_SLOT 12
-#define PLANAR_PROBE_RADIANCE_TEX_SLOT 13
+#define PLANAR_PROBE_DEPTH_TEX_SLOT 14
+#define PLANAR_PROBE_RADIANCE_TEX_SLOT 15
+
+#define GBUF_CLOSURE_TEX_SLOT 16
+#define GBUF_NORMAL_TEX_SLOT 17
+#define GBUF_HEADER_TEX_SLOT 18
 
 /* Images. */
 #define RBUFS_COLOR_SLOT 0

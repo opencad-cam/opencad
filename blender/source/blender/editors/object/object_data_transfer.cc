@@ -161,7 +161,7 @@ static const EnumPropertyItem *dt_layers_select_src_itemf(bContext *C,
 
     RNA_enum_item_add_separator(&item, &totitem);
 
-    const ListBase *defbase = BKE_object_defgroup_list(ob_src);
+    const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob_src);
     for (i = 0, dg = static_cast<const bDeformGroup *>(defbase->first); dg; i++, dg = dg->next) {
       tmp_item.value = i;
       tmp_item.identifier = tmp_item.name = dg->name;
@@ -357,7 +357,7 @@ static void data_transfer_exec_preprocess_objects(bContext *C,
       continue;
     }
 
-    mesh = static_cast<Mesh *>(ob->data);
+    mesh = id_cast<Mesh *>(ob->data);
     if (!ID_IS_EDITABLE(mesh) || ID_IS_OVERRIDE_LIBRARY(mesh)) {
       /* Do not transfer to linked/override data, not supported. */
       BKE_reportf(op->reports,
@@ -388,7 +388,7 @@ static bool data_transfer_exec_is_object_valid(wmOperator *op,
     return true;
   }
 
-  mesh = static_cast<Mesh *>(ob_dst->data);
+  mesh = id_cast<Mesh *>(ob_dst->data);
   if (mesh->id.tag & ID_TAG_DOIT) {
     mesh->id.tag &= ~ID_TAG_DOIT;
     return true;
@@ -554,7 +554,7 @@ static bool data_transfer_poll(bContext *C)
    * it cannot check for all possible invalid cases. */
 
   Object *ob = context_active_object(C);
-  ID *data = static_cast<ID *>((ob) ? ob->data : nullptr);
+  ID *data = (ob) ? ob->data : nullptr;
   return (ob != nullptr && ob->type == OB_MESH && data != nullptr);
 }
 
@@ -687,8 +687,13 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
                   "handy to change several things at once with heavy geometry");
 
   /* Data type to transfer. */
-  ot->prop = RNA_def_enum(
-      ot->srna, "data_type", DT_layer_items, 0, "Data Type", "Which data to transfer");
+  ot->prop = RNA_def_enum(ot->srna,
+                          "data_type",
+                          DT_layer_items,
+                          /* The default is not significant, just use a valid value. */
+                          DT_TYPE_MDEFORMVERT,
+                          "Data Type",
+                          "Which data to transfer");
   RNA_def_boolean(ot->srna,
                   "use_create",
                   true,
@@ -819,7 +824,7 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 
 static bool datalayout_transfer_poll(bContext *C)
 {
-  return (edit_modifier_poll_generic(C, &RNA_DataTransferModifier, (1 << OB_MESH), true, false) ||
+  return (edit_modifier_poll_generic(C, RNA_DataTransferModifier, (1 << OB_MESH), true, false) ||
           data_transfer_poll(C));
 }
 
@@ -829,8 +834,8 @@ static wmOperatorStatus datalayout_transfer_exec(bContext *C, wmOperator *op)
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   DataTransferModifierData *dtmd;
 
-  dtmd = (DataTransferModifierData *)edit_modifier_property_get(
-      op, ob_act, eModifierType_DataTransfer);
+  dtmd = reinterpret_cast<DataTransferModifierData *>(
+      edit_modifier_property_get(op, ob_act, eModifierType_DataTransfer));
 
   /* If we have a modifier, we transfer data layout from this modifier's source object to
    * active one. Else, we transfer data layout from active object to all selected ones. */

@@ -2,15 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_base.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
-
-#include "UI_resources.hh"
 
 #include "COM_algorithm_smaa.hh"
 #include "COM_node_operation.hh"
@@ -20,35 +14,39 @@
 
 #include "node_composite_util.hh"
 
-/* **************** DEPTH COMBINE ******************** */
+namespace blender::nodes::node_composite_depth_combin_cc {
 
-namespace blender::nodes::node_composite_zcombine_cc {
-
-static void cmp_node_zcombine_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("A")
+  b.add_input<decl::Color>("A"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Depth A").default_value(1.0f).min(0.0f).max(10000.0f).structure_type(
-      StructureType::Dynamic);
-  b.add_input<decl::Color>("B")
+  b.add_input<decl::Float>("Depth A"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(10000.0f)
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("B"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Depth B").default_value(1.0f).min(0.0f).max(10000.0f).structure_type(
-      StructureType::Dynamic);
-  b.add_input<decl::Bool>("Use Alpha")
+  b.add_input<decl::Float>("Depth B"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(10000.0f)
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Bool>("Use Alpha"_ustr)
       .default_value(false)
       .description(
           "Use the alpha of the first input as mixing factor and return the more opaque alpha of "
           "the two inputs");
-  b.add_input<decl::Bool>("Anti-Alias")
+  b.add_input<decl::Bool>("Anti-Alias"_ustr)
       .default_value(true)
       .description(
           "Anti-alias the generated mask before combining for smoother boundaries at the cost of "
           "more expensive processing");
 
-  b.add_output<decl::Color>("Result").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Depth").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Result"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Depth"_ustr).structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;
@@ -415,27 +413,25 @@ class ZCombineOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new ZCombineOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_zcombine_cc
-
-static void register_node_type_cmp_zcombine()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_zcombine_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeZcombine", CMP_NODE_ZCOMBINE);
+  cmp_node_type_base(&ntype, "CompositorNodeZcombine"_ustr, CMP_NODE_ZCOMBINE);
   ntype.ui_name = "Depth Combine";
   ntype.ui_description = "Combine two images using depth maps";
   ntype.enum_name_legacy = "ZCOMBINE";
   ntype.nclass = NODE_CLASS_OP_COLOR;
-  ntype.declare = file_ns::cmp_node_zcombine_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_zcombine)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_depth_combin_cc

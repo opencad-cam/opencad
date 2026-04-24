@@ -193,13 +193,13 @@ class LayerViewItemDragController : public AbstractViewItemDragController {
 
   void *create_drag_data() const override
   {
-    wmDragGreasePencilLayer *drag_data = MEM_callocN<wmDragGreasePencilLayer>(__func__);
+    wmDragGreasePencilLayer *drag_data = MEM_new_zeroed<wmDragGreasePencilLayer>(__func__);
     drag_data->node = &dragged_node_;
     drag_data->grease_pencil = &grease_pencil_;
     return drag_data;
   }
 
-  void on_drag_start(bContext & /*C*/) override
+  void on_drag_start(bContext & /*C*/, AbstractViewItem & /*item*/) override
   {
     grease_pencil_.set_active_node(&dragged_node_);
   }
@@ -242,9 +242,9 @@ class LayerViewItem : public AbstractTreeViewItem {
   void on_activate(bContext &C) override
   {
     PointerRNA layers_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilv3Layers, nullptr);
+        &grease_pencil_.id, RNA_GreasePencilv3Layers, nullptr);
     PointerRNA value_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilLayer, &layer_);
+        &grease_pencil_.id, RNA_GreasePencilLayer, &layer_);
 
     PropertyRNA *prop = RNA_struct_find_property(&layers_ptr, "active");
 
@@ -270,7 +270,7 @@ class LayerViewItem : public AbstractTreeViewItem {
   bool rename(const bContext &C, StringRefNull new_name) override
   {
     PointerRNA layer_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilLayer, &layer_);
+        &grease_pencil_.id, RNA_GreasePencilLayer, &layer_);
     PropertyRNA *prop = RNA_struct_find_property(&layer_ptr, "name");
 
     RNA_property_string_set(&layer_ptr, prop, new_name.c_str());
@@ -324,7 +324,7 @@ class LayerViewItem : public AbstractTreeViewItem {
   void build_layer_buttons(Layout &row)
   {
     PointerRNA layer_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilLayer, &layer_);
+        &grease_pencil_.id, RNA_GreasePencilLayer, &layer_);
 
     Layout *sub = &row.row(true);
     sub->active_set(layer_.parent_group().use_masks());
@@ -374,7 +374,7 @@ class LayerGroupViewItem : public AbstractTreeViewItem {
     /* Let RNA handle the property change. This makes sure all the notifiers and DEG
      * update calls are properly called. */
     PointerRNA group_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilLayerGroup, &group_);
+        &grease_pencil_.id, RNA_GreasePencilLayerGroup, &group_);
     PropertyRNA *prop = RNA_struct_find_property(&group_ptr, "is_expanded");
 
     RNA_property_boolean_set(&group_ptr, prop, is_expanded);
@@ -411,9 +411,9 @@ class LayerGroupViewItem : public AbstractTreeViewItem {
   void on_activate(bContext &C) override
   {
     PointerRNA grease_pencil_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilv3LayerGroup, nullptr);
+        &grease_pencil_.id, RNA_GreasePencilv3LayerGroup, nullptr);
     PointerRNA value_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilLayerGroup, &group_);
+        &grease_pencil_.id, RNA_GreasePencilLayerGroup, &group_);
 
     PropertyRNA *prop = RNA_struct_find_property(&grease_pencil_ptr, "active");
 
@@ -439,7 +439,7 @@ class LayerGroupViewItem : public AbstractTreeViewItem {
   bool rename(const bContext &C, StringRefNull new_name) override
   {
     PointerRNA group_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilLayerGroup, &group_);
+        &grease_pencil_.id, RNA_GreasePencilLayerGroup, &group_);
     PropertyRNA *prop = RNA_struct_find_property(&group_ptr, "name");
 
     RNA_property_string_set(&group_ptr, prop, new_name.c_str());
@@ -497,7 +497,7 @@ class LayerGroupViewItem : public AbstractTreeViewItem {
   void build_layer_group_buttons(Layout &row)
   {
     PointerRNA group_ptr = RNA_pointer_create_discrete(
-        &grease_pencil_.id, &RNA_GreasePencilLayerGroup, &group_);
+        &grease_pencil_.id, RNA_GreasePencilLayerGroup, &group_);
 
     Layout *sub = &row.row(true);
     if (group_.as_node().parent_group()) {
@@ -534,8 +534,8 @@ void LayerTreeView::build_tree_node_recursive(TreeViewOrItem &parent, TreeNode &
   else if (node.is_group()) {
     LayerGroupViewItem &group_item = parent.add_tree_item<LayerGroupViewItem>(this->grease_pencil_,
                                                                               node.as_group());
-    LISTBASE_FOREACH_BACKWARD (GreasePencilLayerTreeNode *, node_, &node.as_group().children) {
-      build_tree_node_recursive(group_item, node_->wrap());
+    for (GreasePencilLayerTreeNode &node_ : node.as_group().children.items_reversed()) {
+      build_tree_node_recursive(group_item, node_.wrap());
     }
   }
 }
@@ -543,17 +543,17 @@ void LayerTreeView::build_tree_node_recursive(TreeViewOrItem &parent, TreeNode &
 void LayerTreeView::build_tree()
 {
   using namespace blender::bke::greasepencil;
-  LISTBASE_FOREACH_BACKWARD (
-      GreasePencilLayerTreeNode *, node, &this->grease_pencil_.root_group_ptr->children)
+  for (GreasePencilLayerTreeNode &node :
+       this->grease_pencil_.root_group_ptr->children.items_reversed())
   {
-    this->build_tree_node_recursive(*this, node->wrap());
+    this->build_tree_node_recursive(*this, node.wrap());
   }
 }
 }  // namespace greasepencil
 
 void template_grease_pencil_layer_tree(Layout *layout, bContext *C)
 {
-  GreasePencil *grease_pencil = blender::ed::greasepencil::from_context(*C);
+  GreasePencil *grease_pencil = ed::greasepencil::from_context(*C);
 
   if (grease_pencil == nullptr) {
     return;

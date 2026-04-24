@@ -8,6 +8,8 @@
  * \ingroup bke
  */
 
+namespace blender {
+
 struct CacheFile;
 struct CacheFileLayer;
 struct CacheReader;
@@ -25,7 +27,7 @@ void BKE_cachefile_eval(Main *bmain, Depsgraph *depsgraph, CacheFile *cache_file
 bool BKE_cachefile_filepath_get(const Main *bmain,
                                 const Depsgraph *depsgraph,
                                 const CacheFile *cache_file,
-                                char r_filepath[1024]);
+                                char r_filepath[/*FILE_MAX*/ 1024]);
 
 double BKE_cachefile_time_offset(const CacheFile *cache_file, double time, double fps);
 double BKE_cachefile_frame_offset(const CacheFile *cache_file, double time);
@@ -41,8 +43,11 @@ void BKE_cachefile_reader_free(CacheFile *cache_file, CacheReader **reader);
  * Add a layer to the cache_file. Return NULL if the `filepath` is already that of an existing
  * layer or if the number of layers exceeds the maximum allowed layer count.
  */
-CacheFileLayer *BKE_cachefile_add_layer(CacheFile *cache_file, const char filepath[1024]);
+CacheFileLayer *BKE_cachefile_add_layer(CacheFile *cache_file,
+                                        const char filepath[/*FILE_MAX*/ 1024]);
 
 CacheFileLayer *BKE_cachefile_get_active_layer(CacheFile *cache_file);
 
 void BKE_cachefile_remove_layer(CacheFile *cache_file, CacheFileLayer *layer);
+
+}  // namespace blender

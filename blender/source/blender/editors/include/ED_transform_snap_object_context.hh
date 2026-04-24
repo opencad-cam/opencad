@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
 #include "DNA_scene_types.h"
+
+namespace blender {
 
 // #define DEBUG_SNAP_TIME
 
@@ -18,12 +21,11 @@ struct BMVert;
 
 struct ARegion;
 struct Depsgraph;
-struct ListBase;
 struct Object;
 struct Scene;
 struct View3D;
 
-namespace blender::ed::transform {
+namespace ed::transform {
 
 /* `transform_snap_object.cc` */
 
@@ -81,7 +83,7 @@ struct SnapObjectParams {
 };
 
 struct SnapObjectContext;
-SnapObjectContext *snap_object_context_create(Scene *scene, int flag);
+SnapObjectContext *snap_object_context_create();
 void snap_object_context_destroy(SnapObjectContext *sctx);
 
 /** Callbacks to filter how snap works. */
@@ -136,7 +138,7 @@ bool snap_object_project_ray_all(SnapObjectContext *sctx,
                                  const float ray_normal[3],
                                  float ray_depth,
                                  bool sort,
-                                 ListBase *r_hit_list);
+                                 ListBaseT<SnapObjectHitDepth> *r_hit_list);
 
 /**
  * Perform snapping.
@@ -215,7 +217,7 @@ bool object_project_all_view3d_ex(SnapObjectContext *sctx,
                                   const float mval[2],
                                   float ray_depth,
                                   bool sort,
-                                  ListBase *r_hit_list);
+                                  ListBaseT<SnapObjectHitDepth> *r_hit_list);
 
 #ifdef DEBUG_SNAP_TIME
 void ED_transform_snap_object_time_average_print();
@@ -223,4 +225,5 @@ void ED_transform_snap_object_time_average_print();
 #  define ED_transform_snap_object_time_average_print() void(0)
 #endif
 
-}  // namespace blender::ed::transform
+}  // namespace ed::transform
+}  // namespace blender

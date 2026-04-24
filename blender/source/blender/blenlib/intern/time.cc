@@ -13,11 +13,12 @@
 #  include <cmath>
 #  include <cstdio>
 
-#  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 
 /* timeapi.h needs to be included after windows.h. */
 #  include <timeapi.h>
+
+namespace blender {
 
 double BLI_time_now_seconds()
 {
@@ -78,7 +79,7 @@ void BLI_time_sleep_precise_us(int us)
     }
     else {
       fprintf(stderr,
-              "BLI_time_sleep_precise_us: CreateWaitableTimerExW failed: %d\n",
+              "BLI_time_sleep_precise_us: CreateWaitableTimerExW failed: %lx\n",
               GetLastError());
     }
     return;
@@ -88,19 +89,22 @@ void BLI_time_sleep_precise_us(int us)
   LARGE_INTEGER wait_time;
   wait_time.QuadPart = -us * 10;
   if (!SetWaitableTimer(timerHandle, &wait_time, 0, nullptr, nullptr, 0)) {
-    fprintf(stderr, "BLI_time_sleep_precise_us: SetWaitableTimer failed: %d\n", GetLastError());
+    fprintf(stderr, "BLI_time_sleep_precise_us: SetWaitableTimer failed: %lx\n", GetLastError());
     CloseHandle(timerHandle);
     return;
   }
 
   if (WaitForSingleObject(timerHandle, INFINITE) != WAIT_OBJECT_0) {
-    fprintf(stderr, "BLI_time_sleep_precise_us: WaitForSingleObject failed: %d\n", GetLastError());
+    fprintf(
+        stderr, "BLI_time_sleep_precise_us: WaitForSingleObject failed: %lx\n", GetLastError());
     CloseHandle(timerHandle);
     return;
   }
 
   CloseHandle(timerHandle);
 }
+
+}  // namespace blender
 
 #else
 
@@ -109,6 +113,8 @@ void BLI_time_sleep_precise_us(int us)
 
 #  include <sys/time.h>
 #  include <unistd.h>
+
+namespace blender {
 
 double BLI_time_now_seconds()
 {
@@ -144,5 +150,7 @@ void BLI_time_sleep_precise_us(int us)
 {
   std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
+
+}  // namespace blender
 
 #endif

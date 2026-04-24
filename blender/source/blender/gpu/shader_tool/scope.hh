@@ -9,102 +9,82 @@
 
 #pragma once
 
-#include "parser.hh"
 #include "token.hh"
+#include "token_stream.hh"
 
 #include <cassert>
 
 namespace blender::gpu::shader::parser {
 
-enum class ScopeType : char {
-  Invalid = 0,
-  /* Use ascii chars to store them in string, and for easy debugging / testing. */
-  Global = 'G',
-  Namespace = 'N',
-  Struct = 'S',
-  Function = 'F',
-  LoopArgs = 'l',
-  LoopBody = 'p',
-  SwitchArg = 'w',
-  SwitchBody = 'W',
-  FunctionArgs = 'f',
-  FunctionCall = 'c',
-  Template = 'T',
-  TemplateArg = 't',
-  Subscript = 'A',
-  Preprocessor = 'P',
-  Assignment = 'a',
-  Attributes = 'B',
-  Attribute = 'b',
-  /* Added scope inside function body. */
-  Local = 'L',
-  /* Added scope inside FunctionArgs. */
-  FunctionArg = 'g',
-  /* Added scope inside FunctionCall. */
-  FunctionParam = 'm',
-  /* Added scope inside LoopArgs. */
-  LoopArg = 'r',
-
-};
+struct ScopeParser;
 
 struct Scope {
+  friend ScopeParser;
+
+ private:
+#ifndef NDEBUG
   /* String view for nicer debugging experience. Isn't actually used. */
-  std::string_view token_view;
-  std::string_view str_view;
+  std::string_view token_view_;
+  std::string_view str_view_;
+#endif
+  /* Parser in which the scope resides. */
+  const ParserBase *parser_;
+  /* Scope index. */
+  int64_t index_;
 
-  const Parser *data;
-  int64_t index;
+ public:
+  Scope() = delete;
 
-  static Scope from_position(const Parser *data, int64_t index)
+  Scope(const ParserBase &parser, int64_t index) : parser_(&parser), index_(index)
   {
-    IndexRange index_range = data->scope_ranges[index];
-    int str_start = data->token_offsets[index_range.start].start;
-    int str_end = data->token_offsets[index_range.last()].last();
-    return {std::string_view(data->token_types).substr(index_range.start, index_range.size),
-            std::string_view(data->str).substr(str_start, str_end - str_start + 1),
-            data,
-            index};
+    if (index < 0 || index >= parser.scope_types.size()) {
+      index = parser.scope_types.size();
+      return;
+    }
+#ifndef NDEBUG
+    IndexRange index_range = parser.scope_ranges[index];
+    token_view_ = parser_->token_types_str().substr(index_range.start, index_range.size);
+    str_view_ = parser_->substr((*parser_)[index_range.start], (*parser_)[index_range.last()]);
+#endif
   }
 
-  static Scope invalid()
-  {
-    return {"", "", nullptr, 0};
-  }
+  /* Create an invalid scope. */
+  Scope(const ParserBase &parser) : Scope(parser, -1) {}
 
   bool is_valid() const
   {
-    return data != nullptr;
+    return index_ < parser_->scope_types.size();
   }
   bool is_invalid() const
   {
-    return data == nullptr;
+    return index_ >= parser_->scope_types.size();
   }
 
   Token operator[](int i)
   {
-    return is_invalid() ? Token::invalid() : Token::from_position(data, range().start + i);
+    return is_invalid() ? Token(*parser_) : Token(*parser_, range().start + i);
   }
 
   /* Return first token of that scope. */
   Token front() const
   {
-    return is_invalid() ? Token::invalid() : Token::from_position(data, range().start);
+    return is_invalid() ? Token(*parser_) : Token(*parser_, range().start);
   }
 
   /* Return last token of that scope. */
   Token back() const
   {
-    return is_invalid() ? Token::invalid() : Token::from_position(data, range().last());
+    return is_invalid() ? Token(*parser_) : Token(*parser_, range().last());
   }
 
   IndexRange range() const
   {
-    return is_invalid() ? IndexRange(0, 0) : data->scope_ranges[index];
+    return is_invalid() ? IndexRange(0, 0) : parser_->scope_ranges[index_];
   }
 
   Token operator[](const int64_t index) const
   {
-    return Token::from_position(data, range().start + index);
+    return Token(*parser_, range().start + index);
   }
 
   size_t token_count() const
@@ -114,14 +94,21 @@ struct Scope {
 
   ScopeType type() const
   {
-    return is_invalid() ? ScopeType::Invalid : ScopeType(data->scope_types[index]);
+    return is_invalid() ? ScopeType::Invalid : ScopeType(parser_->scope_types[index_]);
+  }
+
+  /* WORKAROUND: Only used for semantic tagging of scopes after parsing pass.
+   * The type is only retained until the next parsing pass. */
+  void set_type(ScopeType type)
+  {
+    const_cast<ParserBase *>(parser_)->scope_types[index_] = type;
   }
 
   /* Returns the scope that contains this scope. */
   Scope scope() const
   {
     if (is_invalid()) {
-      return Scope::invalid();
+      return Scope(*parser_);
     }
     const size_t scope_start = this->front().str_index_start();
     Scope scope = *this;
@@ -133,18 +120,52 @@ struct Scope {
     return scope;
   }
 
+  /* Returns the parent node.
+   * Equivalent to scope(). Should ultimately replace it. */
+  Scope parent() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].parent_);
+  }
+
+  Scope prev_neighbor() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].prev_);
+  }
+
+  Scope next_neighbor() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].next_);
+  }
+
+  Scope child_first() const
+  {
+    if (is_invalid()) {
+      return Scope(*parser_);
+    }
+    return Scope(*parser_, parser_->scope_links[index_].child_first_);
+  }
+
   /* Returns the previous scope before this scope. Can be either the container scope or the
    * previous scope inside the same container. */
   Scope prev() const
   {
-    return is_invalid() ? Scope::invalid() : front().prev().scope();
+    return is_invalid() ? Scope(*parser_) : front().prev().scope();
   }
 
   /* Returns the next scope after this scope. Can be either the container scope or the next scope
    * inside the same container. */
   Scope next() const
   {
-    return is_invalid() ? Scope::invalid() : back().next().scope();
+    return is_invalid() ? Scope(*parser_) : back().next().scope();
   }
 
   bool contains(const Scope sub) const
@@ -156,45 +177,45 @@ struct Scope {
     return parent == *this;
   }
 
-  std::string str_with_whitespace() const
+  /* Returns true if scope contains the sub-string. */
+  bool contains(const std::string &str) const
   {
-    if (this->is_invalid()) {
-      return "";
-    }
-    return data->str.substr(front().str_index_start(),
-                            back().str_index_last() - front().str_index_start() + 1);
+    return this->str().find(str) != std::string::npos;
   }
 
-  std::string str() const
+  std::string_view str_with_whitespace() const
   {
     if (this->is_invalid()) {
       return "";
     }
-    return data->str.substr(front().str_index_start(),
-                            back().str_index_last_no_whitespace() - front().str_index_start() + 1);
+    return parser_->substr(front(), back(), true);
+  }
+
+  std::string_view str() const
+  {
+    if (this->is_invalid()) {
+      return "";
+    }
+    return parser_->substr(front(), back(), false);
   }
 
   /* Return the content without the first and last token. */
-  std::string str_exclusive() const
+  std::string_view str_exclusive() const
   {
     if (this->is_invalid() || this->token_count() <= 2) {
       return "";
     }
-    Token start = this->front().next();
-    Token end = this->back().prev();
-    return data->str.substr(start.str_index_start(),
-                            end.str_index_last_no_whitespace() - start.str_index_start() + 1);
+    return parser_->substr(front().next(), back().prev(), false);
   }
 
   /* Return first occurrence of token_type inside this scope. */
   Token find_token(const char token_type) const
   {
     if (this->is_invalid()) {
-      return Token::invalid();
+      return Token(*parser_);
     }
-    size_t pos = data->token_types.substr(range().start, range().size).find(token_type);
-    return (pos != std::string::npos) ? Token::from_position(data, range().start + pos) :
-                                        Token::invalid();
+    size_t pos = parser_->token_types_str().substr(range().start, range().size).find(token_type);
+    return (pos != std::string::npos) ? Token(*parser_, range().start + pos) : Token(*parser_);
   }
 
   bool contains_token(const char token_type) const
@@ -210,7 +231,7 @@ struct Scope {
     while (scope.type() != ScopeType::Global && scope.type() != type) {
       scope = scope.scope();
     }
-    return scope.type() == type ? scope : Scope::invalid();
+    return scope.type() == type ? scope : Scope(*parser_);
   }
 
   /**
@@ -224,17 +245,22 @@ struct Scope {
    *   vector.
    * IMPORTANT: 2 matches cannot overlap. The pattern matching algorithm skips the whole match
    *            after a match there is no readback. This could eventually be fixed.
+   *
+   * If `include_preprocessor` is true, try to match any token. Otherwise ignore tokens in
+   * preprocessor scopes.
+   *
+   * Callback should have this signature `void(const std::vector<Token>)`.
    */
-  void foreach_match(const std::string &pattern,
-                     std::function<void(const std::vector<Token>)> callback) const
+  template<bool include_preprocessor = false, typename CallbackFn>
+  void foreach_match(const std::string &pattern, CallbackFn callback) const
   {
     assert(!pattern.empty());
     if (this->is_invalid()) {
       return;
     }
 
-    const std::string_view scope_tokens =
-        std::string_view(data->token_types).substr(range().start, range().size);
+    const std::string_view scope_tokens = parser_->token_types_str().substr(range().start,
+                                                                            range().size);
 
     auto count_match = [](const std::string_view &s, const std::string_view &pattern) {
       size_t pos = 0, occurrences = 0;
@@ -253,42 +279,48 @@ struct Scope {
     const size_t searchable_range = scope_tokens.size() -
                                     (pattern.size() - 1 - control_token_count);
 
-    std::vector<Token> match;
-    match.resize(pattern.size());
+    std::vector<Token> match(pattern.size(), Token(*parser_));
 
     for (size_t pos = 0; pos < searchable_range; pos++) {
       size_t cursor = range().start + pos;
 
       for (int i = 0; i < pattern.size(); i++) {
         bool is_last_token = i == pattern.size() - 1;
-        TokenType token_type = TokenType(data->token_types[cursor]);
+        TokenType token_type = TokenType(parser_->types_[cursor]);
         TokenType curr_search_token = TokenType(pattern[i]);
         TokenType next_search_token = TokenType(is_last_token ? '\0' : pattern[i + 1]);
 
         /* Scope skipping. */
         if (!is_last_token && curr_search_token == '.' && next_search_token == '.') {
-          cursor = match[i - 1].scope().back().index;
+          cursor = match[i - 1].scope().back().index_;
           i++;
           continue;
         }
 
         /* Regular token. */
         if (curr_search_token == token_type) {
-          match[i] = Token::from_position(data, cursor++);
+          match[i] = Token(*parser_, cursor++);
         }
         else if (curr_search_token == '?' && next_search_token != '?') {
           /* We just matched an optional token in previous iteration. Continue scanning. */
-          match[i] = Token::invalid();
+          match[i] = Token(*parser_);
         }
         else if (!is_last_token && curr_search_token != '?' && next_search_token == '?') {
           /* This was an optional token. Continue scanning. */
-          match[i] = Token::invalid();
+          match[i] = Token(*parser_);
           i++;
           continue;
         }
         else {
           /* Token mismatch. Test next position. */
           break;
+        }
+
+        if constexpr (!include_preprocessor) {
+          if (match[i].scope().type() == ScopeType::Preprocessor) {
+            /* Scope mismatch. Test next position. */
+            break;
+          }
         }
 
         if (is_last_token) {
@@ -300,8 +332,11 @@ struct Scope {
     }
   }
 
-  /* Will iterate over all the scopes that are direct children. */
-  void foreach_scope(ScopeType type, std::function<void(Scope)> callback) const
+  /**
+   * Will iterate over all the scopes that are direct children.
+   * Callback should have this signature `void(Scope)`.
+   */
+  template<typename CallbackFn> void foreach_scope(ScopeType type, CallbackFn callback) const
   {
     /* Makes no sense to iterate on global scope since it is the top level. */
     assert(type != ScopeType::Global);
@@ -309,45 +344,61 @@ struct Scope {
     if (this->is_invalid()) {
       return;
     }
-    size_t pos = this->index;
-    while ((pos = data->scope_types.find(char(type), pos)) != std::string::npos) {
-      Scope scope = Scope::from_position(data, pos);
-      if (scope.front().index > this->back().index) {
+    size_t pos = this->index_;
+    while ((pos = parser_->scope_types_str.find(char(type), pos)) != std::string::npos) {
+      Scope scope(*parser_, pos);
+      if (scope.front().index_ > this->back().index_) {
         /* Found scope starts after this scope. End iteration. */
         break;
       }
       /* Make sure found scope is direct child of this scope. */
       Scope parent_scope = scope.scope();
-      if (parent_scope.index == this->index) {
+      if (parent_scope.index_ == this->index_) {
         callback(scope);
       }
       pos += 1;
     }
   }
 
-  /* Will iterate over all the attribute if this scope is an ScopeType::Attributes. */
-  void foreach_attribute(
-      std::function<void(Token attribute_name, Scope attribute_props)> callback) const
+  /**
+   * Will iterate over all the attribute if this scope is an ScopeType::Attributes.
+   * Callback should have this signature `void(Token attribute_name, Scope attribute_parameters)`.
+   */
+  template<typename CallbackFn> void foreach_attribute(CallbackFn callback) const
   {
     assert(this->type() == ScopeType::Attributes);
     this->foreach_scope(ScopeType::Attribute, [&](Scope attr) {
-      callback(attr[0], attr[1] == '(' ? attr[1].scope() : Scope::invalid());
+      callback(attr[0], attr[1] == '(' ? attr[1].scope() : Scope(*parser_));
     });
   }
 
-  void foreach_token(const TokenType token_type, std::function<void(const Token)> callback) const
+  /**
+   * Will iterate over all tokens of the scope (and its contained scopes).
+   * Callback should have this signature `void(Token)`.
+   */
+  template<typename Callback>
+  void foreach_token(const TokenType token_type, Callback callback) const
   {
-    const char str[2] = {token_type, '\0'};
-    foreach_match(str, [&](const std::vector<Token> &tokens) { callback(tokens[0]); });
+    IndexRange index_range = parser_->scope_ranges[index_];
+    std::string_view view(parser_->token_types_str());
+
+    size_t offset = index_range.start;
+    for (const char c : view.substr(index_range.start, index_range.size)) {
+      if (token_type == TokenType(c)) {
+        callback(Token(*parser_, offset));
+      }
+      offset++;
+    }
   }
 
-  /* Run a callback for all existing function scopes. */
-  void foreach_function(
-      std::function<void(
-          bool is_static, Token type, Token name, Scope args, bool is_const, Scope body)> callback)
-      const
+  /**
+   * Run a callback for all the function scopes that are direct children of this scope.
+   * Callback should have this signature
+   * `void(bool is_static, Token type, Token name, Scope args, bool is_const, Scope body)`.
+   */
+  template<typename Callback> void foreach_function(Callback callback) const
   {
-    foreach_match("m?ww(..)c?{..}", [&](const std::vector<Token> matches) {
+    foreach_match("m?AA(..)c?{..}", [&](const std::vector<Token> matches) {
       callback(matches[0] == Static,
                matches[2],
                matches[3],
@@ -355,7 +406,15 @@ struct Scope {
                matches[8] == Const,
                matches[10].scope());
     });
-    foreach_match("m?ww::w(..)c?{..}", [&](const std::vector<Token> matches) {
+    foreach_match("m?A<..>A(..)c?{..}", [&](const std::vector<Token> matches) {
+      callback(matches[0] == Static,
+               matches[2],
+               matches[7],
+               matches[8].scope(),
+               matches[12] == Const,
+               matches[14].scope());
+    });
+    foreach_match("m?AA::A(..)c?{..}", [&](const std::vector<Token> matches) {
       callback(matches[0] == Static,
                matches[2],
                matches[6],
@@ -363,7 +422,7 @@ struct Scope {
                matches[11] == Const,
                matches[13].scope());
     });
-    foreach_match("m?ww<..>(..)c?{..}", [&](const std::vector<Token> matches) {
+    foreach_match("m?AA<..>(..)c?{..}", [&](const std::vector<Token> matches) {
       callback(matches[0] == Static,
                matches[2],
                matches[3],
@@ -373,38 +432,44 @@ struct Scope {
     });
   }
 
-  /* Run a callback for all existing struct scopes. */
-  void foreach_struct(
-      std::function<void(Token struct_tok, Scope attributes, Token name, Scope body)> callback)
-      const
+  /**
+   * Run a callback for all the struct scopes that are direct children of this scope.
+   * Callback should have this signature
+   * `void(Token struct_tok, Scope attributes, Token name, Scope body)`.
+   */
+  template<typename Callback> void foreach_struct(Callback callback) const
   {
-    foreach_match("sw{..}", [&](const std::vector<Token> matches) {
-      callback(matches[0], Scope::invalid(), matches[1], matches[2].scope());
+    foreach_match("sA{..}", [&](const std::vector<Token> matches) {
+      callback(matches[0], Scope(*parser_), matches[1], matches[2].scope());
     });
-    foreach_match("sw<..>{..}", [&](const std::vector<Token> matches) {
-      callback(matches[0], Scope::invalid(), matches[1], matches[6].scope());
+    foreach_match("sA<..>{..}", [&](const std::vector<Token> matches) {
+      callback(matches[0], Scope(*parser_), matches[1], matches[6].scope());
     });
-    foreach_match("s[[..]]w{..}", [&](const std::vector<Token> matches) {
+    foreach_match("s[[..]]A{..}", [&](const std::vector<Token> matches) {
       callback(matches[0], matches[2].scope(), matches[7], matches[8].scope());
     });
-    foreach_match("s[[..]]w<..>{..}", [&](const std::vector<Token> matches) {
+    foreach_match("s[[..]]A<..>{..}", [&](const std::vector<Token> matches) {
       callback(matches[0], matches[2].scope(), matches[7], matches[12].scope());
     });
   }
 
-  /* Run a callback for all existing variable declaration (without assignment). */
-  void foreach_declaration(std::function<void(Scope attributes,
-                                              Token const_tok,
-                                              Token type,
-                                              Scope template_scope,
-                                              Token name,
-                                              Scope array,
-                                              Token decl_end)> callback) const
+  /**
+   * Run a callback for all the variable declarations (without assignment) that are direct children
+   * Callback should have this signature
+   * `void(Scope attributes,
+   *       Token const_tok,
+   *       Token type,
+   *       Scope template_scope,
+   *       Token name,
+   *       Scope array,
+   *       Token decl_end)`.
+   */
+  template<typename Callback> void foreach_declaration(Callback callback) const
   {
-    auto attrs = [](const std::vector<Token> &tokens) {
+    auto attrs = [&](const std::vector<Token> &tokens) {
       Token first = tokens[0].is_valid() ? tokens[0] : tokens[2];
       Scope attributes = first.prev().prev().scope();
-      attributes = (attributes.type() == ScopeType::Attributes) ? attributes : Scope::invalid();
+      attributes = (attributes.type() == ScopeType::Attributes) ? attributes : Scope(*parser_);
       return attributes;
     };
 
@@ -421,36 +486,51 @@ struct Scope {
       callback(attributes, const_tok, type, template_scope, name, array, decl_end);
     };
 
-    foreach_match("c?ww;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], Scope::invalid(), toks[3], Scope::invalid(), toks.back());
+    Scope invalid(*parser_);
+
+    /* TODO(fclem): This is getting out of hand... */
+    foreach_match("c?AA;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], invalid, toks[3], invalid, toks.back());
     });
-    foreach_match("c?ww[..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], Scope::invalid(), toks[3], toks[4].scope(), toks.back());
+    foreach_match("c?AA[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], invalid, toks[3], toks[4].scope(), toks.back());
     });
-    foreach_match("c?w<..>w;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[7], Scope::invalid(), toks.back());
+    foreach_match("c?AA[..][..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], invalid, toks[3], toks[4].scope(), toks.back());
     });
-    foreach_match("c?w<..>w[..];", [&](const std::vector<Token> toks) {
+    foreach_match("c?A<..>A;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[7], invalid, toks.back());
+    });
+    foreach_match("c?A<..>A[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[7], toks[8].scope(), toks.back());
+    });
+    foreach_match("c?A<..>A[..][..];", [&](const std::vector<Token> toks) {
       cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[7], toks[8].scope(), toks.back());
     });
 
-    foreach_match("c?w&w;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], Scope::invalid(), toks[4], Scope::invalid(), toks.back());
+    foreach_match("c?A&A;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], invalid, toks[4], invalid, toks.back());
     });
-    foreach_match("c?w(&w)[..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], Scope::invalid(), toks[5], toks[7].scope(), toks.back());
+    foreach_match("c?A(&A)[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], invalid, toks[5], toks[7].scope(), toks.back());
     });
-    foreach_match("c?w<..>&w;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[8], Scope::invalid(), toks.back());
+    foreach_match("c?A(&A)[..][..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], invalid, toks[5], toks[7].scope(), toks.back());
     });
-    foreach_match("c?w<..>(&w)[..];", [&](const std::vector<Token> toks) {
+    foreach_match("c?A<..>&A;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[8], invalid, toks.back());
+    });
+    foreach_match("c?A<..>(&A)[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[9], toks[11].scope(), toks.back());
+    });
+    foreach_match("c?A<..>(&A)[..][..];", [&](const std::vector<Token> toks) {
       cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[9], toks[11].scope(), toks.back());
     });
   }
 
   bool operator==(const Scope &other) const
   {
-    return this->index == other.index && this->data == other.data;
+    return this->index_ == other.index_ && this->parser_ == other.parser_;
   }
   bool operator!=(const Scope &other) const
   {

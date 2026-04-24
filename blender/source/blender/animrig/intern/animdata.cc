@@ -88,18 +88,18 @@ Vector<ID *> find_related_ids(Main &bmain, ID &id)
         if (!ob->data) {
           break;
         }
-        ID *data = static_cast<ID *>(ob->data);
+        ID *data = ob->data;
         if (ID_REAL_USERS(data) == 1) {
           related_ids.append_non_duplicates(data);
         }
-        LISTBASE_FOREACH (ParticleSystem *, particle_system, &ob->particlesystem) {
-          if (!particle_system->part) {
+        for (ParticleSystem &particle_system : ob->particlesystem) {
+          if (!particle_system.part) {
             continue;
           }
-          if (ID_REAL_USERS(&particle_system->part->id) != 1) {
+          if (ID_REAL_USERS(&particle_system.part->id) != 1) {
             continue;
           }
-          related_ids.append_non_duplicates(&particle_system->part->id);
+          related_ids.append_non_duplicates(&particle_system.part->id);
         }
         break;
       }
@@ -132,11 +132,11 @@ Vector<ID *> find_related_ids(Main &bmain, ID &id)
         FOREACH_MAIN_LISTBASE_ID_BEGIN (&bmain.objects, object_id) {
           ob = reinterpret_cast<Object *>(object_id);
           bool object_uses_particle_settings = false;
-          LISTBASE_FOREACH (ParticleSystem *, particle_system, &ob->particlesystem) {
-            if (!particle_system->part) {
+          for (ParticleSystem &particle_system : ob->particlesystem) {
+            if (!particle_system.part) {
               continue;
             }
-            if (&particle_system->part->id != related_id) {
+            if (&particle_system.part->id != related_id) {
               continue;
             }
             object_uses_particle_settings = true;
@@ -344,6 +344,23 @@ const FCurve *fcurve_find_by_rna_path(const AnimData &adt,
   }
 
   return nullptr;
+}
+
+Span<FCurve *> fcurves_for_assigned_action(AnimData *adt)
+{
+  if (!adt || !adt->action) {
+    return {};
+  }
+  return fcurves_for_action_slot(adt->action->wrap(), adt->slot_handle);
+}
+
+Span<const FCurve *> fcurves_for_assigned_action(const AnimData *adt)
+{
+  if (!adt || !adt->action) {
+    return {};
+  }
+  return fcurves_for_action_slot(const_cast<const bAction *>(adt->action)->wrap(),
+                                 adt->slot_handle);
 }
 
 }  // namespace blender::animrig

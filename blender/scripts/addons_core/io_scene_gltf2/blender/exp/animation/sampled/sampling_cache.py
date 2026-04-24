@@ -43,24 +43,6 @@ def get_cache_data(path: str,
         # If object is not in vtree, this is a material or light for pointers
         obj_uuids = [blender_obj_uuid] if blender_obj_uuid in export_settings['vtree'].nodes.keys() else []
 
-    # If there is only 1 object to cache, we can disable viewport for other objects (for performance)
-    # This can be on these cases:
-    # - TRACK mode
-    # - Only one object to cache (but here, no really useful for performance)
-    # - Action mode, where some object have multiple actions
-        # - For this case, on first call, we will cache active action for all objects
-        # - On next calls, we will cache only the action of current object, so we can disable viewport for others
-
-    if export_settings['gltf_optimize_disable_viewport'] is True and len(obj_uuids) == 1:
-        # Before baking, disabling from viewport all meshes
-        for obj in [n.blender_object for n in export_settings['vtree'].nodes.values() if n.blender_type in
-                    [VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION]]:
-            if obj is None:
-                continue
-            obj.hide_viewport = True
-        export_settings['vtree'].nodes[obj_uuids[0]].blender_object.hide_viewport = False
-    # Work for drivers on shapekeys is already done at start of animation export
-
     depsgraph = bpy.context.evaluated_depsgraph_get()
 
     frame = min_
@@ -68,7 +50,8 @@ def get_cache_data(path: str,
         bpy.context.scene.frame_set(int(frame))
         current_instance = {}  # For GN instances, we are going to track instances by their order in instance iterator
 
-        object_caching(data, obj_uuids, current_instance, action_name, slot_identifier, frame, depsgraph, export_settings)
+        object_caching(data, obj_uuids, current_instance, action_name,
+                       slot_identifier, frame, depsgraph, export_settings)
 
         # KHR_animation_pointer caching for materials, lights, cameras
         if export_settings['gltf_export_anim_pointer'] is True:
@@ -78,11 +61,6 @@ def get_cache_data(path: str,
             camera_caching(data, action_name, slot_identifier, frame, export_settings)
 
         frame += step
-
-    # And now, restoring meshes in viewport
-    for node, obj in [(n, n.blender_object) for n in export_settings['vtree'].nodes.values() if n.blender_type in
-                      [VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION]]:
-        obj.hide_viewport = node.default_hide_viewport
 
     return data
 
@@ -567,7 +545,8 @@ def object_caching(data, obj_uuids, current_instance, action_name, slot_identifi
                 if blender_obj.animation_data and blender_obj.animation_data.action \
                         and blender_obj.animation_data.action_slot \
                         and export_settings['gltf_animation_mode'] in ["ACTIVE_ACTIONS", "ACTIONS", "BROADCAST"]:
-                    key1, key2, key3, key4, key5 = dr_obj, obj_uuid + "_" + blender_obj.animation_data.action.name, blender_obj.animation_data.action_slot.identifier, "sk", None
+                    key1, key2, key3, key4, key5 = dr_obj, obj_uuid + "_" + \
+                        blender_obj.animation_data.action.name, blender_obj.animation_data.action_slot.identifier, "sk", None
                     cache_sk = True
                 elif blender_obj.animation_data \
                         and export_settings['gltf_animation_mode'] in ["NLA_TRACKS"]:

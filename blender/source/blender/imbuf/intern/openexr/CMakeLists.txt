@@ -10,7 +10,6 @@ set(INC
 )
 
 set(INC_SYS
-
 )
 
 set(SRC
@@ -24,21 +23,7 @@ set(LIB
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::clog
+  PRIVATE bf::dependencies::openexr
 )
-
-if(WITH_IMAGE_OPENEXR)
-  list(APPEND INC_SYS
-    ${OPENEXR_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${OPENEXR_LIBRARIES}
-  )
-  add_definitions(-DWITH_IMAGE_OPENEXR)
-  if(WIN32)
-    if(EXISTS ${LIBDIR}/imath/bin/imath.dll)
-      add_definitions(-DIMATH_DLL)
-    endif()
-  endif()
-endif()
 
 blender_add_lib(bf_imbuf_openexr "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

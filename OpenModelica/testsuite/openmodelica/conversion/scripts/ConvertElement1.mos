@@ -1,3 +1,0 @@
-convertElement({"Modelica.Media.Interfaces.PartialMedium.BaseProperties",
-                "Modelica.Media.IdealGases.Common.SingleGasesData.N2"},
-                "R", "R_s")

@@ -36,7 +36,6 @@
 
 #include "BLI_cache_mutex.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_struct_equality_utils.hh"
 
 namespace blender {
 
@@ -55,7 +54,7 @@ struct ComputeContextHash {
     return v1;
   }
 
-  BLI_STRUCT_EQUALITY_OPERATORS_2(ComputeContextHash, v1, v2)
+  friend bool operator==(const ComputeContextHash &a, const ComputeContextHash &b) = default;
 
   /**
    * Standard way to create a compute context hash.
@@ -72,7 +71,6 @@ struct ComputeContextHash {
 
   friend std::ostream &operator<<(std::ostream &stream, const ComputeContextHash &hash);
 
- private:
   /**
    * Compute a context hash by packing all the arguments into a contiguous buffer and hashing
    * that.
@@ -107,8 +105,17 @@ class ComputeContext {
  private:
   mutable CacheMutex hash_mutex_;
 
+  /**
+   * Number of parent contexts. This can be used to limit the maximum depth to prevent
+   * stack-overflows.
+   */
+  int parents_num_ = 0;
+
  public:
-  ComputeContext(const ComputeContext *parent) : parent_(parent) {}
+  ComputeContext(const ComputeContext *parent)
+      : parent_(parent), parents_num_(parent ? parent->parents_num_ + 1 : 0)
+  {
+  }
   virtual ~ComputeContext() = default;
 
   const ComputeContextHash &hash() const
@@ -120,6 +127,11 @@ class ComputeContext {
   const ComputeContext *parent() const
   {
     return parent_;
+  }
+
+  int parents_num() const
+  {
+    return parents_num_;
   }
 
   /**

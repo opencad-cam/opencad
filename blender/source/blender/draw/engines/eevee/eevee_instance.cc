@@ -84,25 +84,29 @@ void Instance::init()
     }
 
     if (camera) {
-      rctf default_border;
-      BLI_rctf_init(&default_border, 0.0f, 1.0f, 0.0f, 1.0f);
-      bool is_default_border = BLI_rctf_compare(&scene->r.border, &default_border, 0.0f);
-      bool use_border = scene->r.mode & R_BORDER;
-      if (!is_default_border && use_border) {
-        rctf viewborder;
-        /* TODO(fclem) Might be better to get it from DRW. */
-        ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &viewborder);
-        float viewborder_sizex = BLI_rctf_size_x(&viewborder);
-        float viewborder_sizey = BLI_rctf_size_y(&viewborder);
-        rect.xmin = floorf(viewborder.xmin + (scene->r.border.xmin * viewborder_sizex));
-        rect.ymin = floorf(viewborder.ymin + (scene->r.border.ymin * viewborder_sizey));
-        rect.xmax = floorf(viewborder.xmin + (scene->r.border.xmax * viewborder_sizex));
-        rect.ymax = floorf(viewborder.ymin + (scene->r.border.ymax * viewborder_sizey));
-        /* Clamp it to the viewport area. */
-        rect.xmin = max(rect.xmin, 0);
-        rect.ymin = max(rect.ymin, 0);
-        rect.xmax = min(rect.xmax, size.x);
-        rect.ymax = min(rect.ymax, size.y);
+      if (scene->r.mode & R_BORDER) {
+        if (draw_ctx->is_viewport_image_render()) {
+          rect.xmin = scene->r.border.xmin * size[0];
+          rect.ymin = scene->r.border.ymin * size[1];
+          rect.xmax = scene->r.border.xmax * size[0];
+          rect.ymax = scene->r.border.ymax * size[1];
+        }
+        else {
+          rctf viewborder;
+          /* TODO(fclem) Might be better to get it from DRW. */
+          ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &viewborder);
+          float viewborder_sizex = BLI_rctf_size_x(&viewborder);
+          float viewborder_sizey = BLI_rctf_size_y(&viewborder);
+          rect.xmin = floorf(viewborder.xmin + (scene->r.border.xmin * viewborder_sizex));
+          rect.ymin = floorf(viewborder.ymin + (scene->r.border.ymin * viewborder_sizey));
+          rect.xmax = floorf(viewborder.xmin + (scene->r.border.xmax * viewborder_sizex));
+          rect.ymax = floorf(viewborder.ymin + (scene->r.border.ymax * viewborder_sizey));
+          /* Clamp it to the viewport area. */
+          rect.xmin = max(rect.xmin, 0);
+          rect.ymin = max(rect.ymin, 0);
+          rect.xmax = min(rect.xmax, size.x);
+          rect.ymax = min(rect.ymax, size.y);
+        }
       }
     }
     else if (v3d->flag2 & V3D_RENDER_BORDER) {
@@ -169,7 +173,7 @@ void Instance::init(const int2 &output_res,
     {
       sampling.reset();
     }
-    if (assign_if_different(debug_mode, (eDebugMode)G.debug_value)) {
+    if (assign_if_different(debug_mode, eDebugMode(G.debug_value))) {
       sampling.reset();
     }
     if (output_res != film.display_extent_get()) {
@@ -191,10 +195,15 @@ void Instance::init(const int2 &output_res,
     if (is_navigating && scene->eevee.flag & SCE_EEVEE_SHADOW_JITTERED_VIEWPORT) {
       sampling.reset();
     }
+    if (is_playback) {
+      sampling.reset();
+    }
   }
   else {
     is_image_render = true;
   }
+
+  anisotropic_filtering = GPU_anisotropic_filtering_flags(scene->r.anisotropic_filter);
 
   sampling.init(scene);
   camera.init();
@@ -223,7 +232,7 @@ void Instance::init(const int2 &output_res,
   SET_FLAG_FROM_TEST(shader_request, needs_planar_probe_passes(), DEFERRED_PLANAR_SHADERS);
   SET_FLAG_FROM_TEST(shader_request, needs_lightprobe_sphere_passes(), DEFERRED_CAPTURE_SHADERS);
   SET_FLAG_FROM_TEST(shader_request, motion_blur.postfx_enabled(), MOTION_BLUR_SHADERS);
-  SET_FLAG_FROM_TEST(shader_request, raytracing.use_fast_gi(), HORIZON_SCAN_SHADERS);
+  SET_FLAG_FROM_TEST(shader_request, raytracing.use_fast_gi(), FAST_GI_SHADERS);
   SET_FLAG_FROM_TEST(shader_request, raytracing.use_raytracing(), RAYTRACING_SHADERS);
 
   loaded_shaders = ShaderGroups::NONE;
@@ -270,7 +279,7 @@ void Instance::init_light_bake(Depsgraph *depsgraph, draw::Manager *manager)
   update_eval_members();
 
   is_light_bake = true;
-  debug_mode = (eDebugMode)G.debug_value;
+  debug_mode = eDebugMode(G.debug_value);
   info_ = "";
 
   sampling.init(scene);
@@ -395,39 +404,32 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager & /*manager*/)
     return;
   }
 
-  ObjectHandle &ob_handle = sync.sync_object(ob_ref);
-
   if (partsys_is_visible && ob != draw_ctx->object_edit) {
-    auto sync_hair =
-        [&](ObjectHandle hair_handle, ModifierData &md, ParticleSystem &particle_sys) {
-          ResourceHandleRange _res_handle = manager->resource_handle_for_psys(
-              ob_ref, ob->object_to_world());
-          sync.sync_curves(ob, hair_handle, ob_ref, _res_handle, &md, &particle_sys);
-        };
-    foreach_hair_particle_handle(*this, ob_ref, ob_handle, sync_hair);
+    auto sync_hair = [&](const HairParticleInfo &info) { sync.sync_curves(ob_ref, &info); };
+    foreach_hair_particle(*this, ob_ref, sync_hair);
   }
 
   if (object_is_visible) {
     switch (ob->type) {
       case OB_LAMP:
-        lights.sync_light(ob, ob_handle);
+        lights.sync_light(ob_ref);
         break;
       case OB_MESH:
-        if (!sync.sync_sculpt(ob, ob_handle, ob_ref)) {
-          sync.sync_mesh(ob, ob_handle, ob_ref);
+        if (!sync.sync_sculpt(ob_ref)) {
+          sync.sync_mesh(ob_ref);
         }
         break;
       case OB_POINTCLOUD:
-        sync.sync_pointcloud(ob, ob_handle, ob_ref);
+        sync.sync_pointcloud(ob_ref);
         break;
       case OB_VOLUME:
-        sync.sync_volume(ob, ob_handle, ob_ref);
+        sync.sync_volume(ob_ref);
         break;
       case OB_CURVES:
-        sync.sync_curves(ob, ob_handle, ob_ref);
+        sync.sync_curves(ob_ref);
         break;
       case OB_LIGHTPROBE:
-        light_probes.sync_probe(ob, ob_handle);
+        light_probes.sync_probe(ob_ref);
         break;
       default:
         break;
@@ -482,7 +484,7 @@ void Instance::render_sync()
   begin_sync();
 
   DRW_render_object_iter(
-      render, depsgraph, [this](blender::draw::ObjectRef &ob_ref, RenderEngine *, Depsgraph *) {
+      render, depsgraph, [this](draw::ObjectRef &ob_ref, RenderEngine *, Depsgraph *) {
         this->object_sync(ob_ref, *this->manager);
       });
 
@@ -598,15 +600,15 @@ void Instance::render_read_result(RenderLayer *render_layer, const char *view_na
   }
 
   /* AOVs. */
-  LISTBASE_FOREACH (ViewLayerAOV *, aov, &view_layer->aovs) {
-    if ((aov->flag & AOV_CONFLICT) != 0) {
+  for (ViewLayerAOV &aov : view_layer->aovs) {
+    if ((aov.flag & AOV_CONFLICT) != 0) {
       continue;
     }
-    RenderPass *rp = RE_pass_find_by_name(render_layer, aov->name, view_name);
+    RenderPass *rp = RE_pass_find_by_name(render_layer, aov.name, view_name);
     if (!rp) {
       continue;
     }
-    float *result = film.read_aov(aov);
+    float *result = film.read_aov(&aov);
 
     if (result) {
       BLI_mutex_lock(&render->update_render_passes_mutex);
@@ -627,7 +629,7 @@ void Instance::render_read_result(RenderLayer *render_layer, const char *view_na
       RenderPass *vector_rp = RE_pass_find_by_name(
           render_layer, vector_pass_name.c_str(), view_name);
       if (vector_rp) {
-        memset(vector_rp->ibuf->float_buffer.data,
+        memset(vector_rp->ibuf->float_data_for_write(),
                0,
                sizeof(float) * 4 * vector_rp->rectx * vector_rp->recty);
       }
@@ -668,9 +670,11 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
       RE_engine_update_stats(engine, nullptr, re_info.c_str());
     }
 
-    /* Perform render step between samples to allow
-     * flushing of freed GPUBackend resources. */
-    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+    /* Metal: Perform render step between samples to allow flushing of freed GPUBackend resources.
+     * Vulkan: Perform render step between samples to avoid allocation of a high amount of command
+     * buffer memory that can eventually result in out-of-memory errors or a TDR when submitted as
+     * one large command buffer. */
+    if (ELEM(GPU_backend_get_type(), GPU_BACKEND_METAL, GPU_BACKEND_VULKAN)) {
       GPU_flush();
     }
     GPU_render_step();
@@ -708,7 +712,7 @@ void Instance::draw_viewport()
 {
   if (skip_render_ || !is_loaded(needed_shaders)) {
     DefaultFramebufferList *dfbl = draw_ctx->viewport_framebuffer_list_get();
-    GPU_framebuffer_clear_color_depth(dfbl->default_fb, float4(0.0f), 1.0f);
+    GPU_framebuffer_clear_color_depth(dfbl->default_fb, double4(0.0), 1.0f);
     if (!is_loaded(needed_shaders & ~WORLD_SHADERS)) {
       info_append_i18n("Compiling EEVEE engine shaders");
       DRW_viewport_request_redraw();
@@ -832,16 +836,16 @@ void Instance::update_passes(RenderEngine *engine, Scene *scene, ViewLayer *view
   CHECK_PASS_LEGACY(AO, SOCK_RGBA, 3, "RGB");
   CHECK_PASS_EEVEE(TRANSPARENT, SOCK_RGBA, 4, "RGBA");
 
-  LISTBASE_FOREACH (ViewLayerAOV *, aov, &view_layer->aovs) {
-    if ((aov->flag & AOV_CONFLICT) != 0) {
+  for (ViewLayerAOV &aov : view_layer->aovs) {
+    if ((aov.flag & AOV_CONFLICT) != 0) {
       continue;
     }
-    switch (aov->type) {
+    switch (aov.type) {
       case AOV_TYPE_COLOR:
-        RE_engine_register_pass(engine, scene, view_layer, aov->name, 4, "RGBA", SOCK_RGBA);
+        RE_engine_register_pass(engine, scene, view_layer, aov.name, 4, "RGBA", SOCK_RGBA);
         break;
       case AOV_TYPE_VALUE:
-        RE_engine_register_pass(engine, scene, view_layer, aov->name, 1, "X", SOCK_FLOAT);
+        RE_engine_register_pass(engine, scene, view_layer, aov.name, 1, "X", SOCK_FLOAT);
         break;
       default:
         break;

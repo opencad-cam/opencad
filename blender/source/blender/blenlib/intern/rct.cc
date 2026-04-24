@@ -24,6 +24,8 @@
 
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 bool BLI_rcti_is_empty(const rcti *rect)
 {
   return ((rect->xmax <= rect->xmin) || (rect->ymax <= rect->ymin));
@@ -383,6 +385,18 @@ void BLI_rctf_union(rctf *rct_a, const rctf *rct_b)
   if (rct_a->ymax < rct_b->ymax) {
     rct_a->ymax = rct_b->ymax;
   }
+}
+
+void BLI_rctf_union_x(rctf *rct, const float x)
+{
+  rct->xmin = min_ff(rct->xmin, x);
+  rct->xmax = max_ff(rct->xmax, x);
+}
+
+void BLI_rctf_union_y(rctf *rct, const float y)
+{
+  rct->ymin = min_ff(rct->ymin, y);
+  rct->ymax = max_ff(rct->ymax, y);
 }
 
 void BLI_rcti_union(rcti *rct_a, const rcti *rct_b)
@@ -1130,8 +1144,6 @@ void BLI_rctf_rotate_expand(rctf *dst, const rctf *src, const float angle)
 
 bool BLI_rctf_clamp_segment(const rctf *rect, float s1[2], float s2[2])
 {
-  using namespace blender;
-
   const bool p1_inside = BLI_rctf_isect_pt_v(rect, s1);
   const bool p2_inside = BLI_rctf_isect_pt_v(rect, s2);
   if (p1_inside && p2_inside) {
@@ -1191,3 +1203,5 @@ bool BLI_rctf_clamp_segment(const rctf *rect, float s1[2], float s2[2])
 }
 
 /** \} */
+
+}  // namespace blender

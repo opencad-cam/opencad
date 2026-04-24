@@ -38,19 +38,14 @@ bke::GSpanAttributeWriter ensure_selection_attribute(PointCloud &pointcloud,
   if (attributes.contains(attribute_name)) {
     return attributes.lookup_for_write_span(attribute_name);
   }
-  const int domain_size = pointcloud.totpoint;
   switch (create_type) {
     case bke::AttrType::Bool:
-      attributes.add(attribute_name,
-                     selection_domain,
-                     bke::AttrType::Bool,
-                     bke::AttributeInitVArray(VArray<bool>::from_single(true, domain_size)));
+      attributes.add(
+          attribute_name, selection_domain, bke::AttrType::Bool, bke::AttributeInitValue(true));
       break;
     case bke::AttrType::Float:
-      attributes.add(attribute_name,
-                     selection_domain,
-                     bke::AttrType::Float,
-                     bke::AttributeInitVArray(VArray<float>::from_single(1.0f, domain_size)));
+      attributes.add(
+          attribute_name, selection_domain, bke::AttrType::Float, bke::AttributeInitValue(1.0f));
       break;
     default:
       BLI_assert_unreachable();
@@ -86,7 +81,7 @@ void fill_selection_true(GMutableSpan selection, const IndexMask &mask)
 static void invert_selection(MutableSpan<float> selection, const IndexMask &mask)
 {
   mask.foreach_index_optimized<int64_t>(
-      GrainSize(2048), [&](const int64_t i) { selection[i] = 1.0f - selection[i]; });
+      [&](const int64_t i) { selection[i] = 1.0f - selection[i]; }, exec_mode::grain_size(4096));
 }
 
 static void invert_selection(GMutableSpan selection, const IndexMask &mask)
@@ -170,7 +165,7 @@ bool select_box(PointCloud &pointcloud,
 
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_predicate(
-      positions.index_range(), GrainSize(1024), memory, [&](const int point) {
+      positions.index_range(), memory, [&](const int point) {
         const float2 pos_proj = ED_view3d_project_float_v2_m4(
             &region, positions[point], projection);
         return BLI_rcti_isect_pt_v(&rect, int2(pos_proj));
@@ -192,7 +187,7 @@ bool select_lasso(PointCloud &pointcloud,
 
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_predicate(
-      positions.index_range(), GrainSize(1024), memory, [&](const int point) {
+      positions.index_range(), memory, [&](const int point) {
         const float2 pos_proj = ED_view3d_project_float_v2_m4(
             &region, positions[point], projection);
         if (!BLI_rcti_isect_pt_v(&bbox, int2(pos_proj))) {
@@ -221,7 +216,7 @@ bool select_circle(PointCloud &pointcloud,
 
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_predicate(
-      positions.index_range(), GrainSize(1024), memory, [&](const int point) {
+      positions.index_range(), memory, [&](const int point) {
         const float2 pos_proj = ED_view3d_project_float_v2_m4(
             &region, positions[point], projection);
         return math::distance_squared(pos_proj, float2(coord)) <= radius_sq;

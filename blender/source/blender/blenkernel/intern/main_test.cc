@@ -1,10 +1,14 @@
 /* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
+
+#include <ranges>
+
 #include "testing/testing.h"
 
 #include "CLG_log.h"
 
+#include "BLI_array.hh"
 #include "BLI_listbase.h"
 #include "BLI_path_utils.hh"
 #include "BLI_string.h"
@@ -34,6 +38,65 @@ class BMainTest : public testing::Test {
     CLG_exit();
   }
 };
+
+class BMainAllIDsIteratorTest : public BMainTest {
+ public:
+  void SetUp() override
+  {
+    bmain = BKE_main_new();
+  }
+
+  void TearDown() override
+  {
+    if (bmain) {
+      BKE_main_free(bmain);
+    }
+  }
+
+  Main *bmain;
+};
+
+TEST_F(BMainAllIDsIteratorTest, basics)
+{
+  EXPECT_TRUE(BLI_listbase_is_empty(&bmain->libraries));
+  EXPECT_TRUE(BLI_listbase_is_empty(&bmain->collections));
+  EXPECT_TRUE(BLI_listbase_is_empty(&bmain->objects));
+
+  /* Test also (default-constructed) empty iterator. */
+  MainAllIDsIterator empty_main_iter{};
+  EXPECT_EQ(empty_main_iter, empty_main_iter.end());
+  EXPECT_EQ(0, empty_main_iter.size());
+  EXPECT_EQ(empty_main_iter.begin(), empty_main_iter.end());
+
+  Library *lib = BKE_id_new<Library>(bmain, "Library");
+  Collection *coll = BKE_id_new<Collection>(bmain, "Collection");
+  Object *ob = BKE_id_new<Object>(bmain, "Object");
+  BKE_collection_object_add(bmain, coll, ob);
+  Object *ob_linked = BKE_id_new_in_lib<Object>(bmain, lib, "Object_linked");
+  BKE_collection_object_add(bmain, coll, ob_linked);
+
+  Array<ID *> expected_ids = {&lib->id, &ob->id, &ob_linked->id, &coll->id};
+
+  EXPECT_EQ(1, BLI_listbase_count(&bmain->libraries));
+  EXPECT_EQ(1, BLI_listbase_count(&bmain->collections));
+  EXPECT_EQ(2, BLI_listbase_count(&bmain->objects));
+
+  MainAllIDsIterator main_iter{*bmain};
+  EXPECT_EQ(4, main_iter.size());
+  int i = 0;
+  for (ID &id_iter : main_iter) {
+    EXPECT_EQ(expected_ids[i], &id_iter);
+    i++;
+  }
+  EXPECT_EQ(4, i);
+
+  i = 4;
+  for (ID &id_iter : main_iter.begin() | std::views::reverse) {
+    i--;
+    EXPECT_EQ(expected_ids[i], &id_iter);
+  }
+  EXPECT_EQ(0, i);
+}
 
 class BMainMergeTest : public BMainTest {
  public:
@@ -294,11 +357,11 @@ TEST_F(BMainMergeTest, link_lib_packed)
 
   auto create_packed_object = [&is_archive_lib_new](Main &bmain,
                                                     Library &owner_lib,
-                                                    blender::StringRefNull ob_name,
+                                                    StringRefNull ob_name,
                                                     IDHash ob_deep_hash) -> Object * {
     Object *ob_packed = BKE_id_new_in_lib<Object>(&bmain, &owner_lib, ob_name.c_str());
     ob_packed->id.deep_hash = ob_deep_hash;
-    Library *archive_lib = blender::bke::library::ensure_archive_library(
+    Library *archive_lib = bke::library::ensure_archive_library(
         bmain, ob_packed->id, owner_lib, ob_packed->id.deep_hash, is_archive_lib_new);
     BKE_main_namemap_remove_id(bmain, ob_packed->id);
     ob_packed->id.lib = archive_lib;

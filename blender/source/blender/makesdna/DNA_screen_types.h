@@ -18,6 +18,8 @@
 
 #include "DNA_ID.h"
 
+namespace blender {
+
 struct ARegion;
 struct ARegionType;
 struct PanelType;
@@ -31,25 +33,13 @@ struct wmDrawBuffer;
 struct wmTimer;
 struct wmTooltipState;
 struct Panel_Runtime;
-#ifdef __cplusplus
-namespace blender::bke {
+namespace bke {
 struct ARegionRuntime;
 struct FileHandlerType;
-}  // namespace blender::bke
-using ARegionRuntimeHandle = blender::bke::ARegionRuntime;
-
-using FileHandlerTypeHandle = blender::bke::FileHandlerType;
-
-namespace blender::ui {
-
+}  // namespace bke
+namespace ui {
 struct Layout;
-}  // namespace blender::ui
-using uiLayoutHandle = blender::ui::Layout;
-#else
-struct ARegionRuntimeHandle;
-struct FileHandlerTypeHandle;
-struct uiLayoutHandle;
-#endif
+}  // namespace ui
 
 /** #bScreen.flag */
 enum {
@@ -257,7 +247,7 @@ struct Panel {
   /** Runtime. */
   struct PanelType *type = nullptr;
   /** Runtime for drawing. */
-  uiLayoutHandle *layout = nullptr;
+  ui::Layout *layout = nullptr;
 
   char panelname[/*BKE_ST_MAXNAME*/ 64] = "";
   /** Panel name is identifier for restoring location. */
@@ -281,7 +271,7 @@ struct Panel {
   /**
    *  This stores the open-close-state of layout-panels created with
    * `layout.panel(...)` in Python. For more information on layout-panels, see
-   * `blender::ui::Layout::panel_prop`.
+   * `ui::Layout::panel_prop`.
    */
   ListBaseT<LayoutPanelState> layout_panel_states = {nullptr, nullptr};
   /**
@@ -317,6 +307,7 @@ struct Panel {
 struct PanelCategoryDyn {
   struct PanelCategoryDyn *next = nullptr, *prev = nullptr;
   char idname[64] = "";
+  int icon = 0;
   rcti rect = {};
 };
 
@@ -453,6 +444,7 @@ struct uiList { /* some list UI data need to be saved in file */
 
 enum uiViewStateFlag {
   UI_VIEW_SHOW_FILTER_OPTIONS = (1 << 0),
+  UI_VIEW_SORT_ALPHA = (1 << 1),
 };
 
 /** See #uiViewStateLink. */
@@ -469,8 +461,8 @@ struct uiViewState {
    */
   int scroll_offset = 0;
   uint16_t flag = 0; /* #uiViewStateFlag */
-  char _pad[6] = {};
-
+  char _pad[5] = {};
+  uint8_t invert_sort_type = 0;
   char search_string[/*UI_MAX_NAME_STR*/ 256] = "";
 };
 
@@ -513,6 +505,27 @@ struct uiPreview {
 
   /** #ID.session_uid of the ID this preview is made for. Unset on file read. */
   unsigned int id_session_uid = 0;
+};
+
+/**
+ * State storage for text-boxes (#ui::ButtonTextBox).
+ */
+struct TextboxState {
+  int visible_lines = 0;
+  int scroll = 0;
+};
+
+/**
+ * Persistent storage for text-boxes (#ui::ButtonTextBox) in a region. The state is matched to the
+ * textbox buttons using the RNA struct identifier + property name.
+ *
+ * The actual state is stored in #uiTextboxState, so textbox buttons can manage this conveniently
+ * without having to care about the idname and listbase pointers themselves.
+ */
+struct uiTextboxStateLink {
+  struct uiTextboxStateLink *next = nullptr, *prev = nullptr;
+  char *idname = nullptr;
+  TextboxState state = {};
 };
 
 enum GlobalAreaFlag {
@@ -816,11 +829,16 @@ struct ARegion {
    * loading files remembers the view state.
    */
   ListBaseT<uiViewStateLink> view_states = {nullptr, nullptr};
+  /**
+   * Permanent state storage of #ui::ButtonTextBox instances, so hiding regions with textbox
+   * buttons or loading files remembers the textbox state.
+   */
+  ListBaseT<uiTextboxStateLink> textbox_states = {nullptr, nullptr};
 
   /** XXX 2.50, need spacedata equivalent? */
   void *regiondata = nullptr;
 
-  ARegionRuntimeHandle *runtime = nullptr;
+  bke::ARegionRuntime *runtime = nullptr;
 };
 
 /* #AssetShelfSettings.display_flag */
@@ -909,5 +927,7 @@ struct RegionAssetShelf {
 struct FileHandler {
   DNA_DEFINE_CXX_METHODS(FileHandler)
   /** Runtime. */
-  FileHandlerTypeHandle *type = nullptr;
+  bke::FileHandlerType *type = nullptr;
 };
+
+}  // namespace blender

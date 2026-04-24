@@ -1,3 +1,0 @@
-moving/fvMeshStitchersMoving.C
-
-LIB = $(FOAM_LIBBIN)/libfvMeshStitchers

@@ -17,8 +17,11 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
+#include "DNA_listBase.h"
 #include "DNA_object_enums.h"
 #include "DNA_userdef_enums.h"
+
+namespace blender {
 
 struct Base;
 struct Depsgraph;
@@ -26,7 +29,6 @@ struct EnumPropertyItem;
 struct ID;
 struct KeyBlock;
 struct GpencilModifierData;
-struct ListBase;
 struct Main;
 struct ModifierData;
 struct Object;
@@ -44,11 +46,11 @@ struct wmOperator;
 struct wmOperatorType;
 enum eReportType : uint16_t;
 
-namespace blender::ui {
+namespace ui {
 struct Layout;
-}  // namespace blender::ui
+}  // namespace ui
 
-namespace blender::ed::object {
+namespace ed::object {
 
 struct XFormObjectData;
 
@@ -157,6 +159,7 @@ enum {
 struct XFormObjectSkipChild_Container;
 XFormObjectSkipChild_Container *xform_skip_child_container_create();
 void xform_skip_child_container_item_ensure_from_array(XFormObjectSkipChild_Container *xcs,
+                                                       const Main &bmain,
                                                        const Scene *scene,
                                                        ViewLayer *view_layer,
                                                        Object **objects,
@@ -257,9 +260,14 @@ void base_free_and_unlink(Main *bmain, Scene *scene, Object *ob);
  * `ob` must not be indirectly used.
  */
 void base_free_and_unlink_no_indirect_check(Main *bmain, Scene *scene, Object *ob);
-bool base_deselect_all_ex(
-    const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action, bool *r_any_visible);
-bool base_deselect_all(const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action);
+bool base_deselect_all_ex(const Main &bmain,
+                          const Scene *scene,
+                          ViewLayer *view_layer,
+                          View3D *v3d,
+                          int action,
+                          bool *r_any_visible);
+bool base_deselect_all(
+    const Main &bmain, const Scene *scene, ViewLayer *view_layer, View3D *v3d, int action);
 
 /**
  * Single object duplicate, if `dupflag == 0`, fully linked, else it uses the flags given.
@@ -272,7 +280,7 @@ Base *add_duplicate(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base, eDupli_ID_Flags dupflag);
 
 void parent_set(Object *ob, Object *parent, int type, const char *substr);
-std::string drop_named_material_tooltip(bContext *C, const char *name, const int mval[2]);
+std::string drop_named_material_tooltip(bContext *C, StringRef name, const int mval[2]);
 std::string drop_geometry_nodes_tooltip(bContext *C, PointerRNA *properties, const int mval[2]);
 
 /** Bit-flags for enter/exit edit-mode. */
@@ -388,7 +396,7 @@ enum eObjectPathCalcRange {
 void motion_paths_recalc(bContext *C,
                          Scene *scene,
                          eObjectPathCalcRange range,
-                         ListBase *ld_objects);
+                         ListBaseT<LinkData> *ld_objects);
 
 void motion_paths_recalc_selected(bContext *C, Scene *scene, eObjectPathCalcRange range);
 
@@ -399,17 +407,19 @@ void motion_paths_recalc_visible(bContext *C, Scene *scene, eObjectPathCalcRange
  * If object is in pose-mode, return active bone constraints, else object constraints.
  * No constraints are returned for a bone on an inactive bone-layer.
  */
-ListBase *constraint_active_list(Object *ob);
+ListBaseT<bConstraint> *constraint_active_list(Object *ob);
 /**
  * Get the constraints for the active pose bone. Bone may be on an inactive bone-layer
  * (unlike #constraint_active_list, such constraints are not excluded here).
  */
-ListBase *pose_constraint_list(const bContext *C);
+ListBaseT<bConstraint> *pose_constraint_list(const bContext *C);
 /**
  * Find the list that a given constraint belongs to,
  * and/or also get the pose-channel this is from (if applicable).
  */
-ListBase *constraint_list_from_constraint(Object *ob, bConstraint *con, bPoseChannel **r_pchan);
+ListBaseT<bConstraint> *constraint_list_from_constraint(Object *ob,
+                                                        bConstraint *con,
+                                                        bPoseChannel **r_pchan);
 /**
  * Single constraint.
  */
@@ -425,7 +435,10 @@ void constraint_tag_update(Main *bmain, Object *ob, bConstraint *con);
 void constraint_dependency_tag_update(Main *bmain, Object *ob, bConstraint *con);
 
 bool constraint_move_to_index(Object *ob, bConstraint *con, int index);
-void constraint_link(Main *bmain, Object *ob_dst, ListBase *dst, ListBase *src);
+void constraint_link(Main *bmain,
+                     Object *ob_dst,
+                     ListBaseT<bConstraint> *dst,
+                     ListBaseT<bConstraint> *src);
 void constraint_copy_for_object(Main *bmain, Object *ob_dst, bConstraint *con);
 void constraint_copy_for_pose(Main *bmain, Object *ob_dst, bPoseChannel *pchan, bConstraint *con);
 
@@ -466,7 +479,8 @@ void posemode_set_for_weight_paint(bContext *C, Main *bmain, Object *ob, bool is
  *
  * \note The active object is always index 0.
  */
-int object_in_mode_to_index(const Scene *scene,
+int object_in_mode_to_index(const Main &bmain,
+                            const Scene *scene,
                             ViewLayer *view_layer,
                             eObjectMode mode,
                             const Object *ob);
@@ -474,10 +488,8 @@ int object_in_mode_to_index(const Scene *scene,
 /**
  * Access the object from the index returned by #object_in_mode_to_index.
  */
-Object *object_in_mode_from_index(const Scene *scene,
-                                  ViewLayer *view_layer,
-                                  eObjectMode mode,
-                                  int index);
+Object *object_in_mode_from_index(
+    const Main &bmain, const Scene *scene, ViewLayer *view_layer, eObjectMode mode, int index);
 
 /**
  * Retrieve the alpha factors of the currently active mode transfer overlay animations. The key is
@@ -579,7 +591,7 @@ void check_force_modifiers(Main *bmain, Scene *scene, Object *object);
  * If id is not already an Object, try to find an object that uses it as data.
  * Prefers active, then selected, then visible/selectable.
  */
-Base *find_first_by_data_id(const Scene *scene, ViewLayer *view_layer, ID *id);
+Base *find_first_by_data_id(const Main &bmain, const Scene *scene, ViewLayer *view_layer, ID *id);
 
 /**
  * Select and make the target object active in the view layer.
@@ -617,4 +629,5 @@ void ui_template_modifier_asset_menu_items(ui::Layout &layout,
                                            StringRef catalog_path,
                                            bool skip_essentials);
 
-}  // namespace blender::ed::object
+}  // namespace ed::object
+}  // namespace blender

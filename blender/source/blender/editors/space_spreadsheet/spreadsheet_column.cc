@@ -9,7 +9,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector_types.hh"
@@ -55,6 +55,9 @@ eSpreadsheetColumnValueType cpp_type_to_column_type(const CPPType &type)
   if (type.is<float3>()) {
     return SPREADSHEET_VALUE_TYPE_FLOAT3;
   }
+  if (type.is<float4>()) {
+    return SPREADSHEET_VALUE_TYPE_FLOAT4;
+  }
   if (type.is<ColorGeometry4f>()) {
     return SPREADSHEET_VALUE_TYPE_COLOR;
   }
@@ -82,7 +85,7 @@ eSpreadsheetColumnValueType cpp_type_to_column_type(const CPPType &type)
 
 SpreadsheetColumnID *spreadsheet_column_id_new()
 {
-  SpreadsheetColumnID *column_id = MEM_new_for_free<SpreadsheetColumnID>(__func__);
+  SpreadsheetColumnID *column_id = MEM_new<SpreadsheetColumnID>(__func__);
   return column_id;
 }
 
@@ -96,15 +99,15 @@ SpreadsheetColumnID *spreadsheet_column_id_copy(const SpreadsheetColumnID *src_c
 void spreadsheet_column_id_free(SpreadsheetColumnID *column_id)
 {
   if (column_id->name != nullptr) {
-    MEM_freeN(column_id->name);
+    MEM_delete(column_id->name);
   }
-  MEM_freeN(column_id);
+  MEM_delete(column_id);
 }
 
 void spreadsheet_column_id_blend_write(BlendWriter *writer, const SpreadsheetColumnID *column_id)
 {
   writer->write_struct(column_id);
-  BLO_write_string(writer, column_id->name);
+  writer->write_string(column_id->name);
 }
 
 void spreadsheet_column_id_blend_read(BlendDataReader *reader, SpreadsheetColumnID *column_id)
@@ -114,7 +117,7 @@ void spreadsheet_column_id_blend_read(BlendDataReader *reader, SpreadsheetColumn
 
 SpreadsheetColumn *spreadsheet_column_new(SpreadsheetColumnID *column_id)
 {
-  SpreadsheetColumn *column = MEM_new_for_free<SpreadsheetColumn>(__func__);
+  SpreadsheetColumn *column = MEM_new<SpreadsheetColumn>(__func__);
   column->id = column_id;
   column->runtime = MEM_new<SpreadsheetColumnRuntime>(__func__);
   return column;
@@ -125,7 +128,7 @@ void spreadsheet_column_assign_runtime_data(SpreadsheetColumn *column,
                                             const StringRefNull display_name)
 {
   column->data_type = data_type;
-  MEM_SAFE_FREE(column->display_name);
+  MEM_SAFE_DELETE(column->display_name);
   column->display_name = BLI_strdup(display_name.c_str());
 }
 
@@ -143,16 +146,16 @@ SpreadsheetColumn *spreadsheet_column_copy(const SpreadsheetColumn *src_column)
 void spreadsheet_column_free(SpreadsheetColumn *column)
 {
   spreadsheet_column_id_free(column->id);
-  MEM_SAFE_FREE(column->display_name);
+  MEM_SAFE_DELETE(column->display_name);
   MEM_delete(column->runtime);
-  MEM_freeN(column);
+  MEM_delete(column);
 }
 
 void spreadsheet_column_blend_write(BlendWriter *writer, const SpreadsheetColumn *column)
 {
   writer->write_struct(column);
   spreadsheet_column_id_blend_write(writer, column->id);
-  BLO_write_string(writer, column->display_name);
+  writer->write_string(column->display_name);
 }
 
 void spreadsheet_column_blend_read(BlendDataReader *reader, SpreadsheetColumn *column)

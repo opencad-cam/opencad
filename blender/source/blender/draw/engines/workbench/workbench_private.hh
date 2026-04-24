@@ -114,8 +114,8 @@ struct Material {
   Material() = default;
   Material(float3 color) : base_color(color), packed_data(Material::pack_data(0.0f, 0.4f, 1.0f)) {}
 
-  Material(::Object &ob, bool random = false);
-  Material(::Material &mat)
+  Material(blender::Object &ob, bool random = false);
+  Material(blender::Material &mat)
       : base_color(&mat.r), packed_data(Material::pack_data(mat.metallic, mat.roughness, mat.a))
   {
   }
@@ -195,7 +195,7 @@ struct MaterialTexture {
 
   MaterialTexture() = default;
   MaterialTexture(Object *ob, int material_index);
-  MaterialTexture(::Image *image, ImageUser *user = nullptr);
+  MaterialTexture(blender::Image *image, ImageUser *user = nullptr);
 };
 
 struct SceneResources;
@@ -407,11 +407,11 @@ class ShadowPass {
     void set_mode(PassType type);
 
    protected:
-    virtual void compute_visibility(ObjectBoundsBuf &bounds,
-                                    ObjectInfosBuf &infos,
-                                    uint resource_len,
-                                    bool debug_freeze) override;
-    virtual VisibilityBuf &get_visibility_buffer() override;
+    void compute_visibility(ObjectBoundsBuf &bounds,
+                            ObjectInfosBuf &infos,
+                            uint resource_len,
+                            bool debug_freeze) override;
+    VisibilityBuf &get_visibility_buffer() override;
   } view_ = {};
 
   bool enabled_;
@@ -458,6 +458,7 @@ class VolumePass {
 
   Texture dummy_shadow_tx_ = {"Volume.Dummy Shadow Tx"};
   Texture dummy_volume_tx_ = {"Volume.Dummy Volume Tx"};
+  Texture dummy_flag_tx_ = {"Volume.Dummy Flag Tx"};
   Texture dummy_coba_tx_ = {"Volume.Dummy Coba Tx"};
 
   gpu::Texture *stencil_tx_ = nullptr;

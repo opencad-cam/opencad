@@ -22,7 +22,10 @@
 #include "DNA_userdef_enums.h"
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 struct IDProperty;
+struct bUserMenuItem;
 
 /** #UserDef.flag */
 enum eUserPref_Flag {
@@ -54,6 +57,7 @@ enum eUserPref_Flag {
   USER_TXT_TABSTOSPACES_DISABLE = (1 << 25),
   USER_TOOLTIPS_PYTHON = (1 << 26),
   USER_FLAG_UNUSED_27 = (1 << 27), /* dirty */
+  USER_HIDE_DOT_DATABLOCK = (1 << 28),
 };
 
 /** #UserDef.extension_flag */
@@ -67,6 +71,13 @@ enum eUserpref_File_Preview_Type {
   USER_FILE_PREVIEW_AUTO,
   USER_FILE_PREVIEW_SCREENSHOT,
   USER_FILE_PREVIEW_CAMERA,
+};
+
+/** #UserDef.save_modified_images */
+enum eUserpref_Save_Modified_Images {
+  USER_SAVE_MODIFIED_IMAGES_ASK = 0,
+  USER_SAVE_MODIFIED_IMAGES_ALWAYS,
+  USER_SAVE_MODIFIED_IMAGES_NEVER,
 };
 
 enum eUserPref_PrefFlag {
@@ -163,6 +174,8 @@ enum eUserpref_UI_Flag2 {
   USER_REGION_OVERLAP = (1 << 1),
   USER_UIFLAG2_UNUSED_2 = (1 << 2),
   USER_UIFLAG2_UNUSED_3 = (1 << 3), /* dirty */
+  USER_UIFLAG2_SHOW_ONLINE_ASSETS = (1 << 4),
+  USER_UIFLAG2_PANEL_TABS_COMPACT = (1 << 5),
 };
 
 /** #UserDef.gpu_flag */
@@ -574,7 +587,7 @@ struct bUserMenu {
   char space_type = 0;
   char _pad0[7] = {};
   char context[64] = "";
-  ListBaseT<struct bUserMenuItem> items = {nullptr, nullptr};
+  ListBaseT<bUserMenuItem> items = {nullptr, nullptr};
 };
 
 /** May be part of #bUserMenu or other list. */
@@ -590,7 +603,7 @@ struct bUserMenuItem_Op {
   char op_idname[64] = "";
   struct IDProperty *prop = nullptr;
   char op_prop_enum[64] = "";
-  char opcontext = 0; /* #blender::wm::OpCallContext */
+  char opcontext = 0; /* #wm::OpCallContext */
   char _pad0[7] = {};
 };
 
@@ -611,7 +624,12 @@ struct bUserAssetLibrary {
   struct bUserAssetLibrary *next = nullptr, *prev = nullptr;
 
   char name[/*MAX_NAME*/ 64] = "";
+  /** The path on disk for this asset library. For remote libraries
+   * (#ASSET_LIBRARY_USE_REMOTE_URL), this is the download cache directory, where already
+   * downloaded assets will be placed. */
   char dirpath[/*FILE_MAX*/ 1024] = "";
+  /** Only for remote asset libraries (#ASSET_LIBRARY_USE_REMOTE_URL is set). */
+  char remote_url[/*FILE_MAX*/ 1024];
 
   short import_method = ASSET_IMPORT_PACK;  /* eAssetImportMethod */
   short flag = ASSET_LIBRARY_RELATIVE_PATH; /* eAssetLibrary_Flag */
@@ -695,7 +713,7 @@ struct WalkNavigation {
 };
 
 struct XrNavigation {
-  float vignette_intensity = 60;
+  float vignette_intensity = 70;
   float turn_speed = DEG2RAD(60);
   float turn_amount = DEG2RAD(30);
   short flag = USER_XR_NAV_SNAP_TURN;
@@ -734,6 +752,7 @@ enum eUserPref_Section {
   USER_SECTION_EXPERIMENTAL = 16,
   USER_SECTION_EXTENSIONS = 17,
   USER_SECTION_DEVELOPER_TOOLS = 18,
+  USER_SECTION_ASSETS = 19,
 };
 
 /** #UserDef_SpaceData.flag (State of the user preferences UI). */
@@ -805,7 +824,10 @@ struct UserDef_Experimental {
   char use_sculpt_texture_paint = 0;
   char use_shader_node_previews = 0;
   char use_geometry_nodes_lists = 0;
-  char _pad[5] = {};
+  char use_geometry_bundle = 0;
+  char use_remote_asset_libraries = 0;
+  char use_collection_importer = 0;
+  char _pad[2] = {};
 };
 
 #define USER_EXPERIMENTAL_TEST(userdef, member) (((userdef)->experimental).member)
@@ -852,7 +874,8 @@ struct UserDef {
 
   /** #eUserPref_Flag. */
   int flag = (USER_AUTOSAVE | USER_TOOLTIPS | USER_RELPATHS | USER_RELEASECONFIRM |
-              USER_SCRIPT_AUTOEXEC_DISABLE | USER_NONEGFRAMES | USER_FILECOMPRESS);
+              USER_SCRIPT_AUTOEXEC_DISABLE | USER_NONEGFRAMES | USER_FILECOMPRESS |
+              USER_HIDE_DOT_DATABLOCK);
   /** #eDupli_ID_Flags. */
   unsigned int dupflag = USER_DUP_MESH | USER_DUP_CURVE | USER_DUP_SURF | USER_DUP_LATTICE |
                          USER_DUP_FONT | USER_DUP_MBALL | USER_DUP_LAMP | USER_DUP_ARM |
@@ -875,6 +898,7 @@ struct UserDef {
   /* EXR cache path */
   char render_cachedir[/*FILE_MAXDIR*/ 768] = "";
   char textudir[/*FILE_MAXDIR*/ 768] = "//";
+  char texture_cachedir[/*FILE_MAXDIR*/ 768] = "";
   /* Deprecated, use #UserDef.script_directories instead. */
   DNA_DEPRECATED char pythondir_legacy[/*FILE_MAXDIR*/ 768] = "";
   char sounddir[/*FILE_MAXDIR*/ 768] = "//";
@@ -905,7 +929,7 @@ struct UserDef {
                USER_NODE_AUTO_OFFSET | USER_GLOBALUNDO | USER_SHOW_GIZMO_NAVIGATE |
                USER_SHOW_VIEWPORTNAME | USER_SHOW_FPS | USER_CONTINUOUS_MOUSE | USER_SAVE_PROMPT;
   /** #eUserpref_UI_Flag2. */
-  char uiflag2 = USER_REGION_OVERLAP;
+  char uiflag2 = USER_REGION_OVERLAP | USER_UIFLAG2_SHOW_ONLINE_ASSETS;
   char gpu_flag = USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE | USER_GPU_FLAG_SUBDIVISION_EVALUATION;
   char _pad8[6] = {};
   /* Experimental flag for app-templates to make changes to behavior
@@ -1035,11 +1059,11 @@ struct UserDef {
   short vbotimeout = 120, vbocollectrate = 60;
   short textimeout = 120, texcollectrate = 60;
   int memcachelimit = 4096;
+  int geometry_nodes_stack_limit = 100;
   /** Unused. */
   int prefetchframes = 0;
   /** Control the rotation step of the view when PAD2, PAD4, PAD6&PAD8 is use. */
   float pad_rot_angle = 15;
-  char _pad12[4] = {};
   /** Rotating view icon size. */
   short rvisize = 25;
   /** Rotating view icon brightness. */
@@ -1195,7 +1219,8 @@ struct UserDef {
 
   float collection_instance_empty_size = 1.0f;
   char text_flag = 0;
-  char _pad10[1] = {};
+
+  char save_modified_images = USER_SAVE_MODIFIED_IMAGES_ASK; /* eUserpref_Save_Modified_Images */
 
   char file_preview_type = USER_FILE_PREVIEW_AUTO; /* eUserpref_File_Preview_Type */
   char statusbar_flag = STATUSBAR_SHOW_VERSION |
@@ -1218,3 +1243,5 @@ struct UserDef {
 
 /** From `source/blender/blenkernel/intern/blender.cc`. */
 extern UserDef U;
+
+}  // namespace blender

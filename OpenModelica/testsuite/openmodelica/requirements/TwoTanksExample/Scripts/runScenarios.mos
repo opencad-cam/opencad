@@ -1,8 +1,0 @@
-// script to test updating of bindings for a specific scenario
-
-loadFile("../package.mo");
-getErrorString();
-generateVerificationScenarios(TwoTanksExample.VerificationModels);
-getErrorString();
-list(TwoTanksExample.VerificationModels);
-getErrorString();

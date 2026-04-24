@@ -41,6 +41,8 @@
 
 #include "gpencil_intern.hh"
 
+namespace blender {
+
 /* ******************************************************** */
 /* Context Wrangling... */
 
@@ -71,7 +73,7 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
       }
       case SPACE_NODE: /* Nodes Editor */
       {
-        SpaceNode *snode = (SpaceNode *)sl;
+        SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
 
         /* return the GP data for the active node block/node */
         if (snode && snode->nodetree) {
@@ -88,28 +90,28 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
       }
       case SPACE_SEQ: /* Sequencer */
       {
-        SpaceSeq *sseq = (SpaceSeq *)sl;
+        SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(sl);
 
         /* For now, Grease Pencil data is associated with the space
          * (actually preview region only). */
         if (r_ptr) {
-          *r_ptr = RNA_pointer_create_discrete(screen_id, &RNA_SpaceSequenceEditor, sseq);
+          *r_ptr = RNA_pointer_create_discrete(screen_id, RNA_SpaceSequenceEditor, sseq);
         }
         return &sseq->gpd;
       }
       case SPACE_IMAGE: /* Image/UV Editor */
       {
-        SpaceImage *sima = (SpaceImage *)sl;
+        SpaceImage *sima = reinterpret_cast<SpaceImage *>(sl);
 
         /* For now, Grease Pencil data is associated with the space... */
         if (r_ptr) {
-          *r_ptr = RNA_pointer_create_discrete(screen_id, &RNA_SpaceImageEditor, sima);
+          *r_ptr = RNA_pointer_create_discrete(screen_id, RNA_SpaceImageEditor, sima);
         }
         return &sima->gpd;
       }
       case SPACE_CLIP: /* Nodes Editor */
       {
-        SpaceClip *sc = (SpaceClip *)sl;
+        SpaceClip *sc = reinterpret_cast<SpaceClip *>(sl);
         MovieClip *clip = ED_space_clip_get_clip(sc);
 
         if (clip) {
@@ -123,7 +125,7 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
             }
 
             if (r_ptr) {
-              *r_ptr = RNA_pointer_create_discrete(&clip->id, &RNA_MovieTrackingTrack, track);
+              *r_ptr = RNA_pointer_create_discrete(&clip->id, RNA_MovieTrackingTrack, track);
             }
             return &track->gpd;
           }
@@ -144,7 +146,7 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
 
 bGPdata **ED_annotation_data_get_pointers(const bContext *C, PointerRNA *r_ptr)
 {
-  ID *screen_id = (ID *)CTX_wm_screen(C);
+  ID *screen_id = id_cast<ID *>(CTX_wm_screen(C));
   Scene *scene = CTX_data_scene(C);
   ScrArea *area = CTX_wm_area(C);
 
@@ -237,7 +239,7 @@ void gpencil_point_to_xy(
   else if (gps->flag & GP_STROKE_2DSPACE) {
     float vec[3] = {pt->x, pt->y, 0.0f};
     mul_m4_v3(gsc->mat, vec);
-    blender::ui::view2d_view_to_region_clip(v2d, vec[0], vec[1], r_x, r_y);
+    ui::view2d_view_to_region_clip(v2d, vec[0], vec[1], r_x, r_y);
   }
   else {
     if (subrect == nullptr) {
@@ -265,12 +267,13 @@ tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
    * This is done in order to keep cache small and improve speed. */
   if (*buffer_used + 1 > *buffer_size) {
     if ((*buffer_size == 0) || (buffer_array == nullptr)) {
-      p = MEM_calloc_arrayN<tGPspoint>(GP_STROKE_BUFFER_CHUNK, "GPencil Sbuffer");
+      p = MEM_new_array_zeroed<tGPspoint>(GP_STROKE_BUFFER_CHUNK, "GPencil Sbuffer");
       *buffer_size = GP_STROKE_BUFFER_CHUNK;
     }
     else {
       *buffer_size += GP_STROKE_BUFFER_CHUNK;
-      p = static_cast<tGPspoint *>(MEM_recallocN(buffer_array, sizeof(tGPspoint) * *buffer_size));
+      p = static_cast<tGPspoint *>(
+          MEM_realloc_zeroed(buffer_array, sizeof(tGPspoint) * *buffer_size));
     }
 
     if (p == nullptr) {
@@ -290,3 +293,5 @@ tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
 
   return buffer_array;
 }
+
+}  // namespace blender

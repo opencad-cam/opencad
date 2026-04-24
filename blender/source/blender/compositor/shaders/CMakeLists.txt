@@ -78,9 +78,12 @@ set(SRC_GLSL_COMP
   compositor_kuwahara_classic.glsl
   compositor_map_uv_anisotropic.glsl
   compositor_map_uv.glsl
+  compositor_mask_to_sdf_compute_boundary.glsl
+  compositor_mask_to_sdf_compute_distance.glsl
   compositor_morphological_blur.glsl
   compositor_morphological_distance_feather.glsl
   compositor_morphological_distance_threshold.glsl
+  compositor_morphological_distance_threshold_seeds.glsl
   compositor_morphological_distance.glsl
   compositor_morphological_step.glsl
   compositor_motion_blur_max_velocity_dilate.glsl
@@ -97,7 +100,6 @@ set(SRC_GLSL_COMP
   compositor_plane_deform.glsl
   compositor_premultiply_alpha.glsl
   compositor_radial_lens_distortion.glsl
-  compositor_read_input.glsl
   compositor_realize_on_domain.glsl
   compositor_relative_to_pixel_float.glsl
   compositor_relative_to_pixel_float_per_dimension.glsl
@@ -135,10 +137,8 @@ set(SRC_GLSL_LIB
 
 # Compile shaders with shader code.
 if(WITH_GPU_SHADER_CPP_COMPILATION)
-  with_shader_cpp_compilation_config()
-
   compile_sources_as_cpp(compositor_cpp_shaders_comp "${SRC_GLSL_COMP}" "GPU_COMPUTE_SHADER")
   # Only enable to make sure they compile on their own.
   # Otherwise it creates a warning about `pragma once`.
-  compile_sources_as_cpp(compositor_cpp_shaders_lib "${SRC_GLSL_LIB}" "GPU_LIBRARY_SHADER")
+  # compile_sources_as_cpp(compositor_cpp_shaders_lib "${SRC_GLSL_LIB}" "GPU_LIBRARY_SHADER")
 endif()

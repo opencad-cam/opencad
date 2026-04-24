@@ -20,6 +20,7 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 
+#include "SEQ_sequencer.hh"
 #include "SEQ_utils.hh"
 
 namespace blender::seq {
@@ -67,8 +68,8 @@ static bool check_media_missing(const Scene *scene, const Strip *strip)
 
   /* Recurse into meta strips. */
   if (strip->type == STRIP_TYPE_META) {
-    LISTBASE_FOREACH (Strip *, strip_n, &strip->seqbase) {
-      if (check_media_missing(scene, strip_n)) {
+    for (Strip &strip_n : strip->seqbase) {
+      if (check_media_missing(scene, &strip_n)) {
         return true;
       }
     }
@@ -85,7 +86,7 @@ struct MediaPresence {
 
 static MediaPresence *get_media_presence_cache(Scene *scene)
 {
-  MediaPresence **presence = &scene->ed->runtime.media_presence;
+  MediaPresence **presence = &scene->ed->runtime->media_presence;
   if (*presence == nullptr) {
     *presence = MEM_new<MediaPresence>(__func__);
   }
@@ -155,25 +156,25 @@ void media_presence_set_missing(Scene *scene, const Strip *strip, bool missing)
 void media_presence_invalidate_strip(Scene *scene, const Strip *strip)
 {
   std::scoped_lock lock(presence_lock);
-  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime.media_presence != nullptr) {
-    scene->ed->runtime.media_presence->map_seq.remove(strip);
+  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime->media_presence != nullptr) {
+    scene->ed->runtime->media_presence->map_seq.remove(strip);
   }
 }
 
 void media_presence_invalidate_sound(Scene *scene, const bSound *sound)
 {
   std::scoped_lock lock(presence_lock);
-  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime.media_presence != nullptr) {
-    scene->ed->runtime.media_presence->map_sound.remove(sound);
+  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime->media_presence != nullptr) {
+    scene->ed->runtime->media_presence->map_sound.remove(sound);
   }
 }
 
 void media_presence_free(Scene *scene)
 {
   std::scoped_lock lock(presence_lock);
-  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime.media_presence != nullptr) {
-    MEM_delete(scene->ed->runtime.media_presence);
-    scene->ed->runtime.media_presence = nullptr;
+  if (scene != nullptr && scene->ed != nullptr && scene->ed->runtime->media_presence != nullptr) {
+    MEM_delete(scene->ed->runtime->media_presence);
+    scene->ed->runtime->media_presence = nullptr;
   }
 }
 

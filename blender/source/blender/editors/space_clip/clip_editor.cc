@@ -49,6 +49,8 @@
 
 #include "clip_intern.hh" /* own include */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Operator Poll Functions
  * \{ */
@@ -244,7 +246,7 @@ ImBuf *ED_space_clip_get_buffer(const SpaceClip *sc)
     ibuf = BKE_movieclip_get_postprocessed_ibuf(
         sc->clip, &sc->user, MovieClipPostprocFlag(sc->postproc_flag));
 
-    if (ibuf && (ibuf->byte_buffer.data || ibuf->float_buffer.data)) {
+    if (ibuf && (ibuf->byte_data() || ibuf->float_data())) {
       return ibuf;
     }
 
@@ -267,7 +269,7 @@ ImBuf *ED_space_clip_get_stable_buffer(const SpaceClip *sc,
     ibuf = BKE_movieclip_get_stable_ibuf(
         sc->clip, &sc->user, MovieClipPostprocFlag(sc->postproc_flag), loc, scale, angle);
 
-    if (ibuf && (ibuf->byte_buffer.data || ibuf->float_buffer.data)) {
+    if (ibuf && (ibuf->byte_data() || ibuf->float_data())) {
       return ibuf;
     }
 
@@ -318,19 +320,19 @@ bool ED_space_clip_color_sample(const SpaceClip *sc,
 
   if (fx >= 0.0f && fy >= 0.0f && fx < 1.0f && fy < 1.0f) {
     const float *fp;
-    uchar *cp;
+    const uchar *cp;
     int x = int(fx * ibuf->x), y = int(fy * ibuf->y);
 
     CLAMP(x, 0, ibuf->x - 1);
     CLAMP(y, 0, ibuf->y - 1);
 
-    if (ibuf->float_buffer.data) {
-      fp = (ibuf->float_buffer.data + (ibuf->channels) * (y * ibuf->x + x));
+    if (ibuf->float_data()) {
+      fp = (ibuf->float_data() + (ibuf->channels) * (y * ibuf->x + x));
       copy_v3_v3(r_col, fp);
       ret = true;
     }
-    else if (ibuf->byte_buffer.data) {
-      cp = ibuf->byte_buffer.data + 4 * (y * ibuf->x + x);
+    else if (ibuf->byte_data()) {
+      cp = ibuf->byte_data() + 4 * (y * ibuf->x + x);
       rgb_uchar_to_float(r_col, cp);
       IMB_colormanagement_colorspace_to_scene_linear_v3(r_col, ibuf->byte_buffer.colorspace);
       ret = true;
@@ -345,13 +347,13 @@ bool ED_space_clip_color_sample(const SpaceClip *sc,
 void ED_clip_update_frame(const Main *mainp, int cfra)
 {
   /* image window, compo node users */
-  LISTBASE_FOREACH (wmWindowManager *, wm, &mainp->wm) {
-    LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-      bScreen *screen = WM_window_get_active_screen(win);
+  for (wmWindowManager &wm : mainp->wm) {
+    for (wmWindow &win : wm.windows) {
+      bScreen *screen = WM_window_get_active_screen(&win);
 
-      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-        if (area->spacetype == SPACE_CLIP) {
-          SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
+      for (ScrArea &area : screen->areabase) {
+        if (area.spacetype == SPACE_CLIP) {
+          SpaceClip *sc = static_cast<SpaceClip *>(area.spacedata.first);
 
           sc->scopes.ok = false;
 
@@ -388,76 +390,76 @@ void ED_clip_select_all(const SpaceClip *sc, int action, bool *r_has_selection)
   if (action == SEL_TOGGLE) {
     action = SEL_SELECT;
 
-    LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
-      if (!TRACK_VIEW_SELECTED(sc, track)) {
+    for (MovieTrackingTrack &track : tracking_object->tracks) {
+      if (!TRACK_VIEW_SELECTED(sc, &track)) {
         continue;
       }
 
-      const MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
+      const MovieTrackingMarker *marker = BKE_tracking_marker_get(&track, framenr);
 
-      if (ED_space_clip_marker_is_visible(sc, tracking_object, track, marker)) {
+      if (ED_space_clip_marker_is_visible(sc, tracking_object, &track, marker)) {
         action = SEL_DESELECT;
         break;
       }
     }
 
-    LISTBASE_FOREACH (MovieTrackingPlaneTrack *, plane_track, &tracking_object->plane_tracks) {
-      if (PLANE_TRACK_VIEW_SELECTED(plane_track)) {
+    for (MovieTrackingPlaneTrack &plane_track : tracking_object->plane_tracks) {
+      if (PLANE_TRACK_VIEW_SELECTED(&plane_track)) {
         action = SEL_DESELECT;
         break;
       }
     }
   }
 
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
-    if (track->flag & TRACK_HIDDEN) {
+  for (MovieTrackingTrack &track : tracking_object->tracks) {
+    if (track.flag & TRACK_HIDDEN) {
       continue;
     }
 
-    const MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
+    const MovieTrackingMarker *marker = BKE_tracking_marker_get(&track, framenr);
 
-    if (ED_space_clip_marker_is_visible(sc, tracking_object, track, marker)) {
+    if (ED_space_clip_marker_is_visible(sc, tracking_object, &track, marker)) {
       switch (action) {
         case SEL_SELECT:
-          track->flag |= SELECT;
-          track->pat_flag |= SELECT;
-          track->search_flag |= SELECT;
+          track.flag |= SELECT;
+          track.pat_flag |= SELECT;
+          track.search_flag |= SELECT;
           break;
         case SEL_DESELECT:
-          track->flag &= ~SELECT;
-          track->pat_flag &= ~SELECT;
-          track->search_flag &= ~SELECT;
+          track.flag &= ~SELECT;
+          track.pat_flag &= ~SELECT;
+          track.search_flag &= ~SELECT;
           break;
         case SEL_INVERT:
-          track->flag ^= SELECT;
-          track->pat_flag ^= SELECT;
-          track->search_flag ^= SELECT;
+          track.flag ^= SELECT;
+          track.pat_flag ^= SELECT;
+          track.search_flag ^= SELECT;
           break;
       }
     }
 
-    if (TRACK_VIEW_SELECTED(sc, track)) {
+    if (TRACK_VIEW_SELECTED(sc, &track)) {
       has_selection = true;
     }
   }
 
-  LISTBASE_FOREACH (MovieTrackingPlaneTrack *, plane_track, &tracking_object->plane_tracks) {
-    if (plane_track->flag & PLANE_TRACK_HIDDEN) {
+  for (MovieTrackingPlaneTrack &plane_track : tracking_object->plane_tracks) {
+    if (plane_track.flag & PLANE_TRACK_HIDDEN) {
       continue;
     }
 
     switch (action) {
       case SEL_SELECT:
-        plane_track->flag |= SELECT;
+        plane_track.flag |= SELECT;
         break;
       case SEL_DESELECT:
-        plane_track->flag &= ~SELECT;
+        plane_track.flag &= ~SELECT;
         break;
       case SEL_INVERT:
-        plane_track->flag ^= SELECT;
+        plane_track.flag ^= SELECT;
         break;
     }
-    if (plane_track->flag & SELECT) {
+    if (plane_track.flag & SELECT) {
       has_selection = true;
     }
   }
@@ -497,7 +499,7 @@ void ED_clip_point_stable_pos(
   ED_space_clip_get_zoom(sc, region, &zoomx, &zoomy);
   ED_space_clip_get_size(sc, &width, &height);
 
-  blender::ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &sx, &sy);
+  ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &sx, &sy);
 
   pos[0] = (x - sx) / zoomx;
   pos[1] = (y - sy) / zoomy;
@@ -534,7 +536,7 @@ void ED_clip_point_stable_pos__reverse(const SpaceClip *sc,
   int width, height;
   int sx, sy;
 
-  blender::ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &sx, &sy);
+  ui::view2d_view_to_region(&region->v2d, 0.0f, 0.0f, &sx, &sy);
   ED_space_clip_get_size(sc, &width, &height);
   ED_space_clip_get_zoom(sc, region, &zoomx, &zoomy);
 
@@ -597,13 +599,13 @@ void ED_space_clip_set_clip(bContext *C, bScreen *screen, SpaceClip *sc, MovieCl
   old_clip = sc->clip;
   sc->clip = clip;
 
-  id_us_ensure_real((ID *)sc->clip);
+  id_us_ensure_real(id_cast<ID *>(sc->clip));
 
   if (screen && sc->view == SC_VIEW_CLIP) {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-        if (sl->spacetype == SPACE_CLIP) {
-          SpaceClip *cur_sc = (SpaceClip *)sl;
+    for (ScrArea &area : screen->areabase) {
+      for (SpaceLink &sl : area.spacedata) {
+        if (sl.spacetype == SPACE_CLIP) {
+          SpaceClip *cur_sc = reinterpret_cast<SpaceClip *>(&sl);
 
           if (cur_sc != sc) {
             if (cur_sc->view == SC_VIEW_CLIP) {
@@ -647,7 +649,7 @@ void ED_space_clip_set_mask(bContext *C, SpaceClip *sc, Mask *mask)
 {
   sc->mask_info.mask = mask;
 
-  id_us_ensure_real((ID *)sc->mask_info.mask);
+  id_us_ensure_real(id_cast<ID *>(sc->mask_info.mask));
 
   if (C) {
     WM_event_add_notifier(C, NC_MASK | NA_SELECTED, mask);
@@ -684,7 +686,7 @@ struct PrefetchQueue {
    */
   bool forward;
 
-  blender::Mutex mutex;
+  Mutex mutex;
 
   bool *stop;
   bool *do_update;
@@ -720,7 +722,7 @@ static uchar *prefetch_read_file_to_memory(
     return nullptr;
   }
 
-  uchar *mem = MEM_calloc_arrayN<uchar>(size, "movieclip prefetch memory file");
+  uchar *mem = MEM_new_array_zeroed<uchar>(size, "movieclip prefetch memory file");
   if (mem == nullptr) {
     close(file);
     return nullptr;
@@ -728,7 +730,7 @@ static uchar *prefetch_read_file_to_memory(
 
   if (BLI_read(file, mem, size) != size) {
     close(file);
-    MEM_freeN(mem);
+    MEM_delete(mem);
     return nullptr;
   }
 
@@ -840,8 +842,8 @@ static uchar *prefetch_thread_next_frame(PrefetchQueue *queue,
 
 static void prefetch_task_func(TaskPool *__restrict pool, void *task_data)
 {
-  PrefetchQueue *queue = (PrefetchQueue *)BLI_task_pool_user_data(pool);
-  MovieClip *clip = (MovieClip *)task_data;
+  PrefetchQueue *queue = static_cast<PrefetchQueue *>(BLI_task_pool_user_data(pool));
+  MovieClip *clip = static_cast<MovieClip *>(task_data);
   uchar *mem;
   size_t size;
   int current_frame;
@@ -874,7 +876,7 @@ static void prefetch_task_func(TaskPool *__restrict pool, void *task_data)
 
     IMB_freeImBuf(ibuf);
 
-    MEM_freeN(mem);
+    MEM_delete(mem);
 
     if (!result) {
       /* no more space in the cache, stop reading frames */
@@ -1042,10 +1044,10 @@ static void prefetch_freejob(void *pjv)
     BKE_libblock_free_datablock(&clip_local->id, 0);
     BKE_libblock_free_data(&clip_local->id, false);
     BLI_assert(!clip_local->id.py_instance); /* Or call #BKE_libblock_free_data_py. */
-    MEM_freeN(clip_local);
+    MEM_delete(clip_local);
   }
 
-  MEM_freeN(pj);
+  MEM_delete(pj);
 }
 
 static int prefetch_get_content_start(const bContext *C)
@@ -1124,7 +1126,7 @@ void clip_start_prefetch_job(const bContext *C)
                        WM_JOB_TYPE_CLIP_PREFETCH);
 
   /* create new job */
-  pj = MEM_callocN<PrefetchJob>("prefetch job");
+  pj = MEM_new_zeroed<PrefetchJob>("prefetch job");
   pj->clip = ED_space_clip_get_clip(sc);
   pj->start_frame = prefetch_get_content_start(C);
   pj->current_frame = sc->user.framenr;
@@ -1135,7 +1137,8 @@ void clip_start_prefetch_job(const bContext *C)
   /* Create a local copy of the clip, so that video file (clip->anim) access can happen without
    * acquiring the lock which will interfere with the main thread. */
   if (pj->clip->source == MCLIP_SRC_MOVIE) {
-    BKE_id_copy_ex(nullptr, (&pj->clip->id), (ID **)&pj->clip_local, LIB_ID_COPY_LOCALIZE);
+    BKE_id_copy_ex(
+        nullptr, (&pj->clip->id), reinterpret_cast<ID **>(&pj->clip_local), LIB_ID_COPY_LOCALIZE);
   }
 
   WM_jobs_customdata_set(wm_job, pj, prefetch_freejob);
@@ -1194,3 +1197,5 @@ void ED_clip_view_lock_state_restore_no_jump(const bContext *C, const ClipViewLo
 }
 
 /** \} */
+
+}  // namespace blender

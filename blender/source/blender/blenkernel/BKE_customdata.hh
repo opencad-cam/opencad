@@ -19,10 +19,11 @@
 #include "BLI_sys_types.h"
 #include "BLI_vector.hh"
 
-#include "BKE_attribute_storage.hh"
 #include "BKE_volume_enums.hh"
 
 #include "DNA_customdata_types.h"
+
+namespace blender {
 
 struct BlendDataReader;
 struct BlendWriter;
@@ -33,7 +34,7 @@ struct CustomDataTransferLayerMap;
 struct ID;
 struct MeshPairRemap;
 
-namespace blender::bke {
+namespace bke {
 enum class AttrDomain : int8_t;
 }
 
@@ -227,14 +228,6 @@ bool CustomData_bmesh_merge_layout(const CustomData *source,
                                    char htype);
 
 /**
- * Remove layers that aren't stored in BMesh or are stored as flags on BMesh.
- * The `layers` array of the returned #CustomData must be freed, but may be null.
- * Used during conversion of #Mesh data to #BMesh storage format.
- */
-CustomData CustomData_shallow_copy_remove_non_bmesh_attributes(const CustomData *src,
-                                                               eCustomDataMask mask);
-
-/**
  * NULL's all members and resets the #CustomData.typemap.
  *
  * \warning Does not free or release any internal resources.
@@ -264,23 +257,20 @@ const void *CustomData_add_layer_with_data(CustomData *data,
                                            eCustomDataType type,
                                            void *layer_data,
                                            int totelem,
-                                           const blender::ImplicitSharingInfo *sharing_info);
+                                           const ImplicitSharingInfo *sharing_info);
 
 /**
  * Same as #CustomData_add_layer but accepts a name.
  */
-void *CustomData_add_layer_named(CustomData *data,
-                                 eCustomDataType type,
-                                 eCDAllocType alloctype,
-                                 int totelem,
-                                 blender::StringRef name);
+void *CustomData_add_layer_named(
+    CustomData *data, eCustomDataType type, eCDAllocType alloctype, int totelem, StringRef name);
 
 const void *CustomData_add_layer_named_with_data(CustomData *data,
                                                  eCustomDataType type,
                                                  void *layer_data,
                                                  int totelem,
-                                                 blender::StringRef name,
-                                                 const blender::ImplicitSharingInfo *sharing_info);
+                                                 StringRef name,
+                                                 const ImplicitSharingInfo *sharing_info);
 
 /**
  * Frees the active or first data layer with the give type.
@@ -289,7 +279,7 @@ const void *CustomData_add_layer_named_with_data(CustomData *data,
  * In edit-mode, use #EDBM_data_layer_free instead of this function.
  */
 bool CustomData_free_layer(CustomData *data, eCustomDataType type, int index);
-bool CustomData_free_layer_named(CustomData *data, blender::StringRef name);
+bool CustomData_free_layer_named(CustomData *data, StringRef name);
 
 /**
  * Frees the layer index with the give type.
@@ -309,9 +299,7 @@ bool CustomData_free_layers(CustomData *data, eCustomDataType type);
  * Returns true if a layer with the specified type exists.
  */
 bool CustomData_has_layer(const CustomData *data, eCustomDataType type);
-bool CustomData_has_layer_named(const CustomData *data,
-                                eCustomDataType type,
-                                blender::StringRef name);
+bool CustomData_has_layer_named(const CustomData *data, eCustomDataType type, StringRef name);
 
 /**
  * Returns the number of layers with this type.
@@ -382,11 +370,11 @@ struct BMCustomDataCopyMap {
     cd_free fn;
     int dst_offset;
   };
-  blender::Vector<TrivialCopy> trivial_copies;
-  blender::Vector<Copy> copies;
-  blender::Vector<TrivialDefault> trivial_defaults;
-  blender::Vector<Default> defaults;
-  blender::Vector<Free> free;
+  Vector<TrivialCopy> trivial_copies;
+  Vector<Copy> copies;
+  Vector<TrivialDefault> trivial_defaults;
+  Vector<Default> defaults;
+  Vector<Free> free;
 };
 
 /** Precalculate a map for more efficient copying between custom data formats. */
@@ -488,10 +476,7 @@ void *CustomData_bmesh_get_n(const CustomData *data, void *block, eCustomDataTyp
  */
 void *CustomData_bmesh_get_layer_n(const CustomData *data, void *block, int n);
 
-bool CustomData_set_layer_name(CustomData *data,
-                               eCustomDataType type,
-                               int n,
-                               blender::StringRef name);
+bool CustomData_set_layer_name(CustomData *data, eCustomDataType type, int n, StringRef name);
 const char *CustomData_get_layer_name(const CustomData *data, eCustomDataType type, int n);
 
 /**
@@ -514,29 +499,23 @@ void *CustomData_get_layer_n_for_write(CustomData *data, eCustomDataType type, i
  */
 const void *CustomData_get_layer_named(const CustomData *data,
                                        eCustomDataType type,
-                                       blender::StringRef name);
+                                       StringRef name);
 void *CustomData_get_layer_named_for_write(CustomData *data,
                                            eCustomDataType type,
-                                           blender::StringRef name,
+                                           StringRef name,
                                            int totelem);
 
 int CustomData_get_offset(const CustomData *data, eCustomDataType type);
-int CustomData_get_offset_named(const CustomData *data,
-                                eCustomDataType type,
-                                blender::StringRef name);
+int CustomData_get_offset_named(const CustomData *data, eCustomDataType type, StringRef name);
 int CustomData_get_n_offset(const CustomData *data, eCustomDataType type, int n);
 
 int CustomData_get_layer_index(const CustomData *data, eCustomDataType type);
 int CustomData_get_layer_index_n(const CustomData *data, eCustomDataType type, int n);
-int CustomData_get_named_layer_index(const CustomData *data,
-                                     eCustomDataType type,
-                                     blender::StringRef name);
-int CustomData_get_named_layer_index_notype(const CustomData *data, blender::StringRef name);
+int CustomData_get_named_layer_index(const CustomData *data, eCustomDataType type, StringRef name);
+int CustomData_get_named_layer_index_notype(const CustomData *data, StringRef name);
 int CustomData_get_active_layer_index(const CustomData *data, eCustomDataType type);
 int CustomData_get_render_layer_index(const CustomData *data, eCustomDataType type);
-int CustomData_get_named_layer(const CustomData *data,
-                               eCustomDataType type,
-                               blender::StringRef name);
+int CustomData_get_named_layer(const CustomData *data, eCustomDataType type, StringRef name);
 int CustomData_get_active_layer(const CustomData *data, eCustomDataType type);
 int CustomData_get_render_layer(const CustomData *data, eCustomDataType type);
 
@@ -551,8 +530,6 @@ const char *CustomData_get_active_layer_name(const CustomData *data, eCustomData
  * if no such active layer is defined.
  */
 const char *CustomData_get_render_layer_name(const CustomData *data, eCustomDataType type);
-
-bool CustomData_layer_is_anonymous(const CustomData *data, eCustomDataType type, int n);
 
 void CustomData_bmesh_set_n(
     CustomData *data, void *block, eCustomDataType type, int n, const void *source);
@@ -606,7 +583,7 @@ bool CustomData_layertype_is_dynamic(eCustomDataType type);
 int CustomData_layertype_layers_max(eCustomDataType type);
 
 /** \return The maximum size in bytes needed for a layer name with the given prefix. */
-int CustomData_name_maxncpy_calc(blender::StringRef name);
+int CustomData_name_maxncpy_calc(StringRef name);
 
 /**
  * Make sure the name of layer at index is unique.
@@ -622,14 +599,6 @@ bool CustomData_verify_versions(CustomData *data, int index);
 /* BMesh specific custom-data stuff. */
 
 void CustomData_bmesh_init_pool(CustomData *data, int totelem, char htype);
-
-/**
- * Validate and fix data of \a layer,
- * if possible (needs relevant callback in layer's type to be defined).
- *
- * \return True if some errors were found.
- */
-bool CustomData_layer_validate(CustomDataLayer *layer, uint totitems, bool do_fixes);
 
 /* External file storage */
 
@@ -667,9 +636,9 @@ struct CustomDataTransferLayerMap {
   const float *mix_weights = nullptr;
 
   /** Data source array (can be regular CD data, vertices/edges/etc., key-blocks...). */
-  std::variant<const void *, blender::GVArray> data_src;
+  std::variant<const void *, GVArray> data_src;
   /** Data dest array (same type as dat_src). */
-  std::variant<void *, blender::GMutableVArraySpan> data_dst = nullptr;
+  std::variant<void *, GMutableVArraySpan> data_dst = nullptr;
   /** Split from #bke::GSpanAttributeWriter to avoid including BKE_attribute.hh. */
   std::function<void()> tag_modified_fn;
   /** Index to affect in data_src (used e.g. for vgroups). */
@@ -702,25 +671,20 @@ void CustomData_data_transfer(const MeshPairRemap *me_remap, CustomDataTransferL
  *
  * \param data: The custom-data to tweak for .blend file writing (modified in place).
  * \param layers_to_write: A reduced set of layers to be written to file.
- * \param write_data: #AttributeStorage data to write, to support the option for writing the new
- * format even when it isn't used at runtime.
  *
  * \warning This function invalidates the custom data struct by changing the layer counts and the
  * #layers pointer, and by invalidating the type map. It expects to work on a shallow copy of
  * the struct.
  */
 void CustomData_blend_write_prepare(CustomData &data,
-                                    blender::bke::AttrDomain domain,
-                                    int domain_size,
-                                    blender::Vector<CustomDataLayer, 16> &layers_to_write,
-                                    blender::bke::AttributeStorage::BlendWriteData &write_data);
+                                    Vector<CustomDataLayer, 16> &layers_to_write);
 
 /**
  * \param layers_to_write: Layers created by #CustomData_blend_write_prepare.
  */
 void CustomData_blend_write(BlendWriter *writer,
                             CustomData *data,
-                            blender::Span<CustomDataLayer> layers_to_write,
+                            Span<CustomDataLayer> layers_to_write,
                             int count,
                             eCustomDataMask cddata_mask,
                             ID *id);
@@ -729,7 +693,7 @@ void CustomData_blend_read(BlendDataReader *reader, CustomData *data, int count)
 
 size_t CustomData_get_elem_size(const CustomDataLayer *layer);
 
-void CustomData_count_memory(const CustomData &data, int totelem, blender::MemoryCounter &memory);
+void CustomData_count_memory(const CustomData &data, int totelem, MemoryCounter &memory);
 
 #ifndef NDEBUG
 struct DynStr;
@@ -737,7 +701,8 @@ struct DynStr;
 void CustomData_debug_info_from_layers(const CustomData *data, const char *indent, DynStr *dynstr);
 #endif /* !NDEBUG */
 
-namespace blender::bke {
+namespace bke {
 std::optional<VolumeGridType> custom_data_type_to_volume_grid_type(eCustomDataType type);
 std::optional<eCustomDataType> volume_grid_type_to_custom_data_type(VolumeGridType type);
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

@@ -2,33 +2,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
-#include "UI_resources.hh"
-
 #include "COM_node_operation.hh"
 
 #include "node_composite_util.hh"
 
-/* **************** Switch ******************** */
-
 namespace blender::nodes::node_composite_switch_cc {
 
-static void cmp_node_switch_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Bool>("Switch").default_value(false);
-  b.add_input<decl::Color>("Off")
+  b.add_input<decl::Bool>("Switch"_ustr).default_value(false);
+  b.add_input<decl::Color>("Off"_ustr)
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
       .compositor_realization_mode(CompositorInputRealizationMode::None)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Color>("On")
+  b.add_input<decl::Color>("On"_ustr)
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
       .compositor_realization_mode(CompositorInputRealizationMode::None)
       .structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::Color>("Image");
+  b.add_output<decl::Color>("Image"_ustr);
 }
 
 using namespace blender::compositor;
@@ -50,28 +42,26 @@ class SwitchOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new SwitchOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_switch_cc
-
-static void register_node_type_cmp_switch()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_switch_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeSwitch", CMP_NODE_SWITCH);
+  cmp_node_type_base(&ntype, "CompositorNodeSwitch"_ustr, CMP_NODE_SWITCH);
   ntype.ui_name = "Switch";
   ntype.ui_description = "Switch between two images using a checkbox";
   ntype.enum_name_legacy = "SWITCH";
   ntype.nclass = NODE_CLASS_CONVERTER;
-  ntype.declare = file_ns::cmp_node_switch_declare;
-  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Default);
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Default);
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_switch)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_switch_cc

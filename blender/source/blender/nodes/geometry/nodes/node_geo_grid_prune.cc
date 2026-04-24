@@ -37,8 +37,8 @@ static void node_declare(NodeDeclarationBuilder &b)
     return;
   }
   const eNodeSocketDatatype data_type = eNodeSocketDatatype(node->custom1);
-  b.add_input(data_type, "Grid").hide_value().structure_type(StructureType::Grid);
-  b.add_output(data_type, "Grid").structure_type(StructureType::Grid).align_with_previous();
+  b.add_input(data_type, "Grid"_ustr).hide_value().structure_type(StructureType::Grid);
+  b.add_output(data_type, "Grid"_ustr).structure_type(StructureType::Grid).align_with_previous();
   static EnumPropertyItem mode_items[] = {
       {int(Mode::Inactive),
        "INACTIVE",
@@ -60,13 +60,13 @@ static void node_declare(NodeDeclarationBuilder &b)
           "values.")},
       {0, nullptr, 0, nullptr, nullptr},
   };
-  b.add_input<decl::Menu>("Mode")
+  b.add_input<decl::Menu>("Mode"_ustr)
       .static_items(mode_items)
       .default_value(MenuValue(Mode::Threshold))
       .structure_type(StructureType::Single)
       .optional_label();
   if (data_type != SOCK_BOOLEAN) {
-    auto &threshold = b.add_input(data_type, "Threshold")
+    auto &threshold = b.add_input(data_type, "Threshold"_ustr)
                           .structure_type(StructureType::Single)
                           .usage_by_single_menu(int(Mode::Threshold));
     switch (data_type) {
@@ -121,23 +121,23 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
     return;
   }
   params.add_item(IFACE_("Grid"), [data_type](LinkSearchOpParams &params) {
-    bNode &node = params.add_node("GeometryNodeGridPrune");
+    bNode &node = params.add_node("GeometryNodeGridPrune"_ustr);
     node.custom1 = *data_type;
-    params.update_and_connect_available_socket(node, "Grid");
+    params.update_and_connect_available_socket(node, "Grid"_ustr);
   });
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
 #ifdef WITH_OPENVDB
-  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid");
+  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid"_ustr);
   if (!grid) {
     params.set_default_remaining_outputs();
     return;
   }
   bke::VolumeTreeAccessToken tree_token;
   openvdb::GridBase &grid_base = grid.get_for_write().grid_for_write(tree_token);
-  switch (params.extract_input<Mode>("Mode")) {
+  switch (params.extract_input<Mode>("Mode"_ustr)) {
     case Mode::Inactive: {
       bke::volume_grid::prune_inactive(grid_base);
       break;
@@ -157,19 +157,19 @@ static void node_geo_exec(GeoNodeExecParams params)
         }
         case VOLUME_GRID_FLOAT: {
           auto &grid = static_cast<openvdb::FloatGrid &>(grid_base);
-          const float threshold = params.extract_input<float>("Threshold");
+          const float threshold = params.extract_input<float>("Threshold"_ustr);
           openvdb::tools::prune(grid.tree(), threshold);
           break;
         }
         case VOLUME_GRID_INT: {
           auto &grid = static_cast<openvdb::Int32Grid &>(grid_base);
-          const int threshold = params.extract_input<int>("Threshold");
+          const int threshold = params.extract_input<int>("Threshold"_ustr);
           openvdb::tools::prune(grid.tree(), threshold);
           break;
         }
         case VOLUME_GRID_VECTOR_FLOAT: {
           auto &grid = static_cast<openvdb::Vec3fGrid &>(grid_base);
-          const float3 threshold = params.extract_input<float3>("Threshold");
+          const float3 threshold = params.extract_input<float3>("Threshold"_ustr);
           openvdb::tools::prune(grid.tree(),
                                 openvdb::Vec3s(threshold.x, threshold.y, threshold.z));
           break;
@@ -188,22 +188,22 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
     case Mode::SDF: {
       const VolumeGridType grid_type = bke::volume_grid::get_type(grid_base);
-      BKE_volume_grid_type_to_static_type(grid_type, [&](auto type_tag) {
-        using GridT = typename decltype(type_tag)::type;
-        if constexpr (bke::volume_grid::is_supported_grid_type<GridT>) {
-          if constexpr (std::is_scalar_v<typename GridT::ValueType>) {
-            GridT &grid = static_cast<GridT &>(grid_base);
-            openvdb::tools::pruneLevelSet(grid.tree());
-          }
-        }
-        else {
-          BLI_assert_unreachable();
-        }
-      });
+      BKE_volume_grid_type_to_static_type(
+          grid_type, [&]<std::derived_from<openvdb::GridBase> GridT>() {
+            if constexpr (bke::volume_grid::is_supported_grid_type<GridT>) {
+              if constexpr (std::is_scalar_v<typename GridT::ValueType>) {
+                GridT &grid = static_cast<GridT &>(grid_base);
+                openvdb::tools::pruneLevelSet(grid.tree());
+              }
+            }
+            else {
+              BLI_assert_unreachable();
+            }
+          });
       break;
     }
   }
-  params.set_output("Grid", std::move(grid));
+  params.set_output("Grid"_ustr, std::move(grid));
 #else
   node_geo_exec_with_missing_openvdb(params);
 #endif
@@ -228,8 +228,8 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeGridPrune");
+  static bke::bNodeType ntype;
+  geo_node_type_base(&ntype, "GeometryNodeGridPrune"_ustr);
   ntype.ui_name = "Prune Grid";
   ntype.ui_description =
       "Make the storage of a volume grid more efficient by collapsing data into tiles or inner "
@@ -240,7 +240,7 @@ static void node_register()
   ntype.initfunc = node_init;
   ntype.gather_link_search_ops = node_gather_link_search_ops;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
   node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)

@@ -104,27 +104,30 @@ static void modify_stroke_color(Object &ob,
   const VArray<int> stroke_materials = *attributes.lookup_or_default<int>(
       "material_index", bke::AttrDomain::Curve, 0);
 
-  curves_mask.foreach_index(GrainSize(512), [&](const int64_t curve_i) {
-    const Material *ma = BKE_object_material_get(&ob, stroke_materials[curve_i] + 1);
-    const MaterialGPencilStyle *gp_style = ma ? ma->gp_style : nullptr;
-    const ColorGeometry4f material_color = (gp_style ? ColorGeometry4f(gp_style->stroke_rgba) :
-                                                       ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f));
+  curves_mask.foreach_index(
+      [&](const int64_t curve_i) {
+        const Material *ma = BKE_object_material_get(&ob, stroke_materials[curve_i] + 1);
+        const MaterialGPencilStyle *gp_style = ma ? ma->gp_style : nullptr;
+        const ColorGeometry4f material_color = (gp_style ?
+                                                    ColorGeometry4f(gp_style->stroke_rgba) :
+                                                    ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f));
 
-    const IndexRange points = points_by_curve[curve_i];
-    for (const int64_t i : points.index_range()) {
-      const int64_t point_i = points[i];
-      float3 factor = cmd.hsv;
-      if (use_curve) {
-        const float curve_input = points.size() >= 2 ? (float(i) / float(points.size() - 1)) :
-                                                       0.0f;
-        const float curve_factor = BKE_curvemapping_evaluateF(
-            cmd.influence.custom_curve, 0, curve_input);
-        factor *= curve_factor;
-      }
+        const IndexRange points = points_by_curve[curve_i];
+        for (const int64_t i : points.index_range()) {
+          const int64_t point_i = points[i];
+          float3 factor = cmd.hsv;
+          if (use_curve) {
+            const float curve_input = points.size() >= 2 ? (float(i) / float(points.size() - 1)) :
+                                                           0.0f;
+            const float curve_factor = BKE_curvemapping_evaluateF(
+                cmd.influence.custom_curve, 0, curve_input);
+            factor *= curve_factor;
+          }
 
-      apply_color_factor(vertex_colors[point_i], material_color, factor);
-    }
-  });
+          apply_color_factor(vertex_colors[point_i], material_color, factor);
+        }
+      },
+      exec_mode::grain_size(512));
 }
 
 static void modify_fill_color(Object &ob,
@@ -139,14 +142,17 @@ static void modify_fill_color(Object &ob,
   const VArray<int> stroke_materials = *attributes.lookup_or_default<int>(
       "material_index", bke::AttrDomain::Curve, 0);
 
-  curves_mask.foreach_index(GrainSize(512), [&](int64_t curve_i) {
-    const Material *ma = BKE_object_material_get(&ob, stroke_materials[curve_i] + 1);
-    const MaterialGPencilStyle *gp_style = ma ? ma->gp_style : nullptr;
-    const ColorGeometry4f material_color = (gp_style ? ColorGeometry4f(gp_style->fill_rgba) :
-                                                       ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f));
+  curves_mask.foreach_index(
+      [&](int64_t curve_i) {
+        const Material *ma = BKE_object_material_get(&ob, stroke_materials[curve_i] + 1);
+        const MaterialGPencilStyle *gp_style = ma ? ma->gp_style : nullptr;
+        const ColorGeometry4f material_color = (gp_style ?
+                                                    ColorGeometry4f(gp_style->fill_rgba) :
+                                                    ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f));
 
-    apply_color_factor(fill_colors[curve_i], material_color, cmd.hsv);
-  });
+        apply_color_factor(fill_colors[curve_i], material_color, cmd.hsv);
+      },
+      exec_mode::grain_size(512));
 }
 
 static void modify_drawing(ModifierData &md, const ModifierEvalContext &ctx, Drawing &drawing)
@@ -244,8 +250,6 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &cmd->influence);
 }
 
-}  // namespace blender
-
 ModifierTypeInfo modifierType_GreasePencilColor = {
     /*idname*/ "GreasePencilColor",
     /*name*/ N_("Color"),
@@ -257,26 +261,28 @@ ModifierTypeInfo modifierType_GreasePencilColor = {
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_SupportsMapping,
     /*icon*/ ICON_MOD_HUE_SATURATION,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
+    /*free_data*/ free_data,
     /*is_disabled*/ nullptr,
     /*update_depsgraph*/ nullptr,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

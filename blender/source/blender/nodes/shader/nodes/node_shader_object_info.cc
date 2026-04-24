@@ -6,16 +6,18 @@
 
 #include "DNA_material_types.h"
 
-namespace blender::nodes::node_shader_object_info_cc {
+namespace blender {
+
+namespace nodes::node_shader_object_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("Location");
-  b.add_output<decl::Color>("Color");
-  b.add_output<decl::Float>("Alpha");
-  b.add_output<decl::Float>("Object Index");
-  b.add_output<decl::Float>("Material Index");
-  b.add_output<decl::Float>("Random");
+  b.add_output<decl::Vector>("Location"_ustr);
+  b.add_output<decl::Color>("Color"_ustr);
+  b.add_output<decl::Float>("Alpha"_ustr);
+  b.add_output<decl::Float>("Object Index"_ustr);
+  b.add_output<decl::Float>("Material Index"_ustr);
+  b.add_output<decl::Float>("Random"_ustr);
 }
 
 static int node_shader_gpu_object_info(GPUMaterial *mat,
@@ -51,15 +53,15 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_object_info_cc
+}  // namespace nodes::node_shader_object_info_cc
 
 void register_node_type_sh_object_info()
 {
-  namespace file_ns = blender::nodes::node_shader_object_info_cc;
+  namespace file_ns = nodes::node_shader_object_info_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeObjectInfo", SH_NODE_OBJECT_INFO);
+  sh_node_type_base(&ntype, "ShaderNodeObjectInfo"_ustr, SH_NODE_OBJECT_INFO);
   ntype.ui_name = "Object Info";
   ntype.ui_description = "Retrieve information about the object instance";
   ntype.enum_name_legacy = "OBJECT_INFO";
@@ -68,5 +70,7 @@ void register_node_type_sh_object_info()
   ntype.gpu_fn = file_ns::node_shader_gpu_object_info;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

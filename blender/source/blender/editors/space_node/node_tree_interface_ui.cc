@@ -37,7 +37,7 @@ static bool node_tree_interface_panel_poll(const bContext *C, PanelType * /*pt*/
   if (!ntree) {
     return false;
   }
-  if (ntree->flag & ID_FLAG_EMBEDDED_DATA) {
+  if (ntree->id.flag & ID_FLAG_EMBEDDED_DATA) {
     return false;
   }
   if (ntree->typeinfo->no_group_interface) {
@@ -48,7 +48,7 @@ static bool node_tree_interface_panel_poll(const bContext *C, PanelType * /*pt*/
 
 void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree)
 {
-  PointerRNA tree_ptr = RNA_pointer_create_discrete(&tree.id, &RNA_NodeTree, &tree);
+  PointerRNA tree_ptr = RNA_pointer_create_discrete(&tree.id, RNA_NodeTree, &tree);
   PointerRNA interface_ptr = RNA_pointer_get(&tree_ptr, "interface");
 
   {
@@ -78,7 +78,7 @@ void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree)
     layout.prop(&active_item_ptr, "socket_type", UI_ITEM_NONE, IFACE_("Type"), ICON_NONE);
     layout.prop(&active_item_ptr, "description", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     if (tree.type == NTREE_GEOMETRY) {
-      if (nodes::socket_type_supports_fields(stype->type) && stype->type != SOCK_MENU) {
+      if (nodes::socket_type_supports_attributes(stype->type)) {
         if (socket->flag & NODE_INTERFACE_SOCKET_OUTPUT) {
           layout.prop(&active_item_ptr, "attribute_domain", UI_ITEM_NONE, std::nullopt, ICON_NONE);
         }
@@ -99,7 +99,7 @@ void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree)
     if (bNodeTreeInterfaceSocket *panel_toggle_socket = panel_item->header_toggle_socket()) {
       if (ui::Layout *panel = layout.panel(&C, "panel_toggle", false, IFACE_("Panel Toggle"))) {
         PointerRNA panel_toggle_socket_ptr = RNA_pointer_create_discrete(
-            &tree.id, &RNA_NodeTreeInterfaceSocket, panel_toggle_socket);
+            &tree.id, RNA_NodeTreeInterfaceSocket, panel_toggle_socket);
         panel->prop(
             &panel_toggle_socket_ptr, "default_value", UI_ITEM_NONE, IFACE_("Default"), ICON_NONE);
         ui::Layout &col = panel->column(false);
@@ -123,7 +123,7 @@ static void node_tree_interface_panel_draw(const bContext *C, Panel *panel)
 
 void node_tree_interface_panel_register(ARegionType *art)
 {
-  PanelType *pt = MEM_callocN<PanelType>("NODE_PT_node_tree_interface");
+  PanelType *pt = MEM_new_zeroed<PanelType>("NODE_PT_node_tree_interface");
   STRNCPY_UTF8(pt->idname, "NODE_PT_node_tree_interface");
   STRNCPY_UTF8(pt->label, N_("Group Sockets"));
   STRNCPY_UTF8(pt->category, "Group");

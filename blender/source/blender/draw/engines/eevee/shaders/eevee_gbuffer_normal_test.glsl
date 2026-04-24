@@ -9,6 +9,10 @@
 #  line 10
 #endif
 
+#include "infos/gpu_shader_test_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(gpu_shader_test)
+
 #include "eevee_gbuffer_write_lib.glsl"
 #include "gpu_shader_test_lib.glsl"
 
@@ -30,7 +34,7 @@ void main()
 {
   float3 Ng = float3(1.0f, 0.0f, 0.0f);
   float3 N = Ng;
-  float thickness = 0.2f;
+  Thickness thickness = Thickness::from(0.2f, ThicknessMode::Slab);
   float3 surface_N = normalize(float3(0.1f, 0.2f, 0.3f));
 
   ClosureUndetermined cl1 = closure_new(CLOSURE_BSDF_DIFFUSE_ID);

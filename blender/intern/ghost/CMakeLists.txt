@@ -12,7 +12,6 @@ set(INC_SYS
 
 set(SRC
   intern/GHOST_Buttons.cc
-  intern/GHOST_C-api.cc
   intern/GHOST_CallbackEventConsumer.cc
   intern/GHOST_Context.cc
   intern/GHOST_ContextNone.cc
@@ -20,7 +19,6 @@ set(SRC
   intern/GHOST_ISystem.cc
   intern/GHOST_ISystemPaths.cc
   intern/GHOST_ModifierKeys.cc
-  intern/GHOST_Path-api.cc
   intern/GHOST_PathUtils.cc
   intern/GHOST_Rect.cc
   intern/GHOST_System.cc
@@ -28,7 +26,7 @@ set(SRC
   intern/GHOST_Window.cc
   intern/GHOST_WindowManager.cc
 
-  GHOST_C-api.h
+  GHOST_CallbackEventConsumer.hh
   GHOST_IContext.hh
   GHOST_IEvent.hh
   GHOST_IEventConsumer.hh
@@ -36,12 +34,10 @@ set(SRC
   GHOST_ISystemPaths.hh
   GHOST_ITimerTask.hh
   GHOST_IWindow.hh
-  GHOST_Path-api.hh
   GHOST_Rect.hh
-  GHOST_Types.h
+  GHOST_Types.hh
 
   intern/GHOST_Buttons.hh
-  intern/GHOST_CallbackEventConsumer.hh
   intern/GHOST_Context.hh
   intern/GHOST_ContextNone.hh
   intern/GHOST_Debug.hh
@@ -80,11 +76,8 @@ if(WITH_INPUT_IME)
 endif()
 
 if(WITH_OPENGL_BACKEND)
-  list(APPEND INC_SYS
-    ${Epoxy_INCLUDE_DIRS}
-  )
   list(APPEND LIB
-    ${Epoxy_LIBRARIES}
+    PRIVATE bf::dependencies::epoxy
   )
   add_definitions(-DWITH_OPENGL_BACKEND)
 endif()
@@ -95,15 +88,9 @@ if(WITH_VULKAN_BACKEND)
 
     intern/GHOST_ContextVK.hh
   )
-  list(APPEND INC
-    ../../extern/vulkan_memory_allocator/
-  )
-  list(APPEND INC_SYS
-    PUBLIC ${VULKAN_INCLUDE_DIRS}
-  )
-
   list(APPEND LIB
-    ${VULKAN_LIBRARIES}
+    PUBLIC bf::dependencies::optional::vulkan
+    PRIVATE bf::extern::vulkan_memory_allocator
   )
 
   add_definitions(-DWITH_VULKAN_BACKEND)
@@ -160,11 +147,8 @@ elseif(WITH_GHOST_SDL)
   )
   add_definitions(-DWITH_GHOST_SDL)
 
-  list(APPEND INC_SYS
-    ${SDL_INCLUDE_DIR}
-  )
   list(APPEND LIB
-    ${SDL_LIBRARY}
+    bf::dependencies::optional::sdl
   )
 elseif(APPLE AND NOT WITH_GHOST_X11)
   list(APPEND SRC
@@ -321,7 +305,9 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
     set(INC_DST ${CMAKE_CURRENT_BINARY_DIR}/libwayland)
 
     # Generate protocols bindings.
-    macro(generate_protocol_bindings PROT_DEF)
+    # Modifies in parent scope:
+    # - `SRC`: appended with generated protocol source and header files.
+    function(generate_protocol_bindings PROT_DEF)
       # File name without directory or extension (use for header name).
       get_filename_component(_name ${PROT_DEF} NAME_WLE)
       add_custom_command(
@@ -348,8 +334,8 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
         ${INC_DST}/${_name}-client-protocol.c
         ${INC_DST}/${_name}-client-protocol.h
       )
-      unset(_name)
-    endmacro()
+      set(SRC "${SRC}" PARENT_SCOPE)
+    endfunction()
 
     list(APPEND INC_SYS
       ${INC_DST}
@@ -375,9 +361,13 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
     generate_protocol_bindings(
       "${WAYLAND_PROTOCOLS_DIR}/staging/fractional-scale/fractional-scale-v1.xml"
     )
-    # ViewPorter (only required when fractional scale is in use).
+    # Viewporter (only required when fractional scale is in use).
     generate_protocol_bindings(
       "${WAYLAND_PROTOCOLS_DIR}/stable/viewporter/viewporter.xml"
+    )
+    # Color management (HDR properties)
+    generate_protocol_bindings(
+      "${WAYLAND_PROTOCOLS_DIR}/staging/color-management/color-management-v1.xml"
     )
     # Pointer-constraints.
     generate_protocol_bindings(
@@ -407,6 +397,10 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
     # Desktop compositor controlled cursor rendering.
     generate_protocol_bindings(
       "${WAYLAND_PROTOCOLS_DIR}/staging/cursor-shape/cursor-shape-v1.xml"
+    )
+    # Support setting the window icon directly (replace legacy `.desktop` files).
+    generate_protocol_bindings(
+      "${WAYLAND_PROTOCOLS_DIR}/staging/xdg-toplevel-icon/xdg-toplevel-icon-v1.xml"
     )
 
     unset(INC_DST)
@@ -541,6 +535,7 @@ if(WITH_XR_OPENXR)
     intern/GHOST_XrSwapchain.cc
 
     GHOST_IXrContext.hh
+    GHOST_Xr-api.hh
     intern/GHOST_IXrGraphicsBinding.hh
     intern/GHOST_XrAction.hh
     intern/GHOST_XrContext.hh

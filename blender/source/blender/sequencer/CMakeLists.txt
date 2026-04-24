@@ -17,7 +17,6 @@ set(INC
 )
 
 set(INC_SYS
-
 )
 
 set(SRC
@@ -46,6 +45,8 @@ set(SRC
   SEQ_utils.hh
 
   intern/animation.cc
+  intern/cache/compositor_cache.cc
+  intern/cache/compositor_cache.hh
   intern/cache/final_image_cache.cc
   intern/cache/final_image_cache.hh
   intern/cache/intra_frame_cache.cc
@@ -55,19 +56,22 @@ set(SRC
   intern/cache/source_image_cache.hh
   intern/cache/thumbnail_cache.cc
   intern/channels.cc
+  intern/compositor.cc
+  intern/compositor.hh
+  intern/effects/effect_add_sub_mul.cc
+  intern/effects/effect_adjustment.cc
+  intern/effects/effect_blend.cc
+  intern/effects/effect_compositor.cc
+  intern/effects/effect_cross.cc
+  intern/effects/effect_gaussian_blur.cc
+  intern/effects/effect_glow.cc
+  intern/effects/effect_multi_camera.cc
+  intern/effects/effect_solid_color.cc
+  intern/effects/effect_speed.cc
+  intern/effects/effect_text.cc
+  intern/effects/effect_wipe.cc
   intern/effects/effects.cc
   intern/effects/effects.hh
-  intern/effects/vse_effect_add_sub_mul.cc
-  intern/effects/vse_effect_adjustment.cc
-  intern/effects/vse_effect_blend.cc
-  intern/effects/vse_effect_cross.cc
-  intern/effects/vse_effect_gaussian_blur.cc
-  intern/effects/vse_effect_glow.cc
-  intern/effects/vse_effect_multi_camera.cc
-  intern/effects/vse_effect_solid_color.cc
-  intern/effects/vse_effect_speed.cc
-  intern/effects/vse_effect_text.cc
-  intern/effects/vse_effect_wipe.cc
   intern/modifiers/MOD_brightness_contrast.cc
   intern/modifiers/MOD_color_balance.cc
   intern/modifiers/MOD_compositor.cc
@@ -118,7 +122,8 @@ set(LIB
   PRIVATE bf::blentranslation
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
-  PRIVATE bf::extern::fmtlib
+  PRIVATE bf::draw
+  PRIVATE bf::extern::xxhash
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
   PRIVATE bf::imbuf::movie
@@ -129,25 +134,13 @@ set(LIB
   PRIVATE bf::render
   PRIVATE bf::windowmanager
   bf_compositor
+  PRIVATE bf::dependencies::optional::audaspace
+  PRIVATE bf::dependencies::optional::fftw3
 )
 
 if(WITH_AUDASPACE)
-  list(APPEND INC_SYS
-    ${AUDASPACE_C_INCLUDE_DIRS}
-  )
-  if(WITH_SYSTEM_AUDASPACE)
-    list(APPEND LIB
-      ${AUDASPACE_C_LIBRARIES}
-      ${AUDASPACE_PY_LIBRARIES}
-    )
-  endif()
-  add_definitions(-DWITH_AUDASPACE)
-
   if(WITH_FFTW3)
     add_definitions(-DWITH_CONVOLUTION)
-  endif()
-  if(WITH_RUBBERBAND)
-    add_definitions(-DWITH_RUBBERBAND)
   endif()
 endif()
 

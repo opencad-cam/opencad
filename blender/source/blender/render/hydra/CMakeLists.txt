@@ -10,9 +10,9 @@ if(UNIX AND NOT APPLE)
   add_definitions(-D_GLIBCXX_PERMIT_BACKWARD_HASH)
 endif()
 if(WIN32)
-  add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DBOOST_DEBUG_PYTHON)
+  # We need to keep BOOST_DEBUG_PYTHON for the vendored copy of boost inside USD.
+  add_definitions(-DBOOST_DEBUG_PYTHON)
 endif()
-add_definitions(-DBOOST_ALL_NO_LIB)
 
 # Pre-compiled Linux libraries are made with GCC, and USD uses some extensions
 # which lead to an incompatible ABI for Clang. Using those extensions with
@@ -32,13 +32,17 @@ if(WIN32)
   # Some USD library headers trigger the "unreferenced formal parameter"
   # warning alert.
   # Silence them by restore warn C4100 back to w4
-  remove_cc_flag("/w34100")
+  remove_c_and_cxx_flag("/w34100")
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
     # USD currently does not support the new preprocessor,
     # so we remove it here and disable sse2neon
-    remove_cc_flag("/Zc:preprocessor")
+    remove_c_and_cxx_flag("/Zc:preprocessor")
     add_definitions(-DDISABLE_SSE2NEON)
   endif()
+endif()
+
+if(WITH_OPENGL_BACKEND)
+  add_definitions(-DWITH_OPENGL_BACKEND)
 endif()
 
 set(INC
@@ -55,26 +59,22 @@ set(INC
 )
 
 set(INC_SYS
-  ${PYTHON_INCLUDE_DIRS}
-  ${Epoxy_INCLUDE_DIRS}
-  ${USD_INCLUDE_DIRS}
-  ${BOOST_INCLUDE_DIR}
-  ${TBB_INCLUDE_DIRS}
-  ${GFLAGS_INCLUDE_DIRS}
 )
 
 set(LIB
-  ${Epoxy_LIBRARIES}
-  ${PYTHON_LIBRARIES}
-  ${USD_LIBRARIES}
-  ${TBB_LIBRARIES}
   PRIVATE bf::blenkernel
+  PRIVATE bf::blenlib
   PRIVATE bf::depsgraph
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
   PRIVATE bf::intern::clog
   bf_io_usd
   PRIVATE bf::nodes
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::optional::usd
+  PRIVATE bf::dependencies::optional::tbb
+  PRIVATE bf::dependencies::epoxy
+  PRIVATE bf::dependencies::gflags
   PRIVATE bf::dependencies::eigen
 )
 

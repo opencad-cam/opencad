@@ -7,6 +7,9 @@
  */
 
 #ifdef WIN32
+#  ifdef WIN32_LEAN_AND_MEAN
+#    undef WIN32_LEAN_AND_MEAN
+#  endif
 #  include <Windows.h>
 
 #  include <KnownFolders.h>
@@ -22,6 +25,8 @@
 
 #  include "utf_winfunc.hh"
 #  include "utfconv.hh"
+
+namespace blender {
 
 /**
  * Pinning: Windows allows people to pin an application to their taskbar, when a user pins
@@ -48,7 +53,7 @@ bool BLI_windows_update_pinned_launcher(const char *launcher_path)
     return false;
   }
 
-  blender::CoInitializeWrapper initialize(COINIT_APARTMENTTHREADED);
+  CoInitializeWrapper initialize(COINIT_APARTMENTTHREADED);
   if (FAILED(initialize)) {
     return false;
   }
@@ -101,4 +106,7 @@ bool BLI_windows_update_pinned_launcher(const char *launcher_path)
   }
   return true;
 }
+
+}  // namespace blender
+
 #endif

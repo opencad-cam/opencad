@@ -76,13 +76,13 @@ static Block *block_func_PIE(bContext * /*C*/, PopupBlockHandle *handle, void *a
   block->bounds_offset[1] = 0;
   block->bounds_type = BLOCK_BOUNDS_PIE_CENTER;
 
-  block->pie_data.pie_center_spawned[0] = pie->mx;
-  block->pie_data.pie_center_spawned[1] = pie->my;
+  block->pie_data->pie_center_spawned[0] = pie->mx;
+  block->pie_data->pie_center_spawned[1] = pie->my;
 
   return pie->pie_block;
 }
 
-static float ui_pie_menu_title_width(const char *name, int icon)
+static float pie_menu_title_width(const char *name, int icon)
 {
   const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
   return (fontstyle_string_width(fstyle, name) + (UI_UNIT_X * (1.50f + (icon ? 0.25f : 0.0f))));
@@ -95,20 +95,21 @@ PieMenu *pie_menu_begin(bContext *C, const char *title, int icon, const wmEvent 
 
   wmWindow *win = CTX_wm_window(C);
 
-  PieMenu *pie = MEM_callocN<PieMenu>(__func__);
+  PieMenu *pie = MEM_new_zeroed<PieMenu>(__func__);
 
   pie->pie_block = block_begin(C, nullptr, __func__, EmbossType::Emboss);
   /* may be useful later to allow spawning pies
    * from old positions */
   // pie->pie_block->flag |= BLOCK_POPUP_MEMORY;
-  pie->pie_block->puphash = ui_popup_menu_hash(title);
+  pie->pie_block->puphash = popup_menu_hash(title);
   pie->pie_block->flag |= BLOCK_PIE_MENU;
+  pie->pie_block->pie_data = std::make_unique<PieMenuData>();
 
   /* if pie is spawned by a left click, release or click event,
    * it is always assumed to be click style */
   if (event->type == LEFTMOUSE || ELEM(event->val, KM_RELEASE, KM_CLICK)) {
-    pie->pie_block->pie_data.flags |= PIE_CLICK_STYLE;
-    pie->pie_block->pie_data.event_type = EVENT_NONE;
+    pie->pie_block->pie_data->flags |= PIE_CLICK_STYLE;
+    pie->pie_block->pie_data->event_type = EVENT_NONE;
     win->pie_event_type_lock = EVENT_NONE;
   }
   else {
@@ -116,7 +117,7 @@ PieMenu *pie_menu_begin(bContext *C, const char *title, int icon, const wmEvent 
       /* original pie key has been released, so don't propagate the event */
       if (win->pie_event_type_lock == EVENT_NONE) {
         event_type = EVENT_NONE;
-        pie->pie_block->pie_data.flags |= PIE_CLICK_STYLE;
+        pie->pie_block->pie_data->flags |= PIE_CLICK_STYLE;
       }
       else {
         event_type = win->pie_event_type_last;
@@ -126,7 +127,7 @@ PieMenu *pie_menu_begin(bContext *C, const char *title, int icon, const wmEvent 
       event_type = event->type;
     }
 
-    pie->pie_block->pie_data.event_type = event_type;
+    pie->pie_block->pie_data->event_type = event_type;
     win->pie_event_type_lock = event_type;
   }
 
@@ -144,19 +145,19 @@ PieMenu *pie_menu_begin(bContext *C, const char *title, int icon, const wmEvent 
     int w;
     if (icon) {
       SNPRINTF_UTF8(titlestr, " %s", title);
-      w = ui_pie_menu_title_width(titlestr, icon);
+      w = pie_menu_title_width(titlestr, icon);
       but = uiDefIconTextBut(
           pie->pie_block, ButtonType::Label, icon, titlestr, 0, 0, w, UI_UNIT_Y, nullptr, "");
     }
     else {
-      w = ui_pie_menu_title_width(title, 0);
+      w = pie_menu_title_width(title, 0);
       but = uiDefBut(
           pie->pie_block, ButtonType::Label, title, 0, 0, w, UI_UNIT_Y, nullptr, 0.0, 0.0, "");
     }
     /* do not align left */
     but->drawflag &= ~BUT_TEXT_LEFT;
-    pie->pie_block->pie_data.title = but->str.c_str();
-    pie->pie_block->pie_data.icon = icon;
+    pie->pie_block->pie_data->title = but->str.c_str();
+    pie->pie_block->pie_data->icon = icon;
   }
 
   return pie;
@@ -174,7 +175,7 @@ void pie_menu_end(bContext *C, PieMenu *pie)
   popup_handlers_add(C, &window->runtime->modalhandlers, menu, WM_HANDLER_ACCEPT_DBL_CLICK);
   WM_event_add_mousemove(window);
 
-  MEM_freeN(pie);
+  MEM_delete(pie);
 }
 
 Layout *pie_menu_layout(PieMenu *pie)
@@ -240,10 +241,10 @@ struct PieMenuLevelData {
 /**
  * Invokes a new pie menu for a new level.
  */
-static void ui_pie_menu_level_invoke(bContext *C, void *argN, void *arg2)
+static void pie_menu_level_invoke(bContext *C, void *argN, void *arg2)
 {
-  EnumPropertyItem *item_array = (EnumPropertyItem *)argN;
-  PieMenuLevelData *lvl = (PieMenuLevelData *)arg2;
+  EnumPropertyItem *item_array = static_cast<EnumPropertyItem *>(argN);
+  PieMenuLevelData *lvl = static_cast<PieMenuLevelData *>(arg2);
   wmWindow *win = CTX_wm_window(C);
 
   PieMenu *pie = pie_menu_begin(C, IFACE_(lvl->title), lvl->icon, win->runtime->eventstate);
@@ -280,14 +281,14 @@ void pie_menu_level_create(Block *block,
 
   /* used as but->func_argN so freeing is handled elsewhere */
   EnumPropertyItem *remaining = static_cast<EnumPropertyItem *>(
-      MEM_mallocN(array_size + sizeof(EnumPropertyItem), "pie_level_item_array"));
+      MEM_new_uninitialized(array_size + sizeof(EnumPropertyItem), "pie_level_item_array"));
   memcpy(remaining, items + totitem_parent, array_size);
   /* A null terminating sentinel element is required. */
   memset(&remaining[totitem_remain], 0, sizeof(EnumPropertyItem));
 
   /* yuk, static... issue is we can't reliably free this without doing dangerous changes */
   static PieMenuLevelData lvl;
-  STRNCPY_UTF8(lvl.title, block->pie_data.title);
+  STRNCPY_UTF8(lvl.title, block->pie_data->title);
   lvl.totitem = totitem_remain;
   lvl.ot = ot;
   lvl.propname = propname;
@@ -306,7 +307,7 @@ void pie_menu_level_create(Block *block,
                                  UI_UNIT_Y,
                                  nullptr,
                                  "Show more items of this menu");
-  button_funcN_set(but, ui_pie_menu_level_invoke, remaining, &lvl);
+  button_funcN_set(but, pie_menu_level_invoke, remaining, &lvl);
 }
 
 /** \} */ /* Pie Menu Levels */

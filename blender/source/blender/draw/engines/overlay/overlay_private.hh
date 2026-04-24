@@ -32,14 +32,16 @@
 
 #include "draw_common.hh"
 
-template<> struct blender::gpu::AttrType<VertexClass> {
+namespace blender {
+
+template<> struct gpu::AttrType<VertexClass> {
   static constexpr VertAttrType type = VertAttrType::SINT_32;
 };
-template<> struct blender::gpu::AttrType<StickBoneFlag> {
+template<> struct gpu::AttrType<StickBoneFlag> {
   static constexpr VertAttrType type = VertAttrType::SINT_32;
 };
 
-namespace blender::draw::overlay {
+namespace draw::overlay {
 
 struct BoneInstanceData {
   /* Keep sync with bone instance vertex format (OVERLAY_InstanceFormats) */
@@ -75,7 +77,7 @@ struct BoneInstanceData {
     mat44[0] = ob_mat[0] * radius;
     mat44[1] = ob_mat[1] * radius;
     mat44[2] = ob_mat[2] * radius;
-    mat44[3] = float4(blender::math::transform_point(ob_mat, pos), 0.0f);
+    mat44[3] = float4(math::transform_point(ob_mat, pos), 0.0f);
     set_color(color);
   }
 
@@ -116,11 +118,11 @@ struct BoneInstanceData {
 
 using SelectionType = select::SelectionType;
 
-using blender::draw::Framebuffer;
-using blender::draw::StorageVectorBuffer;
-using blender::draw::Texture;
-using blender::draw::TextureFromPool;
-using blender::draw::TextureRef;
+using draw::Framebuffer;
+using draw::StorageVectorBuffer;
+using draw::Texture;
+using draw::TextureFromPool;
+using draw::TextureRef;
 
 struct State {
   Depsgraph *depsgraph = nullptr;
@@ -447,7 +449,7 @@ class ShaderModule {
 
  public:
   /** Shaders */
-  StaticShader anti_aliasing = {"overlay_antialiasing"};
+  StaticShader anti_aliasing = {"overlay_antialiasing_pipeline"};
   StaticShader armature_degrees_of_freedom = shader_clippable("overlay_armature_dof");
   StaticShader attribute_viewer_mesh = shader_clippable("overlay_viewer_attribute_mesh");
   StaticShader attribute_viewer_pointcloud = shader_clippable(
@@ -516,7 +518,7 @@ class ShaderModule {
   StaticShader uv_image_borders = {"overlay_edit_uv_tiled_image_borders"};
   StaticShader uv_paint_mask = {"overlay_edit_uv_mask_image"};
   StaticShader uv_wireframe = {"overlay_wireframe_uv"};
-  StaticShader xray_fade = {"overlay_xray_fade"};
+  StaticShader xray_fade = {"overlay_xray_fade_pipeline"};
 
   /** Selectable Shaders */
   StaticShader armature_envelope_fill = shader_selectable("overlay_armature_envelope_solid");
@@ -549,6 +551,8 @@ class ShaderModule {
   StaticShader wireframe_mesh = shader_selectable("overlay_wireframe");
   /* Draw objects without edges for the wireframe overlay. */
   StaticShader wireframe_points = shader_selectable("overlay_wireframe_points");
+  StaticShader wireframe_points_with_radius = shader_selectable(
+      "overlay_wireframe_points_with_radius");
   StaticShader wireframe_curve = shader_selectable("overlay_wireframe_curve");
 
   StaticShader fluid_grid_lines_flags = shader_selectable_no_clip(
@@ -582,7 +586,7 @@ struct GreasePencilDepthPlane {
   /* Center and size of the bounding box of the Grease Pencil object. */
   Bounds<float3> bounds;
   /* Grease-pencil object resource handle. */
-  ResourceHandleRange handle;
+  ResourceHandle handle;
 };
 
 struct Resources : public select::SelectMap {
@@ -1020,15 +1024,15 @@ struct FlatObjectRef {
     return -1;
   }
 
-  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceIndex handle)>;
+  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceID handle)>;
 
   /* Execute callback for every handles that is orthogonal to the view.
    * Note: Only works in orthogonal view. */
   void if_flat_axis_orthogonal_to_view(Manager &manager, const View &view, Callback callback) const
   {
-    for (ResourceIndex resource_index : handle.index_range()) {
+    for (ResourceID resource_id : handle.id_range()) {
       const float4x4 &object_to_world =
-          manager.matrix_buf.current().get_or_resize(resource_index.resource_index()).model;
+          manager.matrix_buf.current().get_or_resize(resource_id.index()).model;
 
       float3 view_forward = view.forward();
       float3 axis_not_flat_a = (flattened_axis_id == 0) ? object_to_world.y_axis() :
@@ -1038,7 +1042,7 @@ struct FlatObjectRef {
       float3 axis_flat = math::cross(axis_not_flat_a, axis_not_flat_b);
 
       if (math::abs(math::dot(view_forward, axis_flat)) < 1e-3f) {
-        callback(geom, resource_index);
+        callback(geom, resource_id);
       }
     }
   }
@@ -1202,4 +1206,5 @@ static inline bool is_from_dupli_or_set(const ObjectRef &ob_ref)
   return is_from_dupli_or_set(ob_ref.object);
 }
 
-}  // namespace blender::draw::overlay
+}  // namespace draw::overlay
+}  // namespace blender

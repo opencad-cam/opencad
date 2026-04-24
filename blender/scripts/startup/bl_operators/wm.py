@@ -986,9 +986,18 @@ class WM_OT_context_modal_mouse(Operator):
     def modal(self, context, event):
         event_type = event.type
 
+        # Factor for precision tweaking (match GIZMO_PRECISION_FAC in `gizmo_library_utils.cc`).
+        context_modal_mouse_precision_fac = 0.05
+
         if event_type == 'MOUSEMOVE':
-            delta = event.mouse_x - self.initial_x
-            self._values_delta(delta)
+            total_offset = event.mouse_x - self.initial_x
+            step_delta = event.mouse_x - self._prev_x
+            if event.shift:
+                self._precision_offset += step_delta
+            effective_offset = total_offset - self._precision_offset * (1.0 - context_modal_mouse_precision_fac)
+            self._prev_x = event.mouse_x
+            self._values_delta(effective_offset)
+            delta = effective_offset
             header_text = self.header_text
             if header_text:
                 if len(self._values) == 1:
@@ -1024,6 +1033,8 @@ class WM_OT_context_modal_mouse(Operator):
             return {'CANCELLED'}
         else:
             self.initial_x = event.mouse_x
+            self._prev_x = event.mouse_x
+            self._precision_offset = 0.0
 
             context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
@@ -1094,19 +1105,23 @@ class WM_OT_url_open_preset(Operator):
         items=WM_OT_url_open_preset._wm_url_open_preset_type_items,
     )
 
-    def _url_from_bug(self, _context):
+    @staticmethod
+    def _url_from_bug():
         from _bpy_internal.system_info.url_prefill_runtime import url_from_blender
         return url_from_blender()
 
-    def _url_from_release_notes(self, _context):
+    @staticmethod
+    def _url_from_release_notes():
         return "https://www.blender.org/download/releases/{:d}-{:d}/".format(*bpy.app.version[:2])
 
-    def _url_from_manual(self, _context):
+    @staticmethod
+    def _url_from_manual():
         return "https://docs.blender.org/manual/{:s}/{:d}.{:d}/".format(
             bpy.utils.manual_language_code(), *bpy.app.version[:2],
         )
 
-    def _url_from_api(self, _context):
+    @staticmethod
+    def _url_from_api():
         return "https://docs.blender.org/api/{:d}.{:d}/".format(*bpy.app.version[:2])
 
     # This list is: (enum_item, url) pairs.
@@ -1141,15 +1156,18 @@ class WM_OT_url_open_preset(Operator):
          "https://extensions.blender.org/"),
     ]
 
-    def execute(self, context):
-        url = None
-        type = self.type
-        for (item_id, _, _), url in self.preset_items:
-            if item_id == type:
+    @staticmethod
+    def lookup_url_from_type(ty):
+        for (item_id, _, _), url in WM_OT_url_open_preset.preset_items:
+            if item_id == ty:
                 if callable(url):
-                    url = url(self, context)
-                break
+                    return url()
+                return url
+        return None
 
+    def execute(self, _context):
+        url = WM_OT_url_open_preset.lookup_url_from_type(self.type)
+        assert url is not None, "Unexpected enum not found (internal error)"
         return bpy.ops.wm.url_open(url=url)
 
 
@@ -1585,8 +1603,9 @@ class WM_OT_properties_edit(Operator):
         name="Value",
         description="Python value for unsupported custom property types",
     )
-
+    enum_items = None
     # Helper method to avoid repetitive code to retrieve a single value from sequences and non-sequences.
+
     @staticmethod
     def _convert_new_value_single(old_value, new_type):
         if hasattr(old_value, "__len__") and len(old_value) > 0:
@@ -1694,6 +1713,7 @@ class WM_OT_properties_edit(Operator):
             self.soft_min_int = rna_data["soft_min"]
             self.soft_max_int = rna_data["soft_max"]
             self.step_int = rna_data["step"]
+            self.enum_items = rna_data.get("items", None)
             self.use_soft_limits = (
                 self.min_int != self.soft_min_int or
                 self.max_int != self.soft_max_int
@@ -1727,11 +1747,11 @@ class WM_OT_properties_edit(Operator):
             return self._convert_new_value_single(item[name_old], bool)
         elif prop_type_new == 'INT_ARRAY':
             prop_type_old = self.get_property_type(item, name_old)
-            if prop_type_old in {'INT', 'FLOAT', 'INT_ARRAY', 'FLOAT_ARRAY', 'BOOL_ARRAY'}:
+            if prop_type_old in {'INT', 'FLOAT', 'BOOL', 'INT_ARRAY', 'FLOAT_ARRAY', 'BOOL_ARRAY'}:
                 return self._convert_new_value_array(item[name_old], int, self.array_length)
         elif prop_type_new == 'FLOAT_ARRAY':
             prop_type_old = self.get_property_type(item, name_old)
-            if prop_type_old in {'INT', 'FLOAT', 'FLOAT_ARRAY', 'INT_ARRAY', 'BOOL_ARRAY'}:
+            if prop_type_old in {'INT', 'FLOAT', 'BOOL', 'FLOAT_ARRAY', 'INT_ARRAY', 'BOOL_ARRAY'}:
                 return self._convert_new_value_array(item[name_old], float, self.array_length)
         elif prop_type_new == 'BOOL_ARRAY':
             prop_type_old = self.get_property_type(item, name_old)
@@ -1784,6 +1804,7 @@ class WM_OT_properties_edit(Operator):
                 step=self.step_int,
                 default=self.default_int[0] if prop_type_new == 'INT' else self.default_int[:self.array_length],
                 description=self.description,
+                items=self.enum_items,
             )
         elif prop_type_new in {'BOOL', 'BOOL_ARRAY'}:
             ui_data = item.id_properties_ui(name)

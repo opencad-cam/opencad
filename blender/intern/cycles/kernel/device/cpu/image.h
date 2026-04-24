@@ -6,8 +6,11 @@
 
 #include "kernel/device/cpu/compat.h"
 #include "kernel/device/cpu/globals.h"
+#include "kernel/util/image_2d.h"
 
+#include "util/defines.h"
 #include "util/half.h"
+#include "util/types_image.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -31,7 +34,7 @@ ccl_device_inline float frac(const float x, int *ix)
   return x - (float)i;
 }
 
-template<typename TexT, typename OutT = float4> struct TextureInterpolator {
+template<typename TexT, typename OutT = float4> struct ImageInterpolator {
 
   static ccl_always_inline OutT zero()
   {
@@ -129,13 +132,13 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
 
   /* ********  2D interpolation ******** */
 
-  static ccl_always_inline OutT interp_closest(const TextureInfo &info, const float x, float y)
+  static ccl_always_inline OutT interp_closest(const KernelImageInfo &info, const float x, float y)
   {
     const int width = info.width;
     const int height = info.height;
     int ix, iy;
-    frac(x * (float)width, &ix);
-    frac(y * (float)height, &iy);
+    frac(x, &ix);
+    frac(y, &iy);
     switch (info.extension) {
       case EXTENSION_REPEAT:
         ix = wrap_periodic(ix, width);
@@ -164,7 +167,7 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
     return read(data, ix, iy, width, height);
   }
 
-  static ccl_always_inline OutT interp_linear(const TextureInfo &info, const float x, float y)
+  static ccl_always_inline OutT interp_linear(const KernelImageInfo &info, const float x, float y)
   {
     const int width = info.width;
     const int height = info.height;
@@ -172,8 +175,8 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
     /* A -0.5 offset is used to center the linear samples around the sample point. */
     int ix, iy;
     int nix, niy;
-    const float tx = frac(x * (float)width - 0.5f, &ix);
-    const float ty = frac(y * (float)height - 0.5f, &iy);
+    const float tx = frac(x - 0.5f, &ix);
+    const float ty = frac(y - 0.5f, &iy);
     const TexT *data = (const TexT *)info.data;
 
     switch (info.extension) {
@@ -218,15 +221,15 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
            ty * tx * read(data, nix, niy, width, height);
   }
 
-  static ccl_always_inline OutT interp_cubic(const TextureInfo &info, const float x, float y)
+  static ccl_always_inline OutT interp_cubic(const KernelImageInfo &info, const float x, float y)
   {
     const int width = info.width;
     const int height = info.height;
 
     /* A -0.5 offset is used to center the cubic samples around the sample point. */
     int ix, iy;
-    const float tx = frac(x * (float)width - 0.5f, &ix);
-    const float ty = frac(y * (float)height - 0.5f, &iy);
+    const float tx = frac(x - 0.5f, &ix);
+    const float ty = frac(y - 0.5f, &iy);
 
     int pix, piy;
     int nix, niy;
@@ -307,7 +310,7 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
 #undef DATA
   }
 
-  static ccl_always_inline OutT interp(const TextureInfo &info, const float x, float y)
+  static ccl_always_inline OutT interp(const KernelImageInfo &info, const float x, float y)
   {
     switch (info.interpolation) {
       case INTERPOLATION_CLOSEST:
@@ -322,44 +325,92 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
 
 #undef SET_CUBIC_SPLINE_WEIGHTS
 
-ccl_device float4 kernel_tex_image_interp(KernelGlobals kg, const int id, const float x, float y)
+ccl_device float4 kernel_image_interp(KernelGlobals kg,
+                                      ShaderData *sd,
+                                      const int image_texture_id,
+                                      dual2 uv)
 {
-  const TextureInfo &info = kernel_data_fetch(texture_info, id);
+  if (image_texture_id == KERNEL_IMAGE_NONE) {
+    return IMAGE_MISSING_RGBA;
+  }
+  const ccl_global KernelImageTexture &tex = kernel_data_fetch(image_textures, image_texture_id);
+  const ccl_global KernelImageInfo *info;
 
-  if (UNLIKELY(!info.data)) {
+  float2 xy = zero_float2();
+
+  if (tex.tile_descriptor_offset != UINT_MAX) {
+    /* Wrapping. */
+    if (!kernel_image_tile_wrap(ExtensionType(tex.extension), uv.val)) {
+      return zero_float4();
+    }
+
+    /* Tile mapping */
+    const KernelTileDescriptor tile_descriptor = kernel_image_tile_map(
+        kg, sd, tex, image_texture_id, uv, xy);
+
+    if (!kernel_tile_descriptor_loaded(tile_descriptor)) {
+      return (tile_descriptor == KERNEL_TILE_LOAD_FAILED) ? IMAGE_MISSING_RGBA : tex.average_color;
+    }
+
+    info = &kernel_data_fetch(image_info, kernel_tile_descriptor_image_info_id(tile_descriptor));
+  }
+  else {
+    /* Full image sampling. */
+    if (tex.image_info_id == KERNEL_IMAGE_NONE) {
+      return IMAGE_MISSING_RGBA;
+    }
+
+    /* Convert to pixel space. */
+    info = &kernel_data_fetch(image_info, tex.image_info_id);
+    xy = make_float2(uv.val.x * info->width, uv.val.y * info->height);
+  }
+
+  if (UNLIKELY(!info->data)) {
     return zero_float4();
   }
 
-  switch (info.data_type) {
+  switch (info->data_type) {
     case IMAGE_DATA_TYPE_HALF: {
-      const float f = TextureInterpolator<half, float>::interp(info, x, y);
+      const float f = ImageInterpolator<half, float>::interp(*info, xy.x, xy.y);
       return make_float4(f, f, f, 1.0f);
     }
     case IMAGE_DATA_TYPE_BYTE: {
-      const float f = TextureInterpolator<uchar, float>::interp(info, x, y);
+      const float f = ImageInterpolator<uchar, float>::interp(*info, xy.x, xy.y);
       return make_float4(f, f, f, 1.0f);
     }
     case IMAGE_DATA_TYPE_USHORT: {
-      const float f = TextureInterpolator<uint16_t, float>::interp(info, x, y);
+      const float f = ImageInterpolator<uint16_t, float>::interp(*info, xy.x, xy.y);
       return make_float4(f, f, f, 1.0f);
     }
     case IMAGE_DATA_TYPE_FLOAT: {
-      const float f = TextureInterpolator<float, float>::interp(info, x, y);
+      const float f = ImageInterpolator<float, float>::interp(*info, xy.x, xy.y);
       return make_float4(f, f, f, 1.0f);
     }
     case IMAGE_DATA_TYPE_HALF4:
-      return TextureInterpolator<half4>::interp(info, x, y);
+      return ImageInterpolator<half4>::interp(*info, xy.x, xy.y);
     case IMAGE_DATA_TYPE_BYTE4:
-      return TextureInterpolator<uchar4>::interp(info, x, y);
+      return ImageInterpolator<uchar4>::interp(*info, xy.x, xy.y);
     case IMAGE_DATA_TYPE_USHORT4:
-      return TextureInterpolator<ushort4>::interp(info, x, y);
+      return ImageInterpolator<ushort4>::interp(*info, xy.x, xy.y);
     case IMAGE_DATA_TYPE_FLOAT4:
-      return TextureInterpolator<float4>::interp(info, x, y);
+      return ImageInterpolator<float4>::interp(*info, xy.x, xy.y);
     default:
       assert(0);
-      return make_float4(
-          TEX_IMAGE_MISSING_R, TEX_IMAGE_MISSING_G, TEX_IMAGE_MISSING_B, TEX_IMAGE_MISSING_A);
+      return IMAGE_MISSING_RGBA;
   }
+}
+
+ccl_device_forceinline float4 kernel_image_interp_with_udim(KernelGlobals kg,
+                                                            ShaderData *sd,
+                                                            const int udim_id,
+                                                            dual2 uv)
+{
+  const int image_texture_id = kernel_image_udim_map(kg, udim_id, uv.val);
+  if (image_texture_id == KERNEL_IMAGE_NONE) {
+    return IMAGE_MISSING_RGBA;
+  }
+
+  return kernel_image_interp(kg, sd, image_texture_id, uv);
 }
 
 } /* Namespace. */

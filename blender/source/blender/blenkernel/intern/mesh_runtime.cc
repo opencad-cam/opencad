@@ -20,15 +20,13 @@
 #include "BKE_shrinkwrap.hh"
 #include "BKE_subdiv_ccg.hh"
 
-using blender::float3;
-using blender::MutableSpan;
-using blender::Span;
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Mesh Runtime Struct Utils
  * \{ */
 
-namespace blender::bke {
+namespace bke {
 
 static void free_mesh_eval(MeshRuntime &mesh_runtime)
 {
@@ -67,29 +65,15 @@ MeshRuntime::~MeshRuntime()
   free_batch_cache(*this);
 }
 
-static int reset_bits_and_count(MutableBitSpan bits, const Span<int> indices_to_reset)
+static void set_bools(MutableSpan<bool> bools, const Span<int> indices_to_set)
 {
-  int count = bits.size();
-  for (const int i : indices_to_reset) {
-    if (bits[i]) {
-      bits[i].reset();
-      count--;
-    }
-  }
-  return count;
-}
-
-static void bit_vector_with_reset_bits_or_empty(const Span<int> indices_to_reset,
-                                                const int indexed_elems_num,
-                                                BitVector<> &r_bits,
-                                                int &r_count)
-{
-  r_bits.resize(0);
-  r_bits.resize(indexed_elems_num, true);
-  r_count = reset_bits_and_count(r_bits, indices_to_reset);
-  if (r_count == 0) {
-    r_bits.clear_and_shrink();
-  }
+  threading::memory_bandwidth_bound_task(indices_to_set.size(), [&]() {
+    threading::parallel_for(indices_to_set.index_range(), 8192, [&](const IndexRange range) {
+      for (const int i : range) {
+        bools[indices_to_set[i]] = true;
+      }
+    });
+  });
 }
 
 /**
@@ -97,23 +81,23 @@ static void bit_vector_with_reset_bits_or_empty(const Span<int> indices_to_reset
  */
 static void try_tag_verts_no_face_none(const Mesh &mesh)
 {
-  if (!mesh.runtime->loose_edges_cache.is_cached() || mesh.loose_edges().count > 0) {
+  if (!mesh.runtime->loose_edges_cache.is_cached() || !mesh.loose_edges().is_empty()) {
     return;
   }
-  if (!mesh.runtime->loose_verts_cache.is_cached() || mesh.loose_verts().count > 0) {
+  if (!mesh.runtime->loose_verts_cache.is_cached() || !mesh.loose_verts().is_empty()) {
     return;
   }
-  mesh.runtime->verts_no_face_cache.ensure([&](LooseVertCache &r_data) {
-    r_data.is_loose_bits.clear_and_shrink();
-    r_data.count = 0;
+  mesh.runtime->verts_no_face_cache.ensure([&](LooseGeomCache &r_data) {
+    r_data.allocator.~LinearAllocator<>();
+    new (&r_data.allocator) LinearAllocator<>();
+    r_data.mask = {};
   });
 }
 
-}  // namespace blender::bke
+}  // namespace bke
 
-blender::Span<int> Mesh::corner_to_face_map() const
+Span<int> Mesh::corner_to_face_map() const
 {
-  using namespace blender;
   this->runtime->corner_to_face_map_cache.ensure([&](Array<int> &r_data) {
     const OffsetIndices faces = this->faces();
     r_data = bke::mesh::build_corner_to_face_map(faces);
@@ -121,9 +105,8 @@ blender::Span<int> Mesh::corner_to_face_map() const
   return this->runtime->corner_to_face_map_cache.data();
 }
 
-blender::OffsetIndices<int> Mesh::vert_to_face_map_offsets() const
+OffsetIndices<int> Mesh::vert_to_face_map_offsets() const
 {
-  using namespace blender;
   this->runtime->vert_to_face_offset_cache.ensure([&](Array<int> &r_data) {
     r_data = Array<int>(this->verts_num + 1, 0);
     offset_indices::build_reverse_offsets(this->corner_verts(), r_data);
@@ -131,9 +114,8 @@ blender::OffsetIndices<int> Mesh::vert_to_face_map_offsets() const
   return OffsetIndices<int>(this->runtime->vert_to_face_offset_cache.data());
 }
 
-blender::GroupedSpan<int> Mesh::vert_to_face_map() const
+GroupedSpan<int> Mesh::vert_to_face_map() const
 {
-  using namespace blender;
   const OffsetIndices offsets = this->vert_to_face_map_offsets();
   this->runtime->vert_to_face_map_cache.ensure([&](Array<int> &r_data) {
     r_data.reinitialize(this->corners_num);
@@ -153,9 +135,8 @@ blender::GroupedSpan<int> Mesh::vert_to_face_map() const
   return {offsets, this->runtime->vert_to_face_map_cache.data()};
 }
 
-blender::GroupedSpan<int> Mesh::vert_to_corner_map() const
+GroupedSpan<int> Mesh::vert_to_corner_map() const
 {
-  using namespace blender;
   const OffsetIndices offsets = this->vert_to_face_map_offsets();
   this->runtime->vert_to_corner_map_cache.ensure([&](Array<int> &r_data) {
     r_data = bke::mesh::build_vert_to_corner_indices(this->corner_verts(), offsets);
@@ -163,26 +144,30 @@ blender::GroupedSpan<int> Mesh::vert_to_corner_map() const
   return {offsets, this->runtime->vert_to_corner_map_cache.data()};
 }
 
-const blender::bke::LooseVertCache &Mesh::loose_verts() const
+const IndexMask &Mesh::loose_verts() const
 {
   using namespace blender::bke;
-  this->runtime->loose_verts_cache.ensure([&](LooseVertCache &r_data) {
-    const Span<int> verts = this->edges().cast<int>();
-    bit_vector_with_reset_bits_or_empty(
-        verts, this->verts_num, r_data.is_loose_bits, r_data.count);
+  this->runtime->loose_verts_cache.ensure([&](LooseGeomCache &r_data) {
+    Array<bool, 256> bools(this->verts_num, false);
+    set_bools(bools, this->edges().cast<int>());
+    r_data.allocator.~LinearAllocator<>();
+    new (&r_data.allocator) LinearAllocator<>();
+    r_data.mask = IndexMask::from_bools_inverse(bools, r_data.allocator);
   });
-  return this->runtime->loose_verts_cache.data();
+  return this->runtime->loose_verts_cache.data().mask;
 }
 
-const blender::bke::LooseVertCache &Mesh::verts_no_face() const
+const IndexMask &Mesh::verts_no_face() const
 {
   using namespace blender::bke;
-  this->runtime->verts_no_face_cache.ensure([&](LooseVertCache &r_data) {
-    const Span<int> verts = this->corner_verts();
-    bit_vector_with_reset_bits_or_empty(
-        verts, this->verts_num, r_data.is_loose_bits, r_data.count);
+  this->runtime->verts_no_face_cache.ensure([&](LooseGeomCache &r_data) {
+    Array<bool, 256> bools(this->verts_num, false);
+    set_bools(bools, this->corner_verts());
+    r_data.allocator.~LinearAllocator<>();
+    new (&r_data.allocator) LinearAllocator<>();
+    r_data.mask = IndexMask::from_bools_inverse(bools, r_data.allocator);
   });
-  return this->runtime->verts_no_face_cache.data();
+  return this->runtime->verts_no_face_cache.data().mask;
 }
 
 bool Mesh::no_overlapping_topology() const
@@ -190,23 +175,26 @@ bool Mesh::no_overlapping_topology() const
   return this->flag & ME_NO_OVERLAPPING_TOPOLOGY;
 }
 
-const blender::bke::LooseEdgeCache &Mesh::loose_edges() const
+const IndexMask &Mesh::loose_edges() const
 {
   using namespace blender::bke;
-  this->runtime->loose_edges_cache.ensure([&](LooseEdgeCache &r_data) {
-    const Span<int> edges = this->corner_edges();
-    bit_vector_with_reset_bits_or_empty(
-        edges, this->edges_num, r_data.is_loose_bits, r_data.count);
+  this->runtime->loose_edges_cache.ensure([&](LooseGeomCache &r_data) {
+    Array<bool, 256> bools(this->edges_num, false);
+    set_bools(bools, this->corner_edges());
+    r_data.allocator.~LinearAllocator<>();
+    new (&r_data.allocator) LinearAllocator<>();
+    r_data.mask = IndexMask::from_bools_inverse(bools, r_data.allocator);
   });
-  return this->runtime->loose_edges_cache.data();
+  return this->runtime->loose_edges_cache.data().mask;
 }
 
 void Mesh::tag_loose_verts_none() const
 {
   using namespace blender::bke;
-  this->runtime->loose_verts_cache.ensure([&](LooseVertCache &r_data) {
-    r_data.is_loose_bits.clear_and_shrink();
-    r_data.count = 0;
+  this->runtime->loose_verts_cache.ensure([&](LooseGeomCache &r_data) {
+    r_data.allocator.~LinearAllocator<>();
+    new (&r_data.allocator) LinearAllocator<>();
+    r_data.mask = {};
   });
   try_tag_verts_no_face_none(*this);
 }
@@ -214,9 +202,10 @@ void Mesh::tag_loose_verts_none() const
 void Mesh::tag_loose_edges_none() const
 {
   using namespace blender::bke;
-  this->runtime->loose_edges_cache.ensure([&](LooseEdgeCache &r_data) {
-    r_data.is_loose_bits.clear_and_shrink();
-    r_data.count = 0;
+  this->runtime->loose_edges_cache.ensure([&](LooseGeomCache &r_data) {
+    r_data.allocator.~LinearAllocator<>();
+    new (&r_data.allocator) LinearAllocator<>();
+    r_data.mask = {};
   });
   try_tag_verts_no_face_none(*this);
 }
@@ -227,7 +216,7 @@ void Mesh::tag_overlapping_none()
   this->flag |= ME_NO_OVERLAPPING_TOPOLOGY;
 }
 
-namespace blender::bke {
+namespace bke {
 
 void TrianglesCache::freeze()
 {
@@ -254,22 +243,22 @@ void TrianglesCache::tag_dirty()
   }
 }
 
-}  // namespace blender::bke
+}  // namespace bke
 
-blender::Span<blender::int3> Mesh::corner_tris() const
+Span<int3> Mesh::corner_tris() const
 {
-  this->runtime->corner_tris_cache.data.ensure([&](blender::Array<blender::int3> &r_data) {
+  this->runtime->corner_tris_cache.data.ensure([&](Array<int3> &r_data) {
     const Span<float3> positions = this->vert_positions();
-    const blender::OffsetIndices faces = this->faces();
+    const OffsetIndices faces = this->faces();
     const Span<int> corner_verts = this->corner_verts();
 
     r_data.reinitialize(poly_to_tri_count(faces.size(), corner_verts.size()));
 
     if (BKE_mesh_face_normals_are_dirty(this)) {
-      blender::bke::mesh::corner_tris_calc(positions, faces, corner_verts, r_data);
+      bke::mesh::corner_tris_calc(positions, faces, corner_verts, r_data);
     }
     else {
-      blender::bke::mesh::corner_tris_calc_with_normals(
+      bke::mesh::corner_tris_calc_with_normals(
           positions, faces, corner_verts, this->face_normals(), r_data);
     }
   });
@@ -277,10 +266,9 @@ blender::Span<blender::int3> Mesh::corner_tris() const
   return this->runtime->corner_tris_cache.data.data();
 }
 
-blender::Span<int> Mesh::corner_tri_faces() const
+Span<int> Mesh::corner_tri_faces() const
 {
-  using namespace blender;
-  this->runtime->corner_tri_faces_cache.ensure([&](blender::Array<int> &r_data) {
+  this->runtime->corner_tri_faces_cache.ensure([&](Array<int> &r_data) {
     const OffsetIndices faces = this->faces();
     r_data.reinitialize(poly_to_tri_count(faces.size(), this->corners_num));
     bke::mesh::corner_tris_calc_face_indices(faces, r_data);
@@ -297,7 +285,7 @@ int BKE_mesh_runtime_corner_tris_len(const Mesh *mesh)
 void BKE_mesh_runtime_ensure_edit_data(Mesh *mesh)
 {
   if (!mesh->runtime->edit_data) {
-    mesh->runtime->edit_data = std::make_unique<blender::bke::EditMeshData>();
+    mesh->runtime->edit_data = std::make_unique<bke::EditMeshData>();
   }
 }
 
@@ -349,17 +337,17 @@ void Mesh::tag_edges_split()
   this->runtime->vert_to_face_map_cache.tag_dirty();
   this->runtime->vert_to_corner_map_cache.tag_dirty();
   if (this->runtime->loose_edges_cache.is_cached() &&
-      this->runtime->loose_edges_cache.data().count != 0)
+      !this->runtime->loose_edges_cache.data().mask.is_empty())
   {
     this->runtime->loose_edges_cache.tag_dirty();
   }
   if (this->runtime->loose_verts_cache.is_cached() &&
-      this->runtime->loose_verts_cache.data().count != 0)
+      !this->runtime->loose_verts_cache.data().mask.is_empty())
   {
     this->runtime->loose_verts_cache.tag_dirty();
   }
   if (this->runtime->verts_no_face_cache.is_cached() &&
-      this->runtime->verts_no_face_cache.data().count != 0)
+      !this->runtime->verts_no_face_cache.data().mask.is_empty())
   {
     this->runtime->verts_no_face_cache.tag_dirty();
   }
@@ -445,7 +433,7 @@ void Mesh::tag_material_index_changed()
 /* Draw Engine */
 
 void (*BKE_mesh_batch_cache_dirty_tag_cb)(Mesh *mesh, eMeshBatchDirtyMode mode) = nullptr;
-void (*BKE_mesh_batch_cache_free_cb)(void *batch_cache) = nullptr;
+void (*BKE_mesh_batch_cache_free_cb)(draw::MeshBatchCache *batch_cache) = nullptr;
 
 void BKE_mesh_batch_cache_dirty_tag(Mesh *mesh, eMeshBatchDirtyMode mode)
 {
@@ -460,9 +448,11 @@ void BKE_mesh_batch_cache_dirty_tag(Mesh *mesh, eMeshBatchDirtyMode mode)
     BKE_mesh_batch_cache_dirty_tag_cb(mesh_eval, mode);
   }
 }
-void BKE_mesh_batch_cache_free(void *batch_cache)
+void BKE_mesh_batch_cache_free(draw::MeshBatchCache *batch_cache)
 {
   BKE_mesh_batch_cache_free_cb(batch_cache);
 }
 
 /** \} */
+
+}  // namespace blender

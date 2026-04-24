@@ -15,27 +15,27 @@ namespace blender::nodes::node_composite_image_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .hide_value()
       .compositor_realization_mode(CompositorInputRealizationMode::None)
       .structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::Vector>("Dimensions")
+  b.add_output<decl::IntVector>("Dimensions"_ustr)
       .dimensions(2)
       .description("The dimensions of the image in pixels with transformations applied");
-  b.add_output<decl::Vector>("Resolution")
+  b.add_output<decl::IntVector>("Resolution"_ustr)
       .dimensions(2)
       .description("The original resolution of the image in pixels before any transformations");
-  b.add_output<decl::Vector>("Location").dimensions(2);
-  b.add_output<decl::Float>("Rotation");
-  b.add_output<decl::Vector>("Scale").dimensions(2);
+  b.add_output<decl::Vector>("Location"_ustr).dimensions(2);
+  b.add_output<decl::Float>("Rotation"_ustr);
+  b.add_output<decl::Vector>("Scale"_ustr).dimensions(2);
 }
 
 using namespace blender::compositor;
 
 class ImageInfoOperation : public NodeOperation {
  public:
-  ImageInfoOperation(Context &context, DNode node) : NodeOperation(context, node)
+  ImageInfoOperation(Context &context, const bNode &node) : NodeOperation(context, node)
   {
     InputDescriptor &image_descriptor = this->get_input_descriptor("Image");
     image_descriptor.skip_type_conversion = true;
@@ -45,7 +45,7 @@ class ImageInfoOperation : public NodeOperation {
   {
     const Result &input = this->get_input("Image");
     if (input.is_single_value()) {
-      this->execute_invalid();
+      this->allocate_default_remaining_outputs();
       return;
     }
 
@@ -54,16 +54,14 @@ class ImageInfoOperation : public NodeOperation {
     Result &dimensions_result = this->get_result("Dimensions");
     if (dimensions_result.should_compute()) {
       dimensions_result.allocate_single_value();
-      const Domain realized_domain =
-          RealizeOnDomainOperation::compute_realized_transformation_domain(this->context(),
-                                                                           domain);
-      dimensions_result.set_single_value(float2(realized_domain.data_size));
+      const Domain realized_domain = domain.realize_transformation();
+      dimensions_result.set_single_value(realized_domain.data_size);
     }
 
     Result &resolution_result = this->get_result("Resolution");
     if (resolution_result.should_compute()) {
       resolution_result.allocate_single_value();
-      resolution_result.set_single_value(float2(domain.data_size));
+      resolution_result.set_single_value(domain.data_size);
     }
 
     math::AngleRadian rotation;
@@ -88,56 +86,26 @@ class ImageInfoOperation : public NodeOperation {
       scale_result.set_single_value(scale);
     }
   }
-
-  void execute_invalid()
-  {
-    Result &dimensions_result = this->get_result("Dimensions");
-    if (dimensions_result.should_compute()) {
-      dimensions_result.allocate_invalid();
-    }
-
-    Result &resolution_result = this->get_result("Resolution");
-    if (resolution_result.should_compute()) {
-      resolution_result.allocate_invalid();
-    }
-
-    Result &location_result = this->get_result("Location");
-    if (location_result.should_compute()) {
-      location_result.allocate_invalid();
-    }
-
-    Result &rotation_result = this->get_result("Rotation");
-    if (rotation_result.should_compute()) {
-      rotation_result.allocate_invalid();
-    }
-
-    Result &scale_result = this->get_result("Scale");
-    if (scale_result.should_compute()) {
-      scale_result.allocate_invalid();
-    }
-  }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new ImageInfoOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_image_info_cc
-
-static void register_node_type_cmp_image_info()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_image_info_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeImageInfo", CMP_NODE_IMAGE_INFO);
+  cmp_node_type_base(&ntype, "CompositorNodeImageInfo"_ustr, CMP_NODE_IMAGE_INFO);
   ntype.ui_name = "Image Info";
   ntype.ui_description = "Returns information about an image";
   ntype.nclass = NODE_CLASS_INPUT;
-  ntype.declare = file_ns::node_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_image_info)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_image_info_cc

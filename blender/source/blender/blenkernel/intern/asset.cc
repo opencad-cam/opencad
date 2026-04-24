@@ -26,7 +26,7 @@
 
 #include "MEM_guardedalloc.h"
 
-using namespace blender;
+namespace blender {
 
 AssetMetaData *BKE_asset_metadata_create()
 {
@@ -86,16 +86,16 @@ AssetMetaData::~AssetMetaData()
   if (properties) {
     IDP_FreeProperty(properties);
   }
-  MEM_SAFE_FREE(author);
-  MEM_SAFE_FREE(description);
-  MEM_SAFE_FREE(copyright);
-  MEM_SAFE_FREE(license);
+  MEM_SAFE_DELETE(author);
+  MEM_SAFE_DELETE(description);
+  MEM_SAFE_DELETE(copyright);
+  MEM_SAFE_DELETE(license);
   BLI_freelistN(&tags);
 }
 
 static AssetTag *asset_metadata_tag_add(AssetMetaData *asset_data, const char *const name)
 {
-  AssetTag *tag = MEM_new_for_free<AssetTag>(__func__);
+  AssetTag *tag = MEM_new<AssetTag>(__func__);
   STRNCPY_UTF8(tag->name, name);
 
   BLI_addtail(&asset_data->tags, tag);
@@ -120,7 +120,8 @@ AssetTagEnsureResult BKE_asset_metadata_tag_ensure(AssetMetaData *asset_data, co
     return result;
   }
 
-  AssetTag *tag = (AssetTag *)BLI_findstring(&asset_data->tags, name, offsetof(AssetTag, name));
+  AssetTag *tag = static_cast<AssetTag *>(
+      BLI_findstring(&asset_data->tags, name, offsetof(AssetTag, name)));
 
   if (tag) {
     result.tag = tag;
@@ -156,7 +157,7 @@ void BKE_asset_metadata_catalog_id_clear(AssetMetaData *asset_data)
 }
 
 void BKE_asset_metadata_catalog_id_set(AssetMetaData *asset_data,
-                                       const ::bUUID catalog_id,
+                                       const bUUID catalog_id,
                                        const char *catalog_simple_name)
 {
   asset_data->catalog_id = catalog_id;
@@ -200,13 +201,13 @@ void BKE_asset_metadata_write(BlendWriter *writer, AssetMetaData *asset_data)
     IDP_BlendWrite(writer, asset_data->properties);
   }
 
-  BLO_write_string(writer, asset_data->author);
-  BLO_write_string(writer, asset_data->description);
-  BLO_write_string(writer, asset_data->copyright);
-  BLO_write_string(writer, asset_data->license);
+  writer->write_string(asset_data->author);
+  writer->write_string(asset_data->description);
+  writer->write_string(asset_data->copyright);
+  writer->write_string(asset_data->license);
 
-  LISTBASE_FOREACH (AssetTag *, tag, &asset_data->tags) {
-    writer->write_struct(tag);
+  for (AssetTag &tag : asset_data->tags) {
+    writer->write_struct(&tag);
   }
 }
 
@@ -228,3 +229,5 @@ void BKE_asset_metadata_read(BlendDataReader *reader, AssetMetaData *asset_data)
   BLO_read_struct_list(reader, AssetTag, &asset_data->tags);
   BLI_assert(BLI_listbase_count(&asset_data->tags) == asset_data->tot_tags);
 }
+
+}  // namespace blender

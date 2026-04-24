@@ -6,6 +6,7 @@
  * \ingroup edasset
  */
 
+#include <optional>
 #include <string>
 
 #include "AS_asset_library.hh"
@@ -14,7 +15,10 @@
 #include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
 
+#include "BLI_assert.h"
+#include "BLI_listbase.h"
 #include "BLI_path_utils.hh"
+#include "BLI_string.h"
 
 #include "BLT_translation.hh"
 
@@ -46,6 +50,11 @@ void asset_tooltip(const asset_system::AssetRepresentation &asset,
 
   switch (asset.owner_asset_library().library_type()) {
     case ASSET_LIBRARY_CUSTOM: {
+      if (asset.is_online()) {
+        /* Don't show file path or .blend name. Data on disk is just a cache. */
+        break;
+      }
+
       tooltip_text_field_add(tip, {}, {}, ui::TIP_STYLE_SPACER, ui::TIP_LC_NORMAL, false);
 
       const std::string full_blend_path = asset.full_library_path();
@@ -75,12 +84,26 @@ void asset_tooltip(const asset_system::AssetRepresentation &asset,
       /* Intentionally empty. */
       break;
   }
+
+  if (asset.is_online()) {
+    if (std::optional<int64_t> combined_size = asset.online_asset_files_combined_size_in_bytes()) {
+      tooltip_text_field_add(tip, {}, {}, ui::TIP_STYLE_SPACER, ui::TIP_LC_NORMAL, false);
+
+      char size_ui_str[BLI_STR_FORMAT_INT64_BYTE_UNIT_SIZE];
+      BLI_str_format_byte_unit(size_ui_str, *combined_size, true);
+      tooltip_text_field_add(tip,
+                             fmt::format(fmt::runtime(TIP_("Download Size: {}")), size_ui_str),
+                             {},
+                             ui::TIP_STYLE_NORMAL,
+                             ui::TIP_LC_VALUE);
+    }
+  }
 }
 
 BIFIconID asset_preview_icon_id(const asset_system::AssetRepresentation &asset)
 {
   if (const PreviewImage *preview = asset.get_preview()) {
-    if (!BKE_previewimg_is_invalid(preview)) {
+    if (!BKE_previewimg_is_invalid(preview, ICON_SIZE_ICON)) {
       return preview->runtime->icon_id;
     }
   }
@@ -112,6 +135,30 @@ AssetLibraryReference get_asset_library_ref_from_opptr(PointerRNA &ptr)
   return asset::library_reference_from_enum_value(enum_value);
 }
 
+std::optional<AssetLibraryReference> get_user_library_ref_for_save(
+    const asset_system::AssetLibrary *preferred_library)
+{
+  if (preferred_library && !preferred_library->is_read_only()) {
+    if (std::optional<AssetLibraryReference> preferred_library_ref =
+            preferred_library->library_reference())
+    {
+      return preferred_library_ref;
+    }
+    BLI_assert_unreachable();
+  }
+
+  /* Fallback to the first enabled on-disk user library. */
+  for (const bUserAssetLibrary &asset_library : U.asset_libraries) {
+    if (asset_library.flag & (ASSET_LIBRARY_DISABLED | ASSET_LIBRARY_USE_REMOTE_URL)) {
+      continue;
+    }
+    return asset::user_library_to_library_ref(asset_library);
+  }
+
+  /* No enabled user asset library found. */
+  return {};
+}
+
 void visit_library_catalogs_catalog_for_search(
     const Main &bmain,
     const AssetLibraryReference lib,
@@ -130,8 +177,9 @@ void visit_library_catalogs_catalog_for_search(
     }
   }
 
-  const asset_system::AssetCatalogTree &full_tree = library->catalog_service().catalog_tree();
-  full_tree.foreach_item([&](const asset_system::AssetCatalogTreeItem &item) {
+  const std::shared_ptr<const asset_system::AssetCatalogTree> full_tree =
+      library->catalog_service().catalog_tree();
+  full_tree->foreach_item([&](const asset_system::AssetCatalogTreeItem &item) {
     visit_fn(StringPropertySearchVisitParams{item.catalog_path().str(), std::nullopt});
   });
 }

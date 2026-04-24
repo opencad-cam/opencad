@@ -1,11 +1,11 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'4e205b56c72f')\n"
+"Project-Id-Version: Blender 5.2.0 Alpha (b'b1f67602e773')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-22 09:32+0000\n"
-"PO-Revision-Date: 2025-12-17 15:12+0000\n"
-"Last-Translator: Martin Hansen <mh306602@gmail.com>\n"
+"POT-Creation-Date: 2026-04-13 10:20+0000\n"
+"PO-Revision-Date: 2026-01-30 13:12+0000\n"
+"Last-Translator: Martin Hansen <martini-141@users.noreply.translate.blender.org>\n"
 "Language-Team: Norwegian Bokmål <https://translate.blender.org/projects/blender-ui/ui/nb_NO/>\n"
 "Language: nb\n"
 "MIME-Version: 1.0\n"
@@ -92,7 +92,7 @@ msgstr "Plassen som kanalposens animasjonsdata er for"
 
 
 msgid "Collection of F-Curves for a specific action slot, on a specific strip"
-msgstr "Samling av F-kurver for en spesifikk handlings-plass, på en spesifikk stripe"
+msgstr "Samling av F-kurver for en angitt handlings-plass, på en angitt stripe"
 
 
 msgid "Collection of f-curve groups"
@@ -324,7 +324,7 @@ msgstr "Handlings-plass"
 
 
 msgid "Identifier for a set of channels in this Action, that can be used by a data-block to specify what it gets animated by"
-msgstr "Identifikator for et sett kanaler i denne handlinga, som kan brukes av en datablokk til å spesifisere hva den animeres av"
+msgstr "Identifikator for et sett kanaler i denne handlinga, som kan brukes av en datablokk til å angi hva den animeres av"
 
 
 msgid "Active"
@@ -343,7 +343,7 @@ msgid ""
 "Number specific to this Slot, unique within the Action.\n"
 "This is used, for example, on a ActionKeyframeStrip to look up the ActionChannelbag for this Slot"
 msgstr ""
-"Tall, spesifikt for denne plassen, unikt i handlinga.\n"
+"Tall, angitt for denne plassen, unikt i handlinga.\n"
 "Dette brukes f.eks. på ei handlings-nøkkelbildestripe for å søke etter handlings-kanalposen for denne plassen"
 
 
@@ -360,7 +360,7 @@ msgstr "Handlings-plass visningsnavn"
 
 
 msgid "Name of the slot, for display in the user interface. This name combined with the slot's data-block type is unique within its Action"
-msgstr "Navnet på handlings-plassen, for visning i brukergrensesnittet. Dette navnet kombinert med plassens type datablokk er unik i dens handling"
+msgstr "Navnet på handlings-plassen, for visning i brukergrensesnittet. Dette navnet kombinert med plassens datablokk-type er unik i dens handling"
 
 
 msgid "Selection state of the slot"
@@ -381,7 +381,7 @@ msgstr "Mål ID-type"
 
 
 msgid "Type of data-block that this slot is intended to animate; can be set when 'UNSPECIFIED' but is otherwise read-only"
-msgstr "Type datablokk, som denne handlings-plassen er ment å animere; kan velges når «IKKE-SPESIFISERT», men ellers er skrivebeskyttet"
+msgstr "Type datablokk, som denne handlings-plassen er ment å animere; kan velges når «IKKE-ANGITT», men ellers er skrivebeskyttet"
 
 
 msgctxt "ID"
@@ -581,11 +581,11 @@ msgstr "Verden"
 
 msgctxt "ID"
 msgid "Unspecified"
-msgstr "Ikke-spesifisert"
+msgstr "Ikke-angitt"
 
 
 msgid "Not yet specified. When this slot is first assigned to a data-block, this will be set to the type of that data-block"
-msgstr "Ikke enda spesifisert. Når denne handlings-plassen er tildelt en datablokk, vil denne bli valgt til typen for den datablokken"
+msgstr "Ikke enda angitt. Når denne handlings-plassen er tildelt en datablokk, vil denne bli valgt til typen for den datablokken"
 
 
 msgid "Action Slots"
@@ -830,22 +830,6 @@ msgstr "Nederst"
 
 msgid "Place the Mix node at the same height as the lowest node"
 msgstr "Plasser blandingsnoden på samme høyde som den nederste node"
-
-
-msgid "Show Hotkey List"
-msgstr "Vis hurtigtastliste"
-
-
-msgid "Expand this box into a list of all the hotkeys for functions in this addon"
-msgstr "Utvid denne boksen til en liste over alle hurtigtaster for funksjoner i dette tillegget"
-
-
-msgid "Show Principled Naming Tags"
-msgstr "Vis prinsipielle navnemerker"
-
-
-msgid "Expand this box into a list of all naming tags for Principled Texture setup"
-msgstr "Utvid denne boksen til en liste over alle prinsipielle navnemerker for prinsipielt teksturoppsett"
 
 
 msgid "Fribidi Library"
@@ -1141,11 +1125,11 @@ msgstr "Beregn beinstiene fra hodene"
 
 
 msgid "Tails"
-msgstr "Haler"
+msgstr "Ender"
 
 
 msgid "Calculate bone paths from tails"
-msgstr "Beregn beinstiene fra halene"
+msgstr "Beregn beinstiene fra endene"
 
 
 msgid "After Current"
@@ -1269,7 +1253,7 @@ msgstr "Vis bildetall av nøkkelbildene på bevegelses stiene"
 
 
 msgid "Paths Type"
-msgstr "Type sti"
+msgstr "Sti-type"
 
 
 msgid "Type of range to show for Motion Paths"
@@ -1289,7 +1273,7 @@ msgstr "I rekkevidde"
 
 
 msgid "Display Paths of poses within specified range"
-msgstr "Vis stier av poseringer innen en spesifikk rekkevidde"
+msgstr "Vis stier av poseringer innen en angitt rekkevidde"
 
 
 msgid "Bake to active Camera"
@@ -1305,7 +1289,7 @@ msgstr "Merknadsbilde"
 
 
 msgid "Collection of related sketches on a particular frame"
-msgstr "Samling av relaterte skisser på et spesifikt bilde"
+msgstr "Samling av relaterte skisser på et angitt bilde"
 
 
 msgid "Frame Number"
@@ -1926,7 +1910,7 @@ msgstr "Absolutt sti til .blend-fila som inneholder denne eiendelen, utvidet med
 
 msgctxt "ID"
 msgid "Data-block Type"
-msgstr "Type datablokk"
+msgstr "Datablokk-type"
 
 
 msgid "The type of the data-block, if the asset represents one ('NONE' otherwise)"
@@ -2030,7 +2014,7 @@ msgstr "Innstillinger"
 
 
 msgid "Options for this asset shelf type"
-msgstr "Innstillingene for denne type eiendelshylle"
+msgstr "Innstillingene for denne eiendelshylle-typen"
 
 
 msgid "No Asset Dragging"
@@ -2062,7 +2046,7 @@ msgstr "Når du legger til en meny for en eiendel, ta eiendelen i bruk og kall �
 
 
 msgid "Space Type"
-msgstr "Type plass"
+msgstr "Plasstype"
 
 
 msgid "The space where the asset shelf will show up in. Ignored for popup asset shelves which can be displayed in any space."
@@ -2861,7 +2845,7 @@ msgstr "Utvider bakeresultatet som en etterbehandlings-filter"
 
 
 msgid "Margin Type"
-msgstr "Type marg"
+msgstr "Margtype"
 
 
 msgid "Algorithm to extend the baked result"
@@ -3197,11 +3181,11 @@ msgstr "Koordinatene til det første håndtaket"
 
 
 msgid "Handle 1 Type"
-msgstr "Type for håndtak 1"
+msgstr "Håndtaktype 1"
 
 
 msgid "Handle types"
-msgstr "Håndtaktype"
+msgstr "Håndtaktyper"
 
 
 msgid "Free"
@@ -3221,7 +3205,7 @@ msgstr "Koordinatene til det andre håndtaket"
 
 
 msgid "Handle 2 Type"
-msgstr "Type for håndtak 2"
+msgstr "Håndtaktype 2"
 
 
 msgid "Visibility status"
@@ -3337,11 +3321,11 @@ msgstr "Sti til .blend-fila"
 
 
 msgid "Vector Fonts"
-msgstr "Vektor skrifttyper"
+msgstr "Vektor-skrifttyper"
 
 
 msgid "Vector font data-blocks"
-msgstr "Vektor skrifttyper datablokker"
+msgstr "Vektor-skrifttyper datablokker"
 
 
 msgid "Grease Pencil data-blocks"
@@ -4214,7 +4198,7 @@ msgstr "Fryktfaktor"
 
 
 msgid "Avoid object if danger from it is above this threshold"
-msgstr "Unngå objektet hvis faren fra det er over denne terskelen"
+msgstr "Unngå objektet hvis faren fra det er over denne grensa"
 
 
 msgid "Object to avoid"
@@ -4465,6 +4449,648 @@ msgid "Maximum distance from which a boid can attack"
 msgstr "Maksimal rekkevidde som en boid kan angripe fra"
 
 
+msgid "Boid States"
+msgstr "Boid-tilstander"
+
+
+msgid "Strength"
+msgstr "Styrke"
+
+
+msgid "Maximum caused damage on attack per second"
+msgstr "Maksimal forårsaket skade per angrep per sekund"
+
+
+msgid "Allow Climbing"
+msgstr "Tillat klatring"
+
+
+msgid "Allow boids to climb goal objects"
+msgstr "Tillat boid-er å klatre mål-objekter"
+
+
+msgid "Allow Flight"
+msgstr "Tillat flyging"
+
+
+msgid "Allow boids to move in air"
+msgstr "Tillat boid-er å bevege i lufta"
+
+
+msgid "Allow Land"
+msgstr "Tillat landing"
+
+
+msgid "Allow boids to move on land"
+msgstr "Tillat boid-er å bevege på land"
+
+
+msgid "Boid State"
+msgstr "Boid-tilstand"
+
+
+msgid "Boid state for boid physics"
+msgstr "Boid-tilstand for boid-fysikk"
+
+
+msgid "Active Boid Rule Index"
+msgstr "Boid-regelindeks i bruk"
+
+
+msgid "Falloff"
+msgstr "Fall"
+
+
+msgid "Boid state name"
+msgstr "Navn på boid-tilstand"
+
+
+msgid "Rule Fuzziness"
+msgstr "Regeluklarhet"
+
+
+msgid "Boid Rules"
+msgstr "Boid-regler"
+
+
+msgid "Rule Evaluation"
+msgstr "Evaluering av regler"
+
+
+msgid "How the rules in the list are evaluated"
+msgstr "Hvordan reglene i lista evalueres"
+
+
+msgid "Fuzzy"
+msgstr "Uklar"
+
+
+msgid "Rules are gone through top to bottom (only the first rule which effect is above fuzziness threshold is evaluated)"
+msgstr "Reglene gås gjennom topp til bunn (kun den første reglen hvis effekten overstiger uklarhetgrensa evalueres)"
+
+
+msgid "Random"
+msgstr "Tilfeldig"
+
+
+msgid "A random rule is selected for each boid"
+msgstr "En tilfeldig regel velges for hver boid"
+
+
+msgid "Average"
+msgstr "Gjennomsnittlig"
+
+
+msgid "All rules are averaged"
+msgstr "Alle regler er gjennomsnittberegnet"
+
+
+msgid "Volume"
+msgstr "Volum"
+
+
+msgid "Bone in an Armature data-block"
+msgstr "Bein i en armatur-datablokk"
+
+
+msgid "In X"
+msgstr "Inn X"
+
+
+msgid "X-axis handle offset for start of the B-Bone's curve, adjusts curvature"
+msgstr "Forskyvning av håndtaket til X-aksen for starten av B-bein kurva, justerer krumning"
+
+
+msgid "In Z"
+msgstr "Inn Z"
+
+
+msgid "Z-axis handle offset for start of the B-Bone's curve, adjusts curvature"
+msgstr "Forskyvning av håndtaket til Z-aksen for starten av B-bein kurva, justerer krumning"
+
+
+msgid "Out X"
+msgstr "Ut X"
+
+
+msgid "X-axis handle offset for end of the B-Bone's curve, adjusts curvature"
+msgstr "Forskyvning av håndtaket til X-aksen for slutten av B-bein kurva, justerer krumning"
+
+
+msgid "Out Z"
+msgstr "Ut Z"
+
+
+msgid "Z-axis handle offset for end of the B-Bone's curve, adjusts curvature"
+msgstr "Forskyvning av håndtaket til Z-aksen for slutten av B-bein kurva, justerer krumning"
+
+
+msgid "B-Bone End Handle"
+msgstr "B-bein slutthåndtak"
+
+
+msgid "Bone that serves as the end handle for the B-Bone curve"
+msgstr "Bein som fungerer som slutthåndtaket for B-bein krumningen"
+
+
+msgid "B-Bone Start Handle"
+msgstr "B-bein starthåndtak"
+
+
+msgid "Bone that serves as the start handle for the B-Bone curve"
+msgstr "Bein som fungerer som starthåndtaket for B-bein krumningen"
+
+
+msgctxt "Armature"
+msgid "Ease In"
+msgstr "Lett inn"
+
+
+msgid "Length of first Bézier Handle (for B-Bones only)"
+msgstr "Lengden av det første bézier-håndtaket (kun for B-bein)"
+
+
+msgctxt "Armature"
+msgid "Ease Out"
+msgstr "Lett ut"
+
+
+msgid "Length of second Bézier Handle (for B-Bones only)"
+msgstr "Lengden av det andre bézier-håndtaket (kun for B-bein)"
+
+
+msgid "B-Bone End Handle Type"
+msgstr "B-bein slutthåndtaktype"
+
+
+msgid "Selects how the end handle of the B-Bone is computed"
+msgstr "Velger hvordan slutthåndtaket til B-beinet beregnes"
+
+
+msgid "Automatic"
+msgstr "Automatisk"
+
+
+msgid "Use connected parent and children to compute the handle"
+msgstr "Bruk tilkoblede overordnede og underordnede for beregning av håndtak"
+
+
+msgid "Absolute"
+msgstr "Absolutt"
+
+
+msgid "Use the position of the specified bone to compute the handle"
+msgstr "Bruk posisjonen til det valgte beinet for beregning av håndtak"
+
+
+msgid "Relative"
+msgstr "Relativ"
+
+
+msgid "Use the offset of the specified bone from rest pose to compute the handle"
+msgstr "Bruk forskyvningen til det valgte beinet fra hvileplassen for beregning av håndtak"
+
+
+msgid "Use the orientation of the specified bone to compute the handle, ignoring the location"
+msgstr "Bruk retninga av det valgte beinet for beregning av håndtaket, ignorerer plasseringen"
+
+
+msgid "B-Bone Start Handle Type"
+msgstr "B-bein starthåndtaktype"
+
+
+msgid "Selects how the start handle of the B-Bone is computed"
+msgstr "Velger hvordan starthåndtaket til B-beinet beregnes"
+
+
+msgid "End Handle Ease"
+msgstr "Slutthåndtak letthet"
+
+
+msgid "Multiply the B-Bone Ease Out channel by the local Y scale value of the end handle. This is done after the Scale Easing option and isn't affected by it."
+msgstr "Multipliser B-beinets utlettelse-kanal av den lokale Y-skalaverdien av slutthåndtaket. Dette gjøres etter innstillingen for lettelse av skala og påvirkes ikke av den."
+
+
+msgid "Start Handle Ease"
+msgstr "Starthåndtak letthet"
+
+
+msgid "Multiply the B-Bone Ease In channel by the local Y scale value of the start handle. This is done after the Scale Easing option and isn't affected by it."
+msgstr "Multipliser B-beinets innlettelse-kanal av den lokale Y-skalaverdien av starthåndtaket. Dette gjøres etter innstillingen for lettelse av skala og påvirkes ikke av den."
+
+
+msgid "End Handle Scale"
+msgstr "Slutthåndtakskala"
+
+
+msgid "Multiply B-Bone Scale Out channels by the local scale values of the end handle. This is done after the Scale Easing option and isn't affected by it."
+msgstr "Multipliser B-beinets utskaleringskanal av de lokale skalaverdiene av slutthåndtaket. Dette gjøres etter innstillingen for lettelse av skala og påvirkes ikke av den."
+
+
+msgid "Start Handle Scale"
+msgstr "Starthåndtakskala"
+
+
+msgid "Multiply B-Bone Scale In channels by the local scale values of the start handle. This is done after the Scale Easing option and isn't affected by it."
+msgstr "Multipliser B-beinets innskaleringskanal av de lokale skalaverdiene av starthåndtaket. Dette gjøres etter innstillingen for lettelse av skala og påvirkes ikke av den."
+
+
+msgid "B-Bone Vertex Mapping Mode"
+msgstr "B-bein hjørnekartleggings-modus"
+
+
+msgid "Selects how the vertices are mapped to B-Bone segments based on their position"
+msgstr "Velger hvordan hjørnene kartlegges til B-bein segmenter basert på deres posisjon"
+
+
+msgid "Straight"
+msgstr "Rett"
+
+
+msgid "Fast mapping that is good for most situations, but ignores the rest pose curvature of the B-Bone"
+msgstr "Rask kartlegging, fungerer for de fleste situasjoner, men ignorerer hvileplass-krumningen av B-beinet"
+
+
+msgid "Curved"
+msgstr "Kurvet"
+
+
+msgid "Slower mapping that gives better deformation for B-Bones that are sharply curved in rest pose"
+msgstr "Saktere kartlegging, gir bedre deformasjon for B-bein som er skarpt krummet i hvileplassen"
+
+
+msgid "Roll In"
+msgstr "Rull inn"
+
+
+msgid "Roll offset for the start of the B-Bone, adjusts twist"
+msgstr "Rulleforskyvning for starten av B-beinet, justerer vridning"
+
+
+msgid "Roll Out"
+msgstr "Rull ut"
+
+
+msgid "Roll offset for the end of the B-Bone, adjusts twist"
+msgstr "Rulleforskyvning for enden av B-beinet, justerer vridning"
+
+
+msgid "Scale In"
+msgstr "Skaler inn"
+
+
+msgid "Scale factors for the start of the B-Bone, adjusts thickness (for tapering effects)"
+msgstr "Skalafaktorer for starten av B-beinet, justerer tykkelse (for innsnevring-effekt)"
+
+
+msgid "Scale Out"
+msgstr "Skaler ut"
+
+
+msgid "Scale factors for the end of the B-Bone, adjusts thickness (for tapering effects)"
+msgstr "Skalafaktorer for enden av B-beinet, justerer tykkelse (for innsnevring-effekt)"
+
+
+msgid "B-Bone Segments"
+msgstr "B-bein segmenter"
+
+
+msgid "Number of subdivisions of bone (for B-Bones only)"
+msgstr "Antall underinndelelse av bein (kun for B-bein)"
+
+
+msgid "B-Bone Display X Width"
+msgstr "X-aksens bredde på B-beinet"
+
+
+msgid "B-Bone X size"
+msgstr "X-aksens størrelse på B-beinet"
+
+
+msgid "B-Bone Display Z Width"
+msgstr "Z-aksens bredde på B-beinet"
+
+
+msgid "B-Bone Z size"
+msgstr "Z-aksens størrelse på B-beinet"
+
+
+msgid "Children"
+msgstr "Underordnet"
+
+
+msgid "Bones which are children of this bone"
+msgstr "Bein som er underordnet dette beinet"
+
+
+msgid "Bone Collections that contain this bone"
+msgstr "Beinsamlinger som inneholder dette beinet"
+
+
+msgid "Display Type"
+msgstr "Visningstype"
+
+
+msgid "Armature Defined"
+msgstr "Armatur tilpasset"
+
+
+msgid "Use display mode from armature (default)"
+msgstr "Bruk visningsmodus fra armatur (standard)"
+
+
+msgid "Octahedral"
+msgstr "Oktaedrisk"
+
+
+msgid "Display bones as octahedral shape"
+msgstr "Vis bein som oktaedrisk form"
+
+
+msgid "Stick"
+msgstr "Pinne"
+
+
+msgid "Display bones as simple 2D lines with dots"
+msgstr "Vis bein som enkle 2D-linjer med punkter"
+
+
+msgid "B-Bone"
+msgstr "B-bein"
+
+
+msgid "Display bones as boxes, showing subdivision and B-Splines"
+msgstr "Vis bein som bokser, viser underinndelelse og B-spliner"
+
+
+msgid "Envelope"
+msgstr "Omhylling"
+
+
+msgid "Display bones as extruded spheres, showing deformation influence volume"
+msgstr "Vis bein som utvidede sfærer, viser hvordan deformasjon påvirker volum"
+
+
+msgid "Wire"
+msgstr "Netting"
+
+
+msgid "Display bones as thin wires, showing subdivision and B-Splines"
+msgstr "Viser bein som tynn netting, viser underinndelelse og B-spliner"
+
+
+msgid "Envelope Deform Distance"
+msgstr "Omhylling-deformasjonavstand"
+
+
+msgid "Bone deformation distance (for Envelope deform only)"
+msgstr "Bein deformasjonavstand (kun for omhylling-deformasjon)"
+
+
+msgid "Envelope Deform Weight"
+msgstr "Omhylling-deformasjonvekt"
+
+
+msgid "Bone deformation weight (for Envelope deform only)"
+msgstr "Bein deformasjonvekt (kun for omhylling-deformasjon)"
+
+
+msgid "Head"
+msgstr "Hode"
+
+
+msgid "Location of head end of the bone relative to its parent"
+msgstr "Plasseringa av endehodet til beinet relativt til dens overordnede"
+
+
+msgid "Armature-Relative Head"
+msgstr "Armatur-relativt hode"
+
+
+msgid "Location of head end of the bone relative to armature"
+msgstr "Plasseringa av endehodet til beinet relativt til armaturen"
+
+
+msgid "Envelope Head Radius"
+msgstr "Omhylling-hoderadius"
+
+
+msgid "Radius of head of bone (for Envelope deform only)"
+msgstr "Radiusen av hodet til beinet (kun for omhylling-deformasjon)"
+
+
+msgid "Bone is not visible when it is in Edit Mode"
+msgstr "Beinet er ikke synlig når den er i redigeringsmodus"
+
+
+msgid "Selectable"
+msgstr "Valgbar"
+
+
+msgid "Bone is able to be selected"
+msgstr "Beinet kan velges"
+
+
+msgid "Inherit Scale"
+msgstr "Arv skala"
+
+
+msgid "Specifies how the bone inherits scaling from the parent bone"
+msgstr "Velger hvordan beinet arver skalaen til overordnet bein"
+
+
+msgid "Inherit all effects of parent scaling"
+msgstr "Arv alle effekter av overordnet skalering"
+
+
+msgid "Fix Shear"
+msgstr "Fiks skjæring"
+
+
+msgid "Inherit scaling, but remove shearing of the child in the rest orientation"
+msgstr "Arv skalering, men fjern skjæring fra den underordnede i hvileplassen"
+
+
+msgid "Rotate non-uniform parent scaling to align with the child, applying parent X scale to child X axis, and so forth"
+msgstr "Roter ikke-enhetlig skalering fra overordnet for innrettelse med underordnet, bruker X-skala fra overordnet til X-skala fra underordnet og så videre"
+
+
+msgid "Inherit uniform scaling representing the overall change in the volume of the parent"
+msgstr "Arv enhetlig skalering, representerer den helhetlige endringen av volumet til dens overordnede"
+
+
+msgid "Completely ignore parent scaling"
+msgstr "Ignorer fullstendig overordnet skalering"
+
+
+msgid "None (Legacy)"
+msgstr "Ingen (gammel)"
+
+
+msgid "Ignore parent scaling without compensating for parent shear. Replicates the effect of disabling the original Inherit Scale checkbox."
+msgstr "Ignorer overordnet skalering uten kompensasjon av skjæring fra overordnet. Kopierer effekten av å slå av den opprinnelige arv skalering-avmerkingsboksen."
+
+
+msgid "Length"
+msgstr "Lengde"
+
+
+msgid "Length of the bone"
+msgstr "Lengden av beinet"
+
+
+msgid "Bone Matrix"
+msgstr "Beinmatrise"
+
+
+msgid "3×3 bone matrix"
+msgstr "3 × 3 beinmatrise"
+
+
+msgid "Bone Armature-Relative Matrix"
+msgstr "Bein armatur-relativt matrise"
+
+
+msgid "4×4 bone matrix relative to armature"
+msgstr "4 × 4 beinmatrise relativt til armaturen"
+
+
+msgid "Parent"
+msgstr "Overordnet"
+
+
+msgid "Parent bone (in same Armature)"
+msgstr "Overordnet bein (i samme armatur)"
+
+
+msgid "Display Wire"
+msgstr "Vis netting"
+
+
+msgid "Bone is always displayed in wireframe regardless of viewport shading mode (useful for non-obstructive custom bone shapes)"
+msgstr "Beinet er alltid vist i netting uansett hvilket visningsfelt skyggeleggingsmodus (nyttig for ikke-hindrende tilpassede bein-former)"
+
+
+msgid "Tail"
+msgstr "Ende"
+
+
+msgid "Location of tail end of the bone relative to its parent"
+msgstr "Plasseringa av enden av beinet relativt til dens overordnede"
+
+
+msgid "Armature-Relative Tail"
+msgstr "Armatur-relativt ende"
+
+
+msgid "Location of tail end of the bone relative to armature"
+msgstr "Plasseringa av enden av beinet relativt til armaturen"
+
+
+msgid "Envelope Tail Radius"
+msgstr "Omhylling-enderadius"
+
+
+msgid "Radius of tail of bone (for Envelope deform only)"
+msgstr "Radiusen for enden av beinet (kun for omhylling-deformasjon)"
+
+
+msgid "Connected"
+msgstr "Tilkoblet"
+
+
+msgid "When bone has a parent, bone's head is stuck to the parent's tail"
+msgstr "Når beinet har en overordnet, settes beinets hode fast til overordnede sin ende"
+
+
+msgid "Cyclic Offset"
+msgstr "Syklisk-forskyvning"
+
+
+msgid "When bone does not have a parent, it receives cyclic offset effects (Deprecated)"
+msgstr "Når beinet ikke har en overordnet, mottar den en syklisk-forskyvningseffekt (foreldet)"
+
+
+msgid "Deform"
+msgstr "Deformer"
+
+
+msgid "Enable Bone to deform geometry"
+msgstr "Gjør det mulig for beinet å deformere geometrien"
+
+
+msgid "Inherit End Roll"
+msgstr "Arv enderulling"
+
+
+msgid "Add Roll Out of the Start Handle bone to the Roll In value"
+msgstr "Legg til utrulling av starthåndtak bein for innrullingsverdien"
+
+
+msgid "Multiply Vertex Group with Envelope"
+msgstr "Multipliser hjørnegruppe med omhylling"
+
+
+msgid "When deforming bone, multiply effects of Vertex Group weights with Envelope influence"
+msgstr "Ved deformering av bein, multipliser effekter av hjørnegruppe vekten med omhyllingsinnflytelse"
+
+
+msgid "Inherit Rotation"
+msgstr "Arv rotasjon"
+
+
+msgid "Bone inherits rotation or scale from parent bone"
+msgstr "Beinet arver rotasjonen eller skalaen fra overordnet bein"
+
+
+msgid "Local Location"
+msgstr "Lokal plassering"
+
+
+msgid "Bone location is set in local space"
+msgstr "Beinplassering er satt i lokalplass"
+
+
+msgid "Relative Parenting"
+msgstr "Relativ ordning"
+
+
+msgid "Object children will use relative transform, like deform"
+msgstr "Underordnede objekter vil bruke relativ transformering, f.eks deformasjon"
+
+
+msgid "Scale Easing"
+msgstr "Skalaletting"
+
+
+msgid "Multiply the final easing values by the Scale In/Out Y factors"
+msgstr "Multipliser den endelige verdien for lettelse av skalaens in/ut-faktorer"
+
+
+msgid "Bone collection in an Armature data-block"
+msgstr "Samling av bein i en armatur-datablokk"
+
+
+msgid "Bones"
+msgstr "Bein"
+
+
+msgid "Bones assigned to this bone collection. In armature edit mode this will always return an empty list of bones, as the bone collection memberships are only synchronized when exiting edit mode."
+msgstr "Bein tildelt denne beinsamlingen. I armaturredigeringsmodus vil denne alltid gi en tom liste bein, da medlemskap av beinsamlingen bare synkroniseres ved avslutting av redigeringsmodus."
+
+
+msgid "Child Number"
+msgstr "Underordnedes nummer"
+
+
+msgid "Index of this collection into its parent's list of children. Note that finding this index requires a scan of all the bone collections, so do access this with care."
+msgstr "Indeksen av denne samlingen til overordnedes liste over underordnede. Merk: Funn av denne indeksen krever en skann av alle beinsamlinger, vær forsiktig ved bruk."
+
+
+msgid "Index"
+msgstr "Indeks"
+
+
 msgid "Left"
 msgstr "Venstre"
 
@@ -4479,6 +5105,10 @@ msgstr "Lineær"
 
 msgid "Camera"
 msgstr "Kamera"
+
+
+msgid "Handle Type"
+msgstr "Håndtaktype"
 
 
 msgid "Render"
@@ -4520,6 +5150,14 @@ msgstr "Rediger"
 msgctxt "ParticleSettings"
 msgid "Rendered"
 msgstr "Gjengitt"
+
+
+msgid "Vector Font"
+msgstr "Vektor-skrifttype"
+
+
+msgid "Vector font for Text objects"
+msgstr "Vektor-skrifttype for tekstobjekter"
 
 
 msgid "Windows"
@@ -4600,12 +5238,31 @@ msgid "Make Local"
 msgstr "Gjør lokal"
 
 
+msgctxt "Operator"
+msgid "Save"
+msgstr "Lagre"
+
+
+msgctxt "Operator"
+msgid "Save As"
+msgstr "Lagre som"
+
+
 msgid "Rendered"
 msgstr "Gjengitt"
 
 
 msgid "Data-Block Type"
 msgstr "Type datablokk"
+
+
+msgctxt "Operator"
+msgid "Recover Last Session"
+msgstr "Gjenoppta siste økt"
+
+
+msgid "Save Copy"
+msgstr "Lagre kopi"
 
 
 msgctxt "Operator"
@@ -4659,20 +5316,12 @@ msgid "Arabic - ﺔﻴﺑﺮﻌﻟﺍ"
 msgstr "Arabisk – ﺔﻴﺑﺮﻌﻟﺍ"
 
 
-msgid "Locale code: ar_EG. Translation progress: 24%"
-msgstr "Lokalkode: ar_EG. Status på oversettelse: 24 %"
-
-
 msgid "Basque - Euskara"
 msgstr "Baskisk – Euskara"
 
 
 msgid "Locale code: eu_EU. Translation progress: 1%"
 msgstr "Lokalkode: eu_EU. Status på oversettelse: 1 %"
-
-
-msgid "Belarusian - беларуску"
-msgstr "Belarusisk – беларуску"
 
 
 msgid "Locale code: be. Translation progress: 0%"
@@ -4683,32 +5332,16 @@ msgid "Bulgarian - Български"
 msgstr "Bulgarsk – Български"
 
 
-msgid "Locale code: bg_BG. Translation progress: 2%"
-msgstr "Lokalkode: bg_BG. Status på oversettelse: 2 %"
-
-
 msgid "Catalan - Català"
 msgstr "Katalansk – Català"
-
-
-msgid "Locale code: ca_AD. Translation progress: 100%"
-msgstr "Lokalkode: ca_AD. Status på oversettelse: 100 %"
 
 
 msgid "Chinese (Simplified) - 简体中文"
 msgstr "Kinesisk (forenklet) – 简体中文"
 
 
-msgid "Locale code: zh_HANS. Translation progress: 100%"
-msgstr "Lokalkode: zh_HANS. Status på oversettelse: 100 %"
-
-
 msgid "Chinese (Traditional) - 繁體中文"
 msgstr "Kinesisk (tradisjonell) – 繁體中文"
-
-
-msgid "Locale code: zh_HANT. Translation progress: 51%"
-msgstr "Lokalkode: zh_HANT. Status på oversettelse: 51 %"
 
 
 msgid "Czech - Čeština"
@@ -4731,16 +5364,8 @@ msgid "Dutch - Nederlands"
 msgstr "Nederlandsk – Nederlands"
 
 
-msgid "Locale code: nl_NL. Translation progress: 5%"
-msgstr "Lokalkode: nl_NL. Status på oversettelse: 5 %"
-
-
 msgid "English (UK)"
 msgstr "Engelsk (Storbritannia) – English (UK)"
-
-
-msgid "Locale code: en_GB. Translation progress: 100%"
-msgstr "Lokalkode: en_GB. Status på oversettelse: 100 %"
 
 
 msgid "English (US)"
@@ -4771,24 +5396,12 @@ msgid "French - Français"
 msgstr "Fransk – Français"
 
 
-msgid "Locale code: fr_FR. Translation progress: 99%"
-msgstr "Lokalkode: fr_FR. Status på oversettelse: 99 %"
-
-
 msgid "Georgian - ქართული"
 msgstr "Georgisk – ქართული"
 
 
-msgid "Locale code: ka. Translation progress: 100%"
-msgstr "Lokalkode: ka. Status på oversettelse: 100 %"
-
-
 msgid "German - Deutsch"
 msgstr "Tysk – Deutsch"
-
-
-msgid "Locale code: de_DE. Translation progress: 37%"
-msgstr "Lokalkode: de_DE. Status på oversettelse: 37 %"
 
 
 msgid "Greek - Ελληνικά"
@@ -4827,10 +5440,6 @@ msgid "Indonesian - Bahasa indonesia"
 msgstr "Indonesisk – Bahasa indonesia"
 
 
-msgid "Locale code: id_ID. Translation progress: 21%"
-msgstr "Lokalkode: id_ID. Status på oversettelse: 21 %"
-
-
 msgid "Italian - Italiano"
 msgstr "Italiensk – Italiano"
 
@@ -4839,16 +5448,8 @@ msgid "Japanese - 日本語"
 msgstr "Japansk – 日本語"
 
 
-msgid "Locale code: ja_JP. Translation progress: 99%"
-msgstr "Lokalkode: ja_JP. Status på oversettelse: 99 %"
-
-
 msgid "Korean - 한국어"
 msgstr "Koreansk – 한국어"
-
-
-msgid "Locale code: ko_KR. Translation progress: 50%"
-msgstr "Lokalkode: ko_KR. Status på oversettelse: 50 %"
 
 
 msgid "Kyrgyz - Кыргыз тили"
@@ -4891,24 +5492,12 @@ msgid "Polish - Polski"
 msgstr "Polsk – Polski"
 
 
-msgid "Locale code: pl_PL. Translation progress: 18%"
-msgstr "Lokalkode: pl_PL. Status på oversettelse: 18 %"
-
-
 msgid "Portuguese (Brazil) - Português brasileiro"
 msgstr "Portugisisk (Brasil) – Português brasileiro"
 
 
-msgid "Locale code: pt_BR. Translation progress: 43%"
-msgstr "Lokalkode: pt_BR. Status på oversettelse: 43 %"
-
-
 msgid "Portuguese (Portugal) - Português europeu"
 msgstr "Portugisisk (Portugal) – Português europeu"
-
-
-msgid "Locale code: pt_PT. Translation progress: 73%"
-msgstr "Lokalkode: pt_PT. Status på oversettelse: 73 %"
 
 
 msgid "Romanian - Român"
@@ -4921,10 +5510,6 @@ msgstr "Lokalkode: ro_RO. Status på oversettelse: 2 %"
 
 msgid "Russian - Русский"
 msgstr "Russisk – Русский"
-
-
-msgid "Locale code: ru_RU. Translation progress: 100%"
-msgstr "Lokalkode: ru_RU. Status på oversettelse: 100 %"
 
 
 msgid "Serbian (Cyrillic) - Српски"
@@ -4947,32 +5532,16 @@ msgid "Slovak - Slovenčina"
 msgstr "Slovakisk – Slovenčina"
 
 
-msgid "Locale code: sk_SK. Translation progress: 100%"
-msgstr "Lokalkode: sk_SK. Status på oversettelse: 100 %"
-
-
 msgid "Slovenian - Slovenščina"
 msgstr "Slovensk – Slovenščina"
-
-
-msgid "Locale code: sl. Translation progress: 50%"
-msgstr "Lokalkode: sl. Status på oversettelse: 50 %"
 
 
 msgid "Spanish - Español"
 msgstr "Spansk – Español"
 
 
-msgid "Locale code: es. Translation progress: 100%"
-msgstr "Lokalkode: es. Status på oversettelse: 100 %"
-
-
 msgid "Swahili - Kiswahili"
 msgstr "Swahili – Kiswahili"
-
-
-msgid "Locale code: sw. Translation progress: 73%"
-msgstr "Lokalkode: sw. Status på oversettelse: 73 %"
 
 
 msgid "Swedish - Svenska"
@@ -4983,40 +5552,20 @@ msgid "Tamil - தமிழ்"
 msgstr "Tamil – தமிழ்"
 
 
-msgid "Locale code: ta. Translation progress: 94%"
-msgstr "Lokalkode: ta. Status på oversettelse: 94 %"
-
-
 msgid "Thai - ภาษาไทย"
 msgstr "Thai – ภาษาไทย"
-
-
-msgid "Locale code: th_TH. Translation progress: 3%"
-msgstr "Lokalkode: th_TH. Status på oversettelse: 3 %"
 
 
 msgid "Turkish - Türkçe"
 msgstr "Tyrkisk – Türkçe"
 
 
-msgid "Locale code: tr_TR. Translation progress: 79%"
-msgstr "Lokalkode: tr_TR. Status på oversettelse: 79 %"
-
-
 msgid "Ukrainian - Українська"
 msgstr "Ukrainsk – Українська"
 
 
-msgid "Locale code: uk_UA. Translation progress: 57%"
-msgstr "Lokalkode: uk_UA. Status på oversettelse: 57 %"
-
-
 msgid "Urdu - وُدرُا"
 msgstr "Urdu – وُدرُا"
-
-
-msgid "Locale code: ur. Translation progress: 87%"
-msgstr "Lokalkode: ur. Status på oversettelse: 87 %"
 
 
 msgid "Vietnamese - Tiếng Việt"
@@ -5072,8 +5621,99 @@ msgstr "Lisensiert under GNU General Public License"
 
 
 msgctxt "Operator"
+msgid "Save New Preferences"
+msgstr "Lagre nye innstillinger"
+
+
+msgctxt "Operator"
+msgid "Continue"
+msgstr "Fortsett"
+
+
+msgctxt "Operator"
+msgid "More..."
+msgstr "Mer …"
+
+
+msgid "Getting Started"
+msgstr "Kom i gang"
+
+
+msgctxt "Operator"
+msgid "What's New"
+msgstr "Dette er nytt"
+
+
+msgctxt "Operator"
+msgid "Donate to Blender"
+msgstr "Gi pengegave til Blender"
+
+
+msgid "Running in Offline Mode"
+msgstr "Kjører i frakoblet modus"
+
+
+msgctxt "Operator"
+msgid "Donate"
+msgstr "Gi pengegave"
+
+
+msgctxt "Operator"
+msgid "Credits"
+msgstr "Medvirkende"
+
+
+msgctxt "Operator"
 msgid "License"
 msgstr "Lisens"
+
+
+msgctxt "Operator"
+msgid "Blender Store"
+msgstr "Blender-butikk"
+
+
+msgctxt "Operator"
+msgid "Blender Website"
+msgstr "Blender-nettside"
+
+
+msgctxt "Operator"
+msgid "Link..."
+msgstr "Lenk …"
+
+
+msgctxt "Operator"
+msgid "Append..."
+msgstr "Tilføy …"
+
+
+msgid "Bug"
+msgstr "Feil"
+
+
+msgid "Credits"
+msgstr "Medvirkende"
+
+
+msgctxt "Operator"
+msgid "Manual"
+msgstr "Bruksanvisning"
+
+
+msgctxt "Operator"
+msgid "Support"
+msgstr "Støtte"
+
+
+msgctxt "Operator"
+msgid "User Communities"
+msgstr "Brukersamfunn"
+
+
+msgctxt "Operator"
+msgid "Get Involved"
+msgstr "Bli med"
 
 
 msgid "Version: {:s}"
@@ -5094,6 +5734,21 @@ msgstr "Gren: {:s}"
 
 msgid "Windowing Environment: {:s}"
 msgstr "Vindumiljø: {:s}"
+
+
+msgctxt "Operator"
+msgid "Save As..."
+msgstr "Lagre som …"
+
+
+msgctxt "Operator"
+msgid "Save a Copy..."
+msgstr "Lagre som kopi …"
+
+
+msgctxt "Operator"
+msgid "Save Copy..."
+msgstr "Lagre kopi …"
 
 
 msgctxt "Operator"
@@ -5135,9 +5790,30 @@ msgid "Blender Version"
 msgstr "Blender-versjon"
 
 
+msgctxt "Operator"
+msgid "Child"
+msgstr "Underordnet"
+
+
+msgid "Untitled"
+msgstr "Navnløs"
+
+
 msgctxt "WindowManager"
 msgid "Search"
 msgstr "Søk"
+
+
+msgid "Open Recent"
+msgstr "Åpne nylige"
+
+
+msgid "Saved copy as \"%s\""
+msgstr "Lagret kopi som «%s»"
+
+
+msgid "(Unsaved)"
+msgstr "(Ulagret)"
 
 
 msgctxt "WorkSpace"

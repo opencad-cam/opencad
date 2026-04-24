@@ -10,6 +10,8 @@
 
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 /* Internal exports only. */
 
 struct ARegion;
@@ -47,14 +49,14 @@ void space_text_update_cursor_moved(bContext *C);
   ((st)->showlinenrs ? TXT_NUMCOL_WIDTH(st) : 0) + (TXT_BODY_LPAD * (st)->runtime->cwidth_px)
 
 #define TXT_SCROLL_WIDTH U.widget_unit
-#define TXT_SCROLL_SPACE ((int)(0.1f * U.widget_unit))
+#define TXT_SCROLL_SPACE int(0.1f * U.widget_unit)
 
 /* Space between lines, in relation to letter height. */
 #define TXT_LINE_VPAD 0.3f
 /* Space between lines. */
-#define TXT_LINE_SPACING(st) ((int)(TXT_LINE_VPAD * st->runtime->lheight_px))
+#define TXT_LINE_SPACING(st) int(TXT_LINE_VPAD * st->runtime->lheight_px)
 /* Total height of each line. */
-#define TXT_LINE_HEIGHT(st) ((int)((1.0f + TXT_LINE_VPAD) * st->runtime->lheight_px))
+#define TXT_LINE_HEIGHT(st) int((1.0f + TXT_LINE_VPAD) * st->runtime->lheight_px)
 
 #define SUGG_LIST_SIZE 7
 #define SUGG_LIST_WIDTH 20
@@ -180,7 +182,7 @@ void TEXT_OT_autocomplete(wmOperatorType *ot);
 
 extern "C" const char *text_context_dir[]; /* Doc access. */
 
-namespace blender::ed::text {
+namespace ed::text {
 struct SpaceText_Runtime {
 
   /** Actual line height, scaled by DPI. */
@@ -212,4 +214,5 @@ struct SpaceText_Runtime {
   /** Cache for faster drawing. */
   void *drawcache = nullptr;
 };
-}  // namespace blender::ed::text
+}  // namespace ed::text
+}  // namespace blender

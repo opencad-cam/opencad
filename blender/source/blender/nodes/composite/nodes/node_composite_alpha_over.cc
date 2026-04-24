@@ -43,25 +43,25 @@ static const EnumPropertyItem type_items[] = {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Color>("Background").default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Color>("Foreground").default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Float>("Factor", "Fac")
+  b.add_input<decl::Color>("Background"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Color>("Foreground"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Float>("Factor"_ustr, "Fac"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Menu>("Type")
+  b.add_input<decl::Menu>("Type"_ustr)
       .default_value(CMP_NODE_ALPHA_OVER_OPERATION_TYPE_OVER)
       .static_items(type_items)
       .optional_label();
-  b.add_input<decl::Bool>("Straight Alpha")
+  b.add_input<decl::Bool>("Straight Alpha"_ustr)
       .default_value(false)
       .description(
           "Defines whether the foreground is in straight alpha form, which is necessary to know "
           "for proper alpha compositing. Images in the compositor are in premultiplied alpha form "
           "by default, so this should be false in most cases. But if, and only if, the foreground "
           "was converted to straight alpha form for some reason, this should be set to true");
-  b.add_output<decl::Color>("Image");
+  b.add_output<decl::Color>("Image"_ustr);
 }
 
 static int node_gpu_material(GPUMaterial *material,
@@ -146,9 +146,9 @@ static float4 alpha_over_conjoint(const float4 &background,
   return math::interpolate(background, mix_result, factor);
 }
 
-using blender::compositor::Color;
+using compositor::Color;
 
-static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+static void node_build_multi_function(nodes::NodeMultiFunctionBuilder &builder)
 {
   static auto function = mf::build::SI5_SO<Color, Color, float, MenuValue, bool, Color>(
       "Alpha Over",
@@ -175,11 +175,11 @@ static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &
   builder.set_matching_fn(function);
 }
 
-static void register_node_type_cmp_alphaover()
+static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeAlphaOver", CMP_NODE_ALPHAOVER);
+  cmp_node_type_base(&ntype, "CompositorNodeAlphaOver"_ustr, CMP_NODE_ALPHAOVER);
   ntype.ui_name = "Alpha Over";
   ntype.ui_description = "Overlay a foreground image onto a background image";
   ntype.enum_name_legacy = "ALPHAOVER";
@@ -188,8 +188,8 @@ static void register_node_type_cmp_alphaover()
   ntype.gpu_fn = node_gpu_material;
   ntype.build_multi_function = node_build_multi_function;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_alphaover)
+NOD_REGISTER_NODE(node_register)
 
 }  // namespace blender::nodes::node_composite_alpha_over_cc

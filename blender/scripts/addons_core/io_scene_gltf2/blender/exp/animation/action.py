@@ -31,7 +31,7 @@ class ActionsData:
 
     def add_action(self, action, force_new_action=False):
         if force_new_action:
-            action.active = False # If we force a new action, it is not active (but in NLA or broadcasted)
+            action.active = False  # If we force a new action, it is not active (but in NLA or broadcasted)
             if id(action.action) not in self.actions.keys():
                 self.actions[id(action.action)] = []
             self.actions[id(action.action)].append(action)
@@ -148,6 +148,7 @@ def gather_actions_animations(export_settings):
     merged_tracks = {}
 
     vtree = export_settings['vtree']
+    first_cache_is_done = False
     for obj_uuid in vtree.get_all_objects():
 
         # Do not manage real collections (if case of full hierarchy export)
@@ -166,8 +167,18 @@ def gather_actions_animations(export_settings):
         if export_settings['vtree'].nodes[obj_uuid].blender_type == VExportNode.COLLECTION:
             continue
 
-        animations_, merged_tracks = gather_action_animations(obj_uuid, merged_tracks, len(animations), export_settings)
+        animations_, merged_tracks = gather_action_animations(
+            obj_uuid, merged_tracks, len(animations), first_cache_is_done, export_settings)
         animations += animations_
+        first_cache_is_done = True
+
+    # Now we finished to loop on objects and gather all animations, we can enble viewport again if we disabled it
+    if export_settings['gltf_optimize_disable_viewport']:
+        for obj, default_hide_viewport in [
+            (n.blender_object, n.default_hide_viewport) for n in export_settings['vtree'].nodes.values() if n.blender_type in [
+                VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION]]:
+            # Set it back to the initial value, in case some objects were hidden in viewport before export
+            obj.hide_viewport = default_hide_viewport
 
     if export_settings['gltf_animation_mode'] == "ACTIVE_ACTIONS":
         # Fake an animation with all animations of the scene
@@ -200,7 +211,8 @@ def _align_frame_start(reference_frame_start, frame, export_settings):
     if export_settings['gltf_frame_step'] == 1:
         return frame
 
-    return reference_frame_start + export_settings['gltf_frame_step'] * ceil((frame - reference_frame_start) / export_settings['gltf_frame_step'])
+    return reference_frame_start + export_settings['gltf_frame_step'] * \
+        ceil((frame - reference_frame_start) / export_settings['gltf_frame_step'])
 
 
 def prepare_actions_range(export_settings):
@@ -264,7 +276,8 @@ def prepare_actions_range(export_settings):
                     start_frame = max(bpy.context.scene.frame_start, start_frame)
                     end_frame = min(bpy.context.scene.frame_end, end_frame)
 
-                export_settings['ranges'][obj_uuid][blender_action.name]['start'] = _align_frame_start(start_frame_reference, start_frame, export_settings)
+                export_settings['ranges'][obj_uuid][blender_action.name]['start'] = _align_frame_start(
+                    start_frame_reference, start_frame, export_settings)
                 export_settings['ranges'][obj_uuid][blender_action.name]['end'] = end_frame
 
                 if start_frame_reference is None:
@@ -273,7 +286,8 @@ def prepare_actions_range(export_settings):
                     # Recheck all actions to align to this frame
                     for obj_uuid_tmp in export_settings['ranges'].keys():
                         for action_name_tmp in export_settings['ranges'][obj_uuid_tmp].keys():
-                            export_settings['ranges'][obj_uuid_tmp][action_name_tmp]['start'] = _align_frame_start(start_frame_reference, export_settings['ranges'][obj_uuid_tmp][action_name_tmp]['start'], export_settings)
+                            export_settings['ranges'][obj_uuid_tmp][action_name_tmp]['start'] = _align_frame_start(
+                                start_frame_reference, export_settings['ranges'][obj_uuid_tmp][action_name_tmp]['start'], export_settings)
 
                 if export_settings['gltf_negative_frames'] == "SLIDE":
                     if track is not None:
@@ -311,7 +325,8 @@ def prepare_actions_range(export_settings):
 
                 if type_ == "KEY" and export_settings['gltf_bake_animation']:
                     export_settings['ranges'][obj_uuid][obj_uuid] = {}
-                    export_settings['ranges'][obj_uuid][obj_uuid]['start'] = _align_frame_start(start_frame_reference, bpy.context.scene.frame_start, export_settings)
+                    export_settings['ranges'][obj_uuid][obj_uuid]['start'] = _align_frame_start(
+                        start_frame_reference, bpy.context.scene.frame_start, export_settings)
                     export_settings['ranges'][obj_uuid][obj_uuid]['end'] = bpy.context.scene.frame_end
 
                 # For baking drivers
@@ -321,7 +336,8 @@ def prepare_actions_range(export_settings):
                         if obj_dr not in export_settings['ranges']:
                             export_settings['ranges'][obj_dr] = {}
                         export_settings['ranges'][obj_dr][obj_uuid + "_" + blender_action.name] = {}
-                        export_settings['ranges'][obj_dr][obj_uuid + "_" + blender_action.name]['start'] = _align_frame_start(start_frame_reference, start_frame, export_settings)
+                        export_settings['ranges'][obj_dr][obj_uuid + "_" + blender_action.name]['start'] = _align_frame_start(
+                            start_frame_reference, start_frame, export_settings)
                         export_settings['ranges'][obj_dr][obj_uuid + "_" + blender_action.name]['end'] = end_frame
 
         if len(blender_actions) == 0 and export_settings['gltf_bake_animation']:
@@ -329,7 +345,8 @@ def prepare_actions_range(export_settings):
             # In case of baking animation, we will use scene frame range
             # Will be calculated later if max range. Can be set here if scene frame range
             export_settings['ranges'][obj_uuid][obj_uuid] = {}
-            export_settings['ranges'][obj_uuid][obj_uuid]['start'] = _align_frame_start(start_frame_reference, bpy.context.scene.frame_start, export_settings)
+            export_settings['ranges'][obj_uuid][obj_uuid]['start'] = _align_frame_start(
+                start_frame_reference, bpy.context.scene.frame_start, export_settings)
             export_settings['ranges'][obj_uuid][obj_uuid]['end'] = bpy.context.scene.frame_end
 
             # For baking drivers
@@ -339,8 +356,8 @@ def prepare_actions_range(export_settings):
                     if obj_dr not in export_settings['ranges']:
                         export_settings['ranges'][obj_dr] = {}
                     export_settings['ranges'][obj_dr][obj_uuid + "_" + obj_uuid] = {}
-                    export_settings['ranges'][obj_dr][obj_uuid + "_" +
-                                                      obj_uuid]['start'] = _align_frame_start(start_frame_reference, bpy.context.scene.frame_start, export_settings)
+                    export_settings['ranges'][obj_dr][obj_uuid + "_" + obj_uuid]['start'] = _align_frame_start(
+                        start_frame_reference, bpy.context.scene.frame_start, export_settings)
                     export_settings['ranges'][obj_dr][obj_uuid + "_" + obj_uuid]['end'] = bpy.context.scene.frame_end
 
     if (export_settings['gltf_negative_frames'] == "SLIDE"
@@ -378,6 +395,7 @@ def gather_action_animations(obj_uuid: int,
                              tracks: typing.Dict[str,
                                                  typing.List[int]],
                              offset: int,
+                             first_cache_is_done: bool,
                              export_settings) -> typing.Tuple[typing.List[gltf2_io.Animation],
                                                               typing.Dict[str,
                                                                           typing.List[int]]]:
@@ -448,37 +466,32 @@ def gather_action_animations(obj_uuid: int,
         current_use_nla = blender_object.animation_data.use_nla
         blender_object.animation_data.use_nla = False
 
-    # Disable all except armature in viewport, for performance
-    if export_settings['gltf_optimize_disable_viewport'] \
-            and export_settings['vtree'].nodes[obj_uuid].blender_object.type == "ARMATURE":
-
-        # Before baking, disabling from viewport all meshes
-        for obj in [n.blender_object for n in export_settings['vtree'].nodes.values() if n.blender_type in
-                    [VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION]]:
-            obj.hide_viewport = True
+    if export_settings['gltf_optimize_disable_viewport']:
+        # Enable viewport for the object we are exporting
         export_settings['vtree'].nodes[obj_uuid].blender_object.hide_viewport = False
 
-        # We need to create custom properties on armature to store shape keys drivers on disabled meshes
-        # This way, we can evaluate drivers on shape keys, and bake them
-        drivers = get_sk_drivers(obj_uuid, export_settings)
-        if drivers:
-            # So ... Let's create some custom properties and the armature
-            # First, retrieve the armature object
-            for mesh_uuid in drivers:
-                _, channels = get_driver_on_shapekey(mesh_uuid, export_settings)
-                blender_object["gltf_" + mesh_uuid] = [0.0] * len(channels)
-                for idx, channel in enumerate(channels):
-                    if channel is None:
-                        continue
-                    if blender_object.animation_data is None or blender_object.animation_data.drivers is None:
-                        # There is no animation on the armature, so no need to create driver
-                        # But, we need to copy the current value of the shape key to the custom property
-                        blender_object["gltf_" + mesh_uuid][idx] = blender_object.data.shape_keys.key_blocks[channel.data_path.split('"')[
-                            1]].value
-                    else:
-                        dr = blender_object.animation_data.drivers.from_existing(src_driver=channel)
-                        dr.data_path = "[\"gltf_" + mesh_uuid + "\"]"
-                        dr.array_index = idx
+        if export_settings['vtree'].nodes[obj_uuid].blender_object.type == "ARMATURE":
+            # We need to create custom properties on armature to store shape keys drivers on disabled meshes
+            # This way, we can evaluate drivers on shape keys, and bake them
+            drivers = get_sk_drivers(obj_uuid, export_settings)
+            if drivers:
+                # So ... Let's create some custom properties and the armature
+                # First, retrieve the armature object
+                for mesh_uuid in drivers:
+                    _, channels = get_driver_on_shapekey(mesh_uuid, export_settings)
+                    blender_object["gltf_" + mesh_uuid] = [0.0] * len(channels)
+                    for idx, channel in enumerate(channels):
+                        if channel is None:
+                            continue
+                        if blender_object.animation_data is None or blender_object.animation_data.drivers is None:
+                            # There is no animation on the armature, so no need to create driver
+                            # But, we need to copy the current value of the shape key to the custom property
+                            blender_object["gltf_" + mesh_uuid][idx] = blender_object.data.shape_keys.key_blocks[channel.data_path.split('"')[
+                                1]].value
+                        else:
+                            dr = blender_object.animation_data.drivers.from_existing(src_driver=channel)
+                            dr.data_path = "[\"gltf_" + mesh_uuid + "\"]"
+                            dr.array_index = idx
 
     export_user_extensions('animation_switch_loop_hook', export_settings, blender_object, False)
 
@@ -602,7 +615,8 @@ def gather_action_animations(obj_uuid: int,
                     if channels:
                         all_channels.extend(channels)
                 else:
-                    channels = gather_action_sk_sampled(obj_uuid, blender_action, slot.slot.identifier, None, export_settings)
+                    channels = gather_action_sk_sampled(
+                        obj_uuid, blender_action, slot.slot.identifier, None, export_settings)
                     if channels:
                         all_channels.extend(channels)
             else:
@@ -617,20 +631,23 @@ def gather_action_animations(obj_uuid: int,
                     all_channels.extend(channels)
                 for (obj_uuid, type_, prop, bone) in to_be_sampled:
                     if type_ == "BONE":
-                        channel = gather_sampled_bone_channel( #TODOSLOT
+                        channel = gather_sampled_bone_channel(  # TODOSLOT
                             obj_uuid,
                             bone,
                             prop,
                             blender_action.name,
                             slot.slot.identifier,
                             True,
-                            get_gltf_interpolation(export_settings['gltf_sampling_interpolation_fallback'], export_settings),
+                            get_gltf_interpolation(
+                                export_settings['gltf_sampling_interpolation_fallback'], export_settings),
                             export_settings)
                     elif type_ == "OBJECT":
                         channel = gather_sampled_object_channel(
-                            obj_uuid, prop, blender_action.name, slot.slot.identifier, True, get_gltf_interpolation(export_settings['gltf_sampling_interpolation_fallback'], export_settings), export_settings)
+                            obj_uuid, prop, blender_action.name, slot.slot.identifier, True, get_gltf_interpolation(
+                                export_settings['gltf_sampling_interpolation_fallback'], export_settings), export_settings)
                     elif type_ == "SK":
-                        channel = gather_sampled_sk_channel(obj_uuid, blender_action.name, slot.slot.identifier, export_settings)
+                        channel = gather_sampled_sk_channel(
+                            obj_uuid, blender_action.name, slot.slot.identifier, export_settings)
                     elif type_ == "EXTRA":  # TODOSLOT slot-3
                         channel = None
                     else:
@@ -652,7 +669,8 @@ def gather_action_animations(obj_uuid: int,
                     all_channels)
 
             # If we are in a SK animation (without any TRS animation), and we need to bake
-            if len([a for a in blender_actions.values() if len([s for s in a.slots if s.target_id_type == "OBJECT"]) != 0]) == 0 and slot.target_id_type == "KEY":
+            if len([a for a in blender_actions.values() if len(
+                    [s for s in a.slots if s.target_id_type == "OBJECT"]) != 0]) == 0 and slot.target_id_type == "KEY":
                 if export_settings['gltf_bake_animation'] is True and export_settings['gltf_force_sampling'] is True:
                     # We also have to check if this is a skinned mesh, because we don't have to force animation baking on this case
                     # (skinned meshes TRS must be ignored, says glTF specification)
@@ -676,7 +694,8 @@ def gather_action_animations(obj_uuid: int,
                     ignore_sk = False
                     if export_settings['vtree'].nodes[obj_uuid].parent_uuid is not None \
                             and export_settings['vtree'].nodes[export_settings['vtree'].nodes[obj_uuid].parent_uuid].blender_type == VExportNode.ARMATURE:
-                        obj_drivers = get_sk_drivers(export_settings['vtree'].nodes[obj_uuid].parent_uuid, export_settings)
+                        obj_drivers = get_sk_drivers(
+                            export_settings['vtree'].nodes[obj_uuid].parent_uuid, export_settings)
                         if obj_uuid in obj_drivers:
                             ignore_sk = True
 
@@ -687,6 +706,19 @@ def gather_action_animations(obj_uuid: int,
                         channel = gather_sampled_sk_channel(obj_uuid, obj_uuid, None, export_settings)
                         if channel is not None:
                             all_channels.append(channel)
+
+            # Now we did the first cache, we can disable viewport object for all objects
+            # We kept all object for the first cache, to be sure to have all data needed for sampling, for all objects with active action
+            # But now, looping on other slot or action for current object, we can
+            # disable viewport for all other objects, to not have performance issue
+            # during export
+            if not first_cache_is_done and export_settings['gltf_optimize_disable_viewport']:
+                for obj in [
+                    n.blender_object for n in export_settings['vtree'].nodes.values() if n.blender_type in [
+                        VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION] and n.uuid != obj_uuid]:
+                    # Set it back to the initial value, in case some objects were hidden in viewport before export
+                    obj.hide_viewport = True
+                first_cache_is_done = True
 
         # We went through all slots of the action, we can now create the animation
         if len(all_channels) != 0:
@@ -716,7 +748,8 @@ def gather_action_animations(obj_uuid: int,
                     if not (track_name.startswith("NlaTrack") or track_name.startswith("[Action Stash]")):
                         if track_name not in tracks.keys():
                             tracks[track_name] = []
-                        tracks[track_name].append(offset + len(animations) - 1)  # Store index of animation in animations
+                        # Store index of animation in animations
+                        tracks[track_name].append(offset + len(animations) - 1)
             elif export_settings['gltf_merge_animation'] == "ACTION":
                 if action_data.name not in tracks.keys():
                     tracks[action_data.name] = []
@@ -724,7 +757,8 @@ def gather_action_animations(obj_uuid: int,
             elif export_settings['gltf_merge_animation'] == "NONE":
                 pass  # Nothing to store, we are not going to merge animations
             else:
-                pass  # This should not happen (or the developer added a new option, and forget to take it into account here)
+                # This should not happen (or the developer added a new option, and forget to take it into account here)
+                pass
 
 
 # Restoring current situation
@@ -739,7 +773,8 @@ def gather_action_animations(obj_uuid: int,
                 if blender_object.animation_data.action is not None:
                     blender_object.animation_data.action_slot = None
                 blender_object.animation_data.action = None
-            elif blender_object.animation_data.action.name != current_action.name:  # TODO action name is not unique (library)
+            # TODO action name is not unique (library)
+            elif blender_object.animation_data.action.name != current_action.name:
                 # Restore action that was active at start of exporting
                 reset_bone_matrix(blender_object, export_settings)
                 blender_object.animation_data.action = current_action
@@ -768,21 +803,20 @@ def gather_action_animations(obj_uuid: int,
     if blender_object and current_world_matrix is not None:
         blender_object.matrix_world = current_world_matrix
 
-    if export_settings['gltf_optimize_disable_viewport'] \
-            and export_settings['vtree'].nodes[obj_uuid].blender_object.type == "ARMATURE":
-        # And now, restoring meshes in viewport
-        for node, obj in [(n, n.blender_object) for n in export_settings['vtree'].nodes.values() if n.blender_type in
-                          [VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION]]:
-            obj.hide_viewport = node.default_hide_viewport
-        export_settings['vtree'].nodes[obj_uuid].blender_object.hide_viewport = export_settings['vtree'].nodes[obj_uuid].default_hide_viewport
-        # Let's remove the custom properties, and first, remove drivers
-        drivers = get_sk_drivers(obj_uuid, export_settings)
-        if drivers:
-            for mesh_uuid in drivers:
-                for armature_driver in blender_object.animation_data.drivers:
-                    if "gltf_" + mesh_uuid in armature_driver.data_path:
-                        blender_object.animation_data.drivers.remove(armature_driver)
-                del blender_object["gltf_" + mesh_uuid]
+    if export_settings['gltf_optimize_disable_viewport']:
+        # And now, disable viewport for the object we exported, to not have
+        # performance issue during export of other objects
+        export_settings['vtree'].nodes[obj_uuid].blender_object.hide_viewport = True
+
+        if export_settings['vtree'].nodes[obj_uuid].blender_object.type == "ARMATURE":
+            # Let's remove the custom properties, and first, remove drivers
+            drivers = get_sk_drivers(obj_uuid, export_settings)
+            if drivers:
+                for mesh_uuid in drivers:
+                    for armature_driver in blender_object.animation_data.drivers:
+                        if "gltf_" + mesh_uuid in armature_driver.data_path:
+                            blender_object.animation_data.drivers.remove(armature_driver)
+                    del blender_object["gltf_" + mesh_uuid]
 
     export_user_extensions('animation_switch_loop_hook', export_settings, blender_object, True)
 
@@ -814,7 +848,10 @@ def __get_blender_actions(obj_uuid: str,
             else:
                 # Store Action info
                 new_action = ActionData(blender_object.animation_data.action)
-                new_action.add_slot(blender_object.animation_data.action_slot, blender_object.animation_data.action_slot.target_id_type, None)  # Active action => No track
+                new_action.add_slot(
+                    blender_object.animation_data.action_slot,
+                    blender_object.animation_data.action_slot.target_id_type,
+                    None)  # Active action => No track
                 actions.add_action(new_action)
 
         # Collect associated strips from NLA tracks.
@@ -837,6 +874,13 @@ def __get_blender_actions(obj_uuid: str,
                     if hasattr(bpy.data.scenes[0], "gltf_action_filter") and id(strip.action) in [
                             id(item.action) for item in bpy.data.scenes[0].gltf_action_filter if item.keep is False]:
                         continue  # We ignore this action
+
+                    # Check that a slot is assigned to the strip
+                    if strip.action_slot is None:
+                        export_settings['log'].warning(
+                            "Strip '{}' on track '{}' has no action slot assigned, and will be ignored.".format(
+                                strip.name, track.name))
+                        continue
 
                     # Store Action info
                     new_action = ActionData(strip.action)
@@ -865,7 +909,8 @@ def __get_blender_actions(obj_uuid: str,
             else:
                 # Store Action info
                 new_action = ActionData(blender_object.data.shape_keys.animation_data.action)
-                new_action.add_slot(blender_object.data.shape_keys.animation_data.action_slot, blender_object.data.shape_keys.animation_data.action_slot.target_id_type, None)
+                new_action.add_slot(blender_object.data.shape_keys.animation_data.action_slot,
+                                    blender_object.data.shape_keys.animation_data.action_slot.target_id_type, None)
                 actions.add_action(new_action)
 
         if export_settings['gltf_animation_mode'] == "ACTIONS":

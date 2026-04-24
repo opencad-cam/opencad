@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # avoid noisy warnings
-if(CMAKE_COMPILER_IS_GNUCC)
-  remove_cc_flag(
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  remove_c_and_cxx_flag(
     "-Wmissing-declarations"
   )
 endif()

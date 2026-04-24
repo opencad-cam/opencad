@@ -58,6 +58,7 @@
 #define ccl_align(n) __attribute__((aligned(n)))
 #define kernel_assert(cond)
 #define ccl_may_alias
+#define ccl_attr_maybe_unused [[maybe_unused]]
 
 /* clang-format off */
 
@@ -65,7 +66,6 @@
 #define ccl_gpu_kernel(block_num_threads, thread_num_registers)
 #define ccl_gpu_kernel_threads(block_num_threads)
 
-#ifndef WITH_ONEAPI_SYCL_HOST_TASK
 #  define __ccl_gpu_kernel_signature(name, ...) \
 void oneapi_kernel_##name(KernelGlobalsGPU *ccl_restrict kg, \
                           size_t kernel_global_size, \
@@ -82,34 +82,6 @@ void oneapi_kernel_##name(KernelGlobalsGPU *ccl_restrict kg, \
 #  define ccl_gpu_kernel_postfix \
           }); \
     }
-#else
-/* Additional anonymous lambda is required to handle all "return" statements in the kernel code */
-#  define ccl_gpu_kernel_signature(name, ...) \
-void oneapi_kernel_##name(KernelGlobalsGPU *ccl_restrict kg, \
-                          size_t kernel_global_size, \
-                          size_t kernel_local_size, \
-                          sycl::handler &cgh, \
-                          __VA_ARGS__) { \
-      (void)(kg); \
-      (kernel_local_size); \
-      cgh.host_task( \
-          [=]() {\
-            for (size_t gid = (size_t)0; gid < kernel_global_size; gid++) { \
-                kg->nd_item_local_id_0 = 0; \
-                kg->nd_item_local_range_0 = 1; \
-                kg->nd_item_group_id_0 = gid; \
-                kg->nd_item_group_range_0 = kernel_global_size; \
-                kg->nd_item_global_id_0 = gid; \
-                kg->nd_item_global_range_0 = kernel_global_size; \
-                auto kernel = [=]() {
-
-#  define ccl_gpu_kernel_postfix \
-                }; \
-                kernel(); \
-            } \
-      }); \
-}
-#endif
 
 #define ccl_gpu_kernel_call(x) ((ONEAPIKernelContext*)kg)->x
 #define ccl_gpu_kernel_within_bounds(i, n) ((i) < (n))
@@ -125,7 +97,6 @@ void oneapi_kernel_##name(KernelGlobalsGPU *ccl_restrict kg, \
 
 /* GPU thread, block, grid size and index */
 
-#ifndef WITH_ONEAPI_SYCL_HOST_TASK
 #  define ccl_gpu_thread_idx_x (sycl::ext::oneapi::this_work_item::get_nd_item<1>().get_local_id(0))
 #  define ccl_gpu_block_dim_x (sycl::ext::oneapi::this_work_item::get_nd_item<1>().get_local_range(0))
 #  define ccl_gpu_block_idx_x (sycl::ext::oneapi::this_work_item::get_nd_item<1>().get_group(0))
@@ -139,26 +110,12 @@ void oneapi_kernel_##name(KernelGlobalsGPU *ccl_restrict kg, \
 /* GPU warp synchronization */
 #  define ccl_gpu_syncthreads() sycl::ext::oneapi::this_work_item::get_nd_item<1>().barrier()
 #  define ccl_gpu_local_syncthreads() sycl::ext::oneapi::this_work_item::get_nd_item<1>().barrier(sycl::access::fence_space::local_space)
-#  ifdef __SYCL_DEVICE_ONLY__
-#    define ccl_gpu_ballot(predicate) (sycl::ext::oneapi::group_ballot(sycl::ext::oneapi::this_work_item::get_sub_group(), predicate).count())
-#  else
-#    define ccl_gpu_ballot(predicate) (predicate ? 1 : 0)
-#  endif
-#else
-#  define ccl_gpu_thread_idx_x (kg->nd_item_local_id_0)
-#  define ccl_gpu_block_dim_x (kg->nd_item_local_range_0)
-#  define ccl_gpu_block_idx_x (kg->nd_item_group_id_0)
-#  define ccl_gpu_grid_dim_x (kg->nd_item_group_range_0)
-#  define ccl_gpu_warp_size (1)
-#  define ccl_gpu_thread_mask(thread_warp) uint(0xFFFFFFFF >> (ccl_gpu_warp_size - thread_warp))
 
-#  define ccl_gpu_global_id_x() (kg->nd_item_global_id_0)
-#  define ccl_gpu_global_size_x() (kg->nd_item_global_range_0)
-
-#  define ccl_gpu_syncthreads()
-#  define ccl_gpu_local_syncthreads()
-#  define ccl_gpu_ballot(predicate) (predicate ? 1 : 0)
-#endif
+/* A ballot in SYCL is only available as an Intel extension and its DPC++ v6.3 implementation
+ * does not support devices with sub-group sizes above 64. Summing values (of any type) within
+ * sub-groups can be achieved with the SYCL core feature inclusive_scan_over_group, which has
+ * better support on non-Intel devices. */
+#  define ccl_gpu_ballot(predicate) 0; static_assert(false, "Use sycl::inclusive_scan_over_group on oneAPI device instead of ccl_gpu_ballot")
 
 /* Debug defines */
 #if defined(__SYCL_DEVICE_ONLY__)
@@ -243,13 +200,13 @@ ccl_device_forceinline int __float_as_int(const float x)
 static_assert(
     sizeof(sycl::ext::oneapi::experimental::sampled_image_handle::raw_image_handle_type) ==
     sizeof(uint64_t));
-typedef uint64_t ccl_gpu_tex_object_2D;
-typedef uint64_t ccl_gpu_tex_object_3D;
+typedef uint64_t ccl_gpu_image_object_2D;
+typedef uint64_t ccl_gpu_image_object_3D;
 
 template<typename T>
-ccl_device_forceinline T ccl_gpu_tex_object_read_2D(const ccl_gpu_tex_object_2D texobj,
-                                                    const float x,
-                                                    const float y)
+ccl_device_forceinline T ccl_gpu_image_object_read_2D(const ccl_gpu_image_object_2D texobj,
+                                                      const float x,
+                                                      const float y)
 {
   /* Generic implementation not possible due to limitation with SYCL bindless sampled images
    * not being able to read in a format, which is different from the supported data type of
@@ -260,9 +217,8 @@ ccl_device_forceinline T ccl_gpu_tex_object_read_2D(const ccl_gpu_tex_object_2D 
 }
 
 template<>
-ccl_device_forceinline float ccl_gpu_tex_object_read_2D<float>(const ccl_gpu_tex_object_2D texobj,
-                                                               const float x,
-                                                               const float y)
+ccl_device_forceinline float ccl_gpu_image_object_read_2D<float>(
+    const ccl_gpu_image_object_2D texobj, const float x, const float y)
 {
   sycl::ext::oneapi::experimental::sampled_image_handle image(
       (sycl::ext::oneapi::experimental::sampled_image_handle::raw_image_handle_type)texobj);
@@ -270,8 +226,8 @@ ccl_device_forceinline float ccl_gpu_tex_object_read_2D<float>(const ccl_gpu_tex
 }
 
 template<>
-ccl_device_forceinline float4 ccl_gpu_tex_object_read_2D<float4>(
-    const ccl_gpu_tex_object_2D texobj, const float x, const float y)
+ccl_device_forceinline float4 ccl_gpu_image_object_read_2D<float4>(
+    const ccl_gpu_image_object_2D texobj, const float x, const float y)
 {
   sycl::ext::oneapi::experimental::sampled_image_handle image(
       (sycl::ext::oneapi::experimental::sampled_image_handle::raw_image_handle_type)texobj);
@@ -280,10 +236,10 @@ ccl_device_forceinline float4 ccl_gpu_tex_object_read_2D<float4>(
 }
 
 template<typename T>
-ccl_device_forceinline T ccl_gpu_tex_object_read_3D(const ccl_gpu_tex_object_3D texobj,
-                                                    const float x,
-                                                    const float y,
-                                                    const float z)
+ccl_device_forceinline T ccl_gpu_image_object_read_3D(const ccl_gpu_image_object_3D texobj,
+                                                      const float x,
+                                                      const float y,
+                                                      const float z)
 {
   /* A generic implementation is not possible due to limitations with SYCL bindless sampled images
    * not being able to read in a format that is different from the supported data type of
@@ -295,10 +251,8 @@ ccl_device_forceinline T ccl_gpu_tex_object_read_3D(const ccl_gpu_tex_object_3D 
 }
 
 template<>
-ccl_device_forceinline float ccl_gpu_tex_object_read_3D<float>(const ccl_gpu_tex_object_3D texobj,
-                                                               const float x,
-                                                               const float y,
-                                                               const float z)
+ccl_device_forceinline float ccl_gpu_image_object_read_3D<float>(
+    const ccl_gpu_image_object_3D texobj, const float x, const float y, const float z)
 {
   sycl::ext::oneapi::experimental::sampled_image_handle image(
       (sycl::ext::oneapi::experimental::sampled_image_handle::raw_image_handle_type)texobj);
@@ -306,8 +260,8 @@ ccl_device_forceinline float ccl_gpu_tex_object_read_3D<float>(const ccl_gpu_tex
 }
 
 template<>
-ccl_device_forceinline float4 ccl_gpu_tex_object_read_3D<float4>(
-    const ccl_gpu_tex_object_3D texobj, const float x, const float y, const float z)
+ccl_device_forceinline float4 ccl_gpu_image_object_read_3D<float4>(
+    const ccl_gpu_image_object_3D texobj, const float x, const float y, const float z)
 {
   sycl::ext::oneapi::experimental::sampled_image_handle image(
       (sycl::ext::oneapi::experimental::sampled_image_handle::raw_image_handle_type)texobj);

@@ -26,23 +26,31 @@
 #include "BLI_math_rotation.h"
 #include "BLI_string.h"
 
+namespace blender {
+
 using Alembic::AbcGeom::IObject;
 using Alembic::AbcGeom::IXform;
 using Alembic::AbcGeom::IXformSchema;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
-AbcObjectReader::AbcObjectReader(const IObject &object, ImportSettings &settings)
+AbcReaderConstructorArgs create_reader_constructor_args(const IObject &object,
+                                                        ImportSettings &settings)
+{
+  return AbcReaderConstructorArgs{.object = object, .settings = settings};
+}
+
+AbcObjectReader::AbcObjectReader(const AbcReaderConstructorArgs &args)
     : m_object(nullptr),
-      m_iobject(object),
-      m_settings(&settings),
-      m_is_reading_a_file_sequence(settings.is_sequence),
+      m_iobject(args.object),
+      m_settings(&args.settings),
+      m_is_reading_a_file_sequence(args.settings.is_sequence),
       m_min_time(std::numeric_limits<chrono_t>::max()),
       m_max_time(std::numeric_limits<chrono_t>::min()),
       m_refcount(0),
       parent_reader(nullptr)
 {
-  m_name = object.getFullName();
+  m_name = m_iobject.getFullName();
   std::vector<std::string> parts;
   split(m_name, '/', parts);
 
@@ -141,9 +149,7 @@ Imath::M44d get_matrix(const IXformSchema &schema, const chrono_t time)
 
 void AbcObjectReader::read_geometry(bke::GeometrySet & /*geometry_set*/,
                                     const Alembic::Abc::ISampleSelector & /*sample_sel*/,
-                                    int /*read_flag*/,
-                                    const char * /*velocity_name*/,
-                                    const float /*velocity_scale*/,
+                                    const AbcReadGeometryParams & /*read_params*/,
                                     const char ** /*r_err_str*/)
 {
 }
@@ -303,4 +309,5 @@ void AbcObjectReader::decref()
   BLI_assert(m_refcount >= 0);
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

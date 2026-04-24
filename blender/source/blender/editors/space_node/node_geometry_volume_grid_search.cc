@@ -23,7 +23,7 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
 
 #include "UI_string_search.hh"
 
@@ -31,10 +31,12 @@
 
 #include <fmt/format.h>
 
-using blender::nodes::geo_eval_log::GeometryInfoLog;
-using blender::nodes::geo_eval_log::VolumeGridInfo;
+namespace blender {
 
-namespace blender::ed::space_node {
+using nodes::eval_log::GeometryInfoLog;
+using nodes::eval_log::VolumeGridInfo;
+
+namespace ed::space_node {
 
 struct GridSearchData {
   int32_t node_id;
@@ -42,13 +44,14 @@ struct GridSearchData {
   bool can_create_grid;
 };
 
-/* This class must not have a destructor, since it is used by buttons and freed with #MEM_freeN. */
+/* This class must not have a destructor, since it is used by buttons and freed with
+ * #MEM_delete_void. */
 BLI_STATIC_ASSERT(std::is_trivially_destructible_v<GridSearchData>, "");
 
 static Vector<const VolumeGridInfo *> get_grid_names_from_context(const bContext &C,
                                                                   GridSearchData &data)
 {
-  using namespace nodes::geo_eval_log;
+  using namespace nodes::eval_log;
 
   SpaceNode *snode = CTX_wm_space_node(&C);
   if (!snode) {
@@ -69,16 +72,16 @@ static Vector<const VolumeGridInfo *> get_grid_names_from_context(const bContext
   if (!tree_zones) {
     return {};
   }
-  const ContextualGeoTreeLogs tree_logs = GeoNodesLog::get_contextual_tree_logs(*snode);
+  const ContextualNodeTreeLogs tree_logs = NodesEvalLog::get_contextual_tree_logs(*snode);
 
   Set<StringRef> names;
 
-  GeoTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
+  NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
   if (!tree_log) {
     return {};
   }
   tree_log->ensure_socket_values();
-  GeoNodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
+  NodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
   if (node_log == nullptr) {
     return {};
   }
@@ -241,9 +244,9 @@ void node_geometry_add_volume_grid_search_button(const bContext & /*C*/,
   button_placeholder_set(but, placeholder);
 
   const bNodeSocket &socket = *static_cast<const bNodeSocket *>(socket_ptr.data);
-  GridSearchData *data = MEM_callocN<GridSearchData>(__func__);
+  GridSearchData *data = MEM_new_zeroed<GridSearchData>(__func__);
   data->node_id = node.identifier;
-  data->can_create_grid = node.is_type("GeometryNodeStoreNamedGrid");
+  data->can_create_grid = node.is_type("GeometryNodeStoreNamedGrid"_ustr);
   STRNCPY_UTF8(data->socket_identifier, socket.identifier);
 
   button_func_search_set_results_are_suggestions(but, true);
@@ -258,4 +261,6 @@ void node_geometry_add_volume_grid_search_button(const bContext & /*C*/,
                          nullptr);
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace ed::space_node
+
+}  // namespace blender

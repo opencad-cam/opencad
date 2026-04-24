@@ -10,14 +10,18 @@
  */
 
 #include <optional>
+#include <utility>
 
+namespace blender {
+
+struct Depsgraph;
 struct ID;
 struct Main;
 struct Material;
 struct Object;
 struct Scene;
 struct bNode;
-struct Depsgraph;
+struct bNodeTree;
 struct MaterialGPencilStyle;
 
 /* -------------------------------------------------------------------- */
@@ -125,7 +129,8 @@ MaterialGPencilStyle *BKE_gpencil_material_settings(Object *ob, short act);
 
 void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma, const Object *ob);
 void BKE_texpaint_slots_refresh_object(Scene *scene, Object *ob);
-bNode *BKE_texpaint_slot_material_find_node(Material *ma, short texpaint_slot);
+std::pair<bNodeTree *, bNode *> BKE_texpaint_slot_material_find_node(Material *ma,
+                                                                     short texpaint_slot);
 
 /** \} */
 
@@ -239,3 +244,5 @@ void BKE_material_defaults_free_gpu();
 void BKE_material_eval(Depsgraph *depsgraph, Material *material);
 
 /** \} */
+
+}  // namespace blender

@@ -45,12 +45,7 @@
 #  include "quadriflow_capi.hpp"
 #endif
 
-using blender::Array;
-using blender::float3;
-using blender::IndexRange;
-using blender::int3;
-using blender::MutableSpan;
-using blender::Span;
+namespace blender {
 
 #ifdef WITH_QUADRIFLOW
 static Mesh *remesh_quadriflow(const Mesh *input_mesh,
@@ -62,7 +57,6 @@ static Mesh *remesh_quadriflow(const Mesh *input_mesh,
                                void (*update_cb)(void *, float progress, int *cancel),
                                void *update_cb_data)
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> input_positions = input_mesh->vert_positions();
   const Span<int> input_corner_verts = input_mesh->corner_verts();
@@ -100,8 +94,8 @@ static Mesh *remesh_quadriflow(const Mesh *input_mesh,
 
   if (qrd.out_totfaces == 0) {
     /* Meshing failed */
-    MEM_freeN(qrd.out_faces);
-    MEM_freeN(qrd.out_verts);
+    MEM_delete(qrd.out_faces);
+    MEM_delete(qrd.out_verts);
     return nullptr;
   }
 
@@ -111,7 +105,7 @@ static Mesh *remesh_quadriflow(const Mesh *input_mesh,
   MutableSpan<int> face_offsets = mesh->face_offsets_for_write();
   MutableSpan<int> corner_verts = mesh->corner_verts_for_write();
 
-  blender::offset_indices::fill_constant_group_size(4, 0, face_offsets);
+  offset_indices::fill_constant_group_size(4, 0, face_offsets);
 
   mesh->vert_positions_for_write().copy_from(
       Span(reinterpret_cast<float3 *>(qrd.out_verts), qrd.out_totverts));
@@ -126,8 +120,8 @@ static Mesh *remesh_quadriflow(const Mesh *input_mesh,
 
   mesh_calc_edges(*mesh, false, false);
 
-  MEM_freeN(qrd.out_faces);
-  MEM_freeN(qrd.out_verts);
+  MEM_delete(qrd.out_faces);
+  MEM_delete(qrd.out_verts);
 
   return mesh;
 }
@@ -200,13 +194,16 @@ static Mesh *remesh_voxel_volume_to_mesh(const openvdb::FloatGrid::Ptr level_set
                                          const float adaptivity,
                                          const bool relax_disoriented_triangles)
 {
-  using namespace blender;
   using namespace blender::bke;
   std::vector<openvdb::Vec3s> vertices;
   std::vector<openvdb::Vec4I> quads;
   std::vector<openvdb::Vec3I> tris;
   openvdb::tools::volumeToMesh<openvdb::FloatGrid>(
       *level_set_grid, vertices, tris, quads, isovalue, adaptivity, relax_disoriented_triangles);
+
+  if (vertices.size() == 0 || quads.size() + tris.size() == 0) {
+    return nullptr;
+  }
 
   Mesh *mesh = BKE_mesh_new_nomain(
       vertices.size(), 0, quads.size() + tris.size(), quads.size() * 4 + tris.size() * 3);
@@ -216,8 +213,8 @@ static Mesh *remesh_voxel_volume_to_mesh(const openvdb::FloatGrid::Ptr level_set
 
   const int triangle_loop_start = quads.size() * 4;
   if (!face_offsets.is_empty()) {
-    blender::offset_indices::fill_constant_group_size(4, 0, face_offsets.take_front(quads.size()));
-    blender::offset_indices::fill_constant_group_size(
+    offset_indices::fill_constant_group_size(4, 0, face_offsets.take_front(quads.size()));
+    offset_indices::fill_constant_group_size(
         3, triangle_loop_start, face_offsets.drop_front(quads.size()));
   }
 
@@ -268,7 +265,9 @@ Mesh *BKE_mesh_remesh_voxel(const Mesh *mesh,
   }
   openvdb::FloatGrid::Ptr level_set = remesh_voxel_level_set_create(mesh, transform);
   Mesh *result = remesh_voxel_volume_to_mesh(level_set, isovalue, adaptivity, false);
-  BKE_mesh_copy_parameters(result, mesh);
+  if (result != nullptr) {
+    BKE_mesh_copy_parameters(result, mesh);
+  }
   return result;
 #else
   UNUSED_VARS(mesh, voxel_size, adaptivity, isovalue, object, modifier_data);
@@ -296,7 +295,9 @@ Mesh *BKE_mesh_remesh_voxel(const Mesh *mesh,
   }
   openvdb::FloatGrid::Ptr level_set = remesh_voxel_level_set_create(mesh, transform);
   Mesh *result = remesh_voxel_volume_to_mesh(level_set, isovalue, adaptivity, false);
-  BKE_mesh_copy_parameters(result, mesh);
+  if (result != nullptr) {
+    BKE_mesh_copy_parameters(result, mesh);
+  }
   return result;
 #else
   UNUSED_VARS(mesh, voxel_size, adaptivity, isovalue, reports);
@@ -304,7 +305,7 @@ Mesh *BKE_mesh_remesh_voxel(const Mesh *mesh,
 #endif
 }
 
-namespace blender::bke {
+namespace bke {
 
 static void calc_edge_centers(const Span<float3> positions,
                               const Span<int2> edges,
@@ -348,30 +349,6 @@ static void find_nearest_tris_parallel(const Span<float3> positions,
   });
 }
 
-static void find_nearest_verts(const Span<float3> positions,
-                               const Span<int> corner_verts,
-                               const Span<int3> src_corner_tris,
-                               const Span<float3> dst_positions,
-                               const Span<int> nearest_vert_tris,
-                               MutableSpan<int> nearest_verts)
-{
-  threading::parallel_for(dst_positions.index_range(), 512, [&](const IndexRange range) {
-    for (const int dst_vert : range) {
-      const float3 &dst_position = dst_positions[dst_vert];
-      const int3 &src_tri = src_corner_tris[nearest_vert_tris[dst_vert]];
-
-      std::array<float, 3> distances;
-      for (const int i : IndexRange(3)) {
-        const int src_vert = corner_verts[src_tri[i]];
-        distances[i] = math::distance_squared(positions[src_vert], dst_position);
-      }
-
-      const int min = std::min_element(distances.begin(), distances.end()) - distances.begin();
-      nearest_verts[dst_vert] = corner_verts[src_tri[min]];
-    }
-  });
-}
-
 static void find_nearest_faces(const Span<int> src_tri_faces,
                                const Span<float3> dst_positions,
                                const OffsetIndices<int> dst_faces,
@@ -397,38 +374,6 @@ static void find_nearest_faces(const Span<int> src_tri_faces,
 
       array_utils::gather(src_tri_faces, tri_indices.as_span(), nearest_faces.slice(range));
     });
-  });
-}
-
-static void find_nearest_corners(const Span<float3> src_positions,
-                                 const OffsetIndices<int> src_faces,
-                                 const Span<int> src_corner_verts,
-                                 const Span<int> src_tri_faces,
-                                 const Span<float3> dst_positions,
-                                 const Span<int> dst_corner_verts,
-                                 const Span<int> nearest_vert_tris,
-                                 MutableSpan<int> nearest_corners)
-{
-  threading::parallel_for(nearest_corners.index_range(), 512, [&](const IndexRange range) {
-    Vector<float, 64> distances;
-    for (const int dst_corner : range) {
-      const int dst_vert = dst_corner_verts[dst_corner];
-      const float3 &dst_position = dst_positions[dst_vert];
-
-      const int src_tri = nearest_vert_tris[dst_vert];
-      const IndexRange src_face = src_faces[src_tri_faces[src_tri]];
-      const Span<int> src_face_verts = src_corner_verts.slice(src_face);
-
-      /* Find the corner in the face that's closest in the closest face. */
-      distances.reinitialize(src_face_verts.size());
-      for (const int i : src_face_verts.index_range()) {
-        const int src_vert = src_face_verts[i];
-        distances[i] = math::distance_squared(src_positions[src_vert], dst_position);
-      }
-
-      const int min = std::min_element(distances.begin(), distances.end()) - distances.begin();
-      nearest_corners[dst_corner] = src_face[min];
-    }
   });
 }
 
@@ -490,23 +435,71 @@ static void find_nearest_edges(const Span<float3> src_positions,
   });
 }
 
-static void gather_attributes(const Span<StringRef> ids,
+static void gather_attributes(const Span<StringRef> names,
                               const AttributeAccessor src_attributes,
                               const AttrDomain domain,
                               const Span<int> index_map,
                               MutableAttributeAccessor dst_attributes)
 {
-  for (const StringRef id : ids) {
-    const GVArraySpan src = *src_attributes.lookup(id, domain);
+  for (const StringRef name : names) {
+    const GVArraySpan src = *src_attributes.lookup(name, domain);
     const AttrType type = cpp_type_to_attribute_type(src.type());
-    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(id, domain, type);
+    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+        name, domain, type);
     attribute_math::gather(src, index_map, dst.span);
     dst.finish();
   }
 }
 
+static void sample_vertex_attributes(const Span<StringRef> names,
+                                     Span<int> corner_verts,
+                                     Span<int3> corner_tris,
+                                     Span<int> tri_indices,
+                                     Span<float3> bary_coords,
+                                     const AttributeAccessor src_attributes,
+                                     MutableAttributeAccessor dst_attributes)
+{
+  for (const StringRef name : names) {
+    const GVArray src = *src_attributes.lookup(name, AttrDomain::Point);
+    const AttrType type = cpp_type_to_attribute_type(src.type());
+    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+        name, AttrDomain::Point, type);
+    mesh_surface_sample::sample_point_attribute(corner_verts,
+                                                corner_tris,
+                                                tri_indices,
+                                                bary_coords,
+                                                src,
+                                                IndexMask(dst.span.size()),
+                                                dst.span);
+    dst.finish();
+  }
+}
+
+static void sample_corner_attributes(const Span<StringRef> names,
+                                     Span<int3> corner_tris,
+                                     Span<int> tri_indices,
+                                     Span<float3> bary_coords,
+                                     const AttributeAccessor src_attributes,
+                                     MutableAttributeAccessor dst_attributes)
+{
+  for (const StringRef name : names) {
+    const GVArray src = *src_attributes.lookup(name, AttrDomain::Corner);
+    const AttrType type = cpp_type_to_attribute_type(src.type());
+
+    GArray<> dst_point(src.type(), bary_coords.size());
+    mesh_surface_sample::sample_corner_attribute(
+        corner_tris, tri_indices, bary_coords, src, IndexMask(dst_point.size()), dst_point);
+
+    GVArray dst_corner = dst_attributes.adapt_domain(
+        GVArray::from_span(dst_point.as_span()), AttrDomain::Point, AttrDomain::Corner);
+    dst_attributes.add(name, AttrDomain::Corner, type, AttributeInitVArray(std::move(dst_corner)));
+  }
+}
+
 void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst)
 {
+  MutableAttributeAccessor dst_attributes = dst.attributes_for_write();
+
   /* Gather attributes to transfer for each domain. This makes it possible to skip
    * building index maps and even the main BVH tree if there are no attributes. */
   const AttributeAccessor src_attributes = src.attributes();
@@ -517,6 +510,16 @@ void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst)
   src_attributes.foreach_attribute([&](const AttributeIter &iter) {
     if (ELEM(iter.name, "position", ".edge_verts", ".corner_vert", ".corner_edge")) {
       return;
+    }
+    if (iter.storage_type == bke::AttrStorageType::Single) {
+      const GVArray src_attr = *iter.get();
+      const CommonVArrayInfo info = src_attr.common_info();
+      if (info.type == CommonVArrayInfo::Type::Single) {
+        const bke::AttributeInitValue init(GPointer(src_attr.type(), info.data));
+        if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+          return;
+        }
+      }
     }
     switch (iter.domain) {
       case AttrDomain::Point:
@@ -564,35 +567,39 @@ void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst)
   const OffsetIndices dst_faces = dst.faces();
   const Span<int> dst_corner_verts = dst.corner_verts();
 
-  MutableAttributeAccessor dst_attributes = dst.attributes_for_write();
-
   if (!point_ids.is_empty() || !corner_ids.is_empty()) {
     Array<int> vert_nearest_tris(dst_positions.size());
+    Array<float3> bary_coords(dst_positions.size());
     find_nearest_tris_parallel(dst_positions, bvhtree, vert_nearest_tris);
+    mesh_surface_sample::sample_barycentric_weights(src_positions,
+                                                    src_corner_verts,
+                                                    src_corner_tris,
+                                                    vert_nearest_tris,
+                                                    dst_positions,
+                                                    IndexMask(dst_positions.size()),
+                                                    bary_coords);
 
     if (!point_ids.is_empty()) {
-      Array<int> map(dst.verts_num);
-      find_nearest_verts(
-          src_positions, src_corner_verts, src_corner_tris, dst_positions, vert_nearest_tris, map);
       /* Copy vertex group names (otherwise `MeshVertexGroupsAttributeProvider` wont find them -
        * and these would show up as regular attributes afterwards). "vertex_group_active_index" is
        * taken care of via #BKE_mesh_copy_parameters(). */
       BKE_defgroup_copy_list(&dst.vertex_group_names, &src.vertex_group_names);
-      gather_attributes(point_ids, src_attributes, AttrDomain::Point, map, dst_attributes);
+      sample_vertex_attributes(point_ids,
+                               src_corner_verts,
+                               src_corner_tris,
+                               vert_nearest_tris,
+                               bary_coords,
+                               src_attributes,
+                               dst_attributes);
     }
 
     if (!corner_ids.is_empty()) {
-      const Span<int> src_tri_faces = src.corner_tri_faces();
-      Array<int> map(dst.corners_num);
-      find_nearest_corners(src_positions,
-                           src_faces,
-                           src_corner_verts,
-                           src_tri_faces,
-                           dst_positions,
-                           dst_corner_verts,
-                           vert_nearest_tris,
-                           map);
-      gather_attributes(corner_ids, src_attributes, AttrDomain::Corner, map, dst_attributes);
+      sample_corner_attributes(corner_ids,
+                               src_corner_tris,
+                               vert_nearest_tris,
+                               bary_coords,
+                               src_attributes,
+                               dst_attributes);
     }
   }
 
@@ -635,7 +642,7 @@ void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst)
   }
 }
 
-}  // namespace blender::bke
+}  // namespace bke
 
 Mesh *BKE_mesh_remesh_voxel_fix_poles(const Mesh *mesh)
 {
@@ -742,3 +749,5 @@ Mesh *BKE_mesh_remesh_voxel_fix_poles(const Mesh *mesh)
   BM_mesh_free(bm);
   return result;
 }
+
+}  // namespace blender

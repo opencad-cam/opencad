@@ -448,6 +448,7 @@ class GRAPH_MT_key(Menu):
 
         layout.separator()
         layout.operator_menu_enum("graph.keyframe_insert", "type", text="Insert")
+
         layout.operator("graph.copy", text="Copy")
         layout.operator("graph.paste", text="Paste")
         layout.operator("graph.paste", text="Paste Flipped").flipped = True

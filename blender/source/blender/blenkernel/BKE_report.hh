@@ -16,9 +16,11 @@
 
 #include "DNA_listBase.h"
 
-struct wmTimer;
-
 struct CLG_LogRef;
+
+namespace blender {
+
+struct wmTimer;
 
 /**
  * Reporting Information and Errors.
@@ -69,10 +71,12 @@ struct Report {
   int len;
   const char *typestr;
   const char *message;
+  /** Unique per-session identifier, assigned at creation. */
+  int session_uid;
 };
 
 struct ReportList {
-  ListBase list;
+  ListBaseT<Report> list;
   /** #eReportType. */
   int printlevel;
   /** #eReportType. */
@@ -153,3 +157,5 @@ const char *BKE_report_type_str(eReportType type);
 
 bool BKE_report_write_file_fp(FILE *fp, ReportList *reports, const char *header);
 bool BKE_report_write_file(const char *filepath, ReportList *reports, const char *header);
+
+}  // namespace blender

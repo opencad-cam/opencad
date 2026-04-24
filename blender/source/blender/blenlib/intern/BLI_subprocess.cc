@@ -36,7 +36,6 @@ static bool check_arguments_are_valid(Span<StringRefNull> args)
 
 #  ifdef _WIN32
 
-#    define WIN32_LEAN_AND_MEAN
 #    include <comdef.h>
 #    include <windows.h>
 
@@ -71,7 +70,8 @@ class ProcessGroup {
   {
     handle_ = CreateJobObject(nullptr, nullptr);
     CHECK(handle_);
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info = {0};
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+    memset(&info, 0, sizeof(info));
     info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     CHECK(
         SetInformationJobObject(handle_, JobObjectExtendedLimitInformation, &info, sizeof(info)));
@@ -283,7 +283,7 @@ bool BlenderSubprocess::create(Span<StringRefNull> args)
 
   Vector<char *> char_args;
   for (StringRefNull arg : args) {
-    char_args.append((char *)arg.data());
+    char_args.append(const_cast<char *>(arg.data()));
   }
   char_args.append(nullptr);
 

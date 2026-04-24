@@ -1,4 +1,0 @@
-XiFluid.C
-thermophysicalPredictor.C
-
-LIB = $(FOAM_LIBBIN)/libXiFluid

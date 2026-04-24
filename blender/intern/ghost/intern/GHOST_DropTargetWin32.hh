@@ -9,11 +9,11 @@
 #pragma once
 
 #include "GHOST_SystemWin32.hh"
+#include "GHOST_Types.hh"
 #include "GHOST_WindowWin32.hh"
-#include <GHOST_Types.h>
 #include <string.h>
 
-class GHOST_DropTargetWin32 : public IDropTarget {
+class GHOST_DropTargetWin32 final : public IDropTarget {
  public:
   /* IUnknownd implementation.
    * Enables clients to get pointers to other interfaces on a given object

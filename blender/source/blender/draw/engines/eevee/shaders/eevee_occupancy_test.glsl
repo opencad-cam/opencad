@@ -7,7 +7,11 @@
  * Comment out for correct compilation error line. */
 #line 9
 
-#include "eevee_occupancy_lib.glsl"
+#include "infos/gpu_shader_test_infos.hh"
+
+COMPUTE_SHADER_CREATE_INFO(gpu_shader_test)
+
+#include "eevee_occupancy_lib.bsl.hh"
 #include "gpu_shader_test_lib.glsl"
 
 #define TEST(a, b) if (true)

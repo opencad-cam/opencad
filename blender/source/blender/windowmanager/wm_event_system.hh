@@ -9,16 +9,18 @@
 #pragma once
 
 #include "WM_api.hh"
+struct GHOST_TabletData;
+namespace blender {
 
 struct ARegion;
 struct bToolRef;
-struct GHOST_TabletData;
 struct ScrArea;
 struct wmEvent;
 struct wmKeyMap;
+struct wmDropBox;
 struct wmKeyMapItem;
 
-namespace blender::wm {
+namespace wm {
 enum class OpCallContext : int8_t;
 }
 
@@ -114,9 +116,8 @@ struct wmEventHandler_Op {
   /** Operator can be NULL. */
   wmOperator *op;
 
-  /** Workaround: special cases for file-select and XR. */
+  /** Workaround: special case for file-select. */
   bool is_fileselect;
-  bool is_xr;
 
   /** Store context for this handler for derived/modal handlers. */
   struct {
@@ -137,7 +138,7 @@ struct wmEventHandler_Dropbox {
   wmEventHandler head;
 
   /** Never NULL. */
-  ListBase *dropboxes;
+  ListBaseT<wmDropBox> *dropboxes;
 };
 
 /* `wm_event_system.cc` */
@@ -204,14 +205,16 @@ void wm_drop_end(bContext *C, wmDrag *drag, wmDropBox *drop);
 /**
  * Called in inner handler loop, region context.
  */
-void wm_drags_check_ops(bContext *C, const wmEvent *event);
+void wm_drags_handle_events(bContext *C, const wmEvent *event);
 /**
  * The operator of a dropbox should always be executed in the context determined by the mouse
  * coordinates. The dropbox poll should check the context area and region as needed.
- * So this always returns #blender::wm::OpCallContext::InvokeDefault.
+ * So this always returns #wm::OpCallContext::InvokeDefault.
  */
-blender::wm::OpCallContext wm_drop_operator_context_get(const wmDropBox *drop);
+wm::OpCallContext wm_drop_operator_context_get(const wmDropBox *drop);
 /**
  * Called in #wm_draw_window_onscreen.
  */
 void wm_drags_draw(bContext *C, wmWindow *win);
+
+}  // namespace blender

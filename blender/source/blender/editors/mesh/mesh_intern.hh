@@ -13,6 +13,8 @@
 #include "BLI_span.hh"
 #include "BLI_sys_types.h"
 
+namespace blender {
+
 struct bContext;
 struct BMEditMesh;
 struct BMEdge;
@@ -22,6 +24,7 @@ struct BMVert;
 struct BMOperator;
 struct EnumPropertyItem;
 struct LinkNode;
+struct Main;
 struct Object;
 struct Scene;
 struct wmGizmoGroupType;
@@ -86,9 +89,14 @@ BMElem *EDBM_elem_from_selectmode(BMEditMesh *em, BMVert *eve, BMEdge *eed, BMFa
 int EDBM_elem_to_index_any(BMEditMesh *em, BMElem *ele);
 BMElem *EDBM_elem_from_index_any(BMEditMesh *em, uint index);
 
-int EDBM_elem_to_index_any_multi(
-    const Scene *scene, ViewLayer *view_layer, BMEditMesh *em, BMElem *ele, int *r_object_index);
-BMElem *EDBM_elem_from_index_any_multi(const Scene *scene,
+int EDBM_elem_to_index_any_multi(const Main &bmain,
+                                 const Scene *scene,
+                                 ViewLayer *view_layer,
+                                 BMEditMesh *em,
+                                 BMElem *ele,
+                                 int *r_object_index);
+BMElem *EDBM_elem_from_index_any_multi(const Main &bmain,
+                                       const Scene *scene,
                                        ViewLayer *view_layer,
                                        uint object_index,
                                        uint elem_index,
@@ -122,6 +130,10 @@ wmKeyMap *bevel_modal_keymap(wmKeyConfig *keyconf);
 /* *** `editmesh_bisect.cc` *** */
 
 void MESH_OT_bisect(wmOperatorType *ot);
+
+/* *** `editmesh_circularize.cc` *** */
+
+void MESH_OT_circularize(wmOperatorType *ot);
 
 /* *** `editmesh_extrude.cc` *** */
 
@@ -171,11 +183,8 @@ void MESH_OT_knife_project(wmOperatorType *ot);
 /**
  * \param use_tag: When set, tag all faces inside the polylines.
  */
-void EDBM_mesh_knife(ViewContext *vc,
-                     blender::Span<Object *> objects,
-                     LinkNode *polys,
-                     bool use_tag,
-                     bool cut_through);
+void EDBM_mesh_knife(
+    ViewContext *vc, Span<Object *> objects, LinkNode *polys, bool use_tag, bool cut_through);
 
 wmKeyMap *knifetool_modal_keymap(wmKeyConfig *keyconf);
 
@@ -193,7 +202,9 @@ void MESH_OT_rip_edge(wmOperatorType *ot);
 void MESH_OT_select_similar(wmOperatorType *ot);
 void MESH_OT_select_similar_region(wmOperatorType *ot);
 void MESH_OT_select_mode(wmOperatorType *ot);
-void MESH_OT_loop_multi_select(wmOperatorType *ot);
+void MESH_OT_select_edge_loop_multi(wmOperatorType *ot);
+void MESH_OT_select_edge_ring_multi(wmOperatorType *ot);
+void MESH_OT_select_boundary_loop_multi(wmOperatorType *ot);
 void MESH_OT_loop_select(wmOperatorType *ot);
 void MESH_OT_edgering_select(wmOperatorType *ot);
 void MESH_OT_select_all(wmOperatorType *ot);
@@ -252,7 +263,7 @@ void MESH_OT_delete_loose(wmOperatorType *ot);
 void MESH_OT_edge_collapse(wmOperatorType *ot);
 void MESH_OT_faces_shade_smooth(wmOperatorType *ot);
 void MESH_OT_faces_shade_flat(wmOperatorType *ot);
-namespace blender::ed::mesh {
+namespace ed::mesh {
 void MESH_OT_set_sharpness_by_angle(wmOperatorType *ot);
 }
 void MESH_OT_split(wmOperatorType *ot);
@@ -306,8 +317,11 @@ void MESH_OT_mark_freestyle_face(wmOperatorType *ot);
 void MESH_OT_uv_texture_add(wmOperatorType *ot);
 void MESH_OT_uv_texture_remove(wmOperatorType *ot);
 void MESH_OT_customdata_mask_clear(wmOperatorType *ot);
+void MESH_OT_customdata_face_sets_clear(wmOperatorType *ot);
 void MESH_OT_customdata_skin_add(wmOperatorType *ot);
 void MESH_OT_customdata_skin_clear(wmOperatorType *ot);
 void MESH_OT_customdata_custom_splitnormals_add(wmOperatorType *ot);
 void MESH_OT_customdata_custom_splitnormals_clear(wmOperatorType *ot);
 void MESH_OT_reorder_vertices_spatial(wmOperatorType *ot);
+
+}  // namespace blender

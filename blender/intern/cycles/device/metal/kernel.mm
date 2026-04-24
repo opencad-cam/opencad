@@ -46,7 +46,7 @@ struct ShaderCache {
     /* Initialize occupancy tuning LUT. */
 
     // TODO: Look into tuning for DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT and
-    // DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT.
+    // DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_*.
 
     switch (MetalInfo::get_apple_gpu_architecture(mtlDevice)) {
       default:
@@ -441,6 +441,7 @@ static MTLFunctionConstantValues *GetConstantValues(const KernelData *data = nul
 
   MTLDataType MTLDataType_int = MTLDataTypeInt;
   MTLDataType MTLDataType_float = MTLDataTypeFloat;
+  MTLDataType MTLDataType_float2 = MTLDataTypeFloat2;
   MTLDataType MTLDataType_float4 = MTLDataTypeFloat4;
   KernelData zero_data = {0};
   if (!data) {

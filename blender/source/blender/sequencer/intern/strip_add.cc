@@ -125,42 +125,42 @@ static void strip_add_set_view_transform(Scene *scene, Strip *strip, LoadData *l
   }
 }
 
-Strip *add_scene_strip(Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_scene_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, STRIP_TYPE_SCENE);
   strip->scene = load_data->scene;
   strip->len = load_data->scene->r.efra - load_data->scene->r.sfra + 1;
-  id_us_ensure_real((ID *)load_data->scene);
+  id_us_ensure_real(id_cast<ID *>(load_data->scene));
   strip_add_set_name(scene, strip, load_data);
   strip_add_generic_update(scene, strip);
   return strip;
 }
 
-Strip *add_movieclip_strip(Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_movieclip_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, STRIP_TYPE_MOVIECLIP);
   strip->clip = load_data->clip;
   strip->len = BKE_movieclip_get_duration(load_data->clip);
-  id_us_ensure_real((ID *)load_data->clip);
+  id_us_ensure_real(id_cast<ID *>(load_data->clip));
   strip_add_set_name(scene, strip, load_data);
   strip_add_generic_update(scene, strip);
   return strip;
 }
 
-Strip *add_mask_strip(Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_mask_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   Strip *strip = strip_alloc(seqbase, load_data->start_frame, load_data->channel, STRIP_TYPE_MASK);
   strip->mask = load_data->mask;
   strip->len = BKE_mask_get_duration(load_data->mask);
-  id_us_ensure_real((ID *)load_data->mask);
+  id_us_ensure_real(id_cast<ID *>(load_data->mask));
   strip_add_set_name(scene, strip, load_data);
   strip_add_generic_update(scene, strip);
   return strip;
 }
 
-Strip *add_effect_strip(Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_effect_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, load_data->effect.type);
@@ -168,12 +168,13 @@ Strip *add_effect_strip(Scene *scene, ListBase *seqbase, LoadData *load_data)
   strip->flag |= SEQ_USE_EFFECT_DEFAULT_FADE;
   effect_ensure_initialized(strip);
 
-  if (effect_get_num_inputs(strip->type) != 0) {
+  const int min_inputs = effect_type_get_min_num_inputs(load_data->effect.type);
+  if (min_inputs != 0 || load_data->effect.type == STRIP_TYPE_COMPOSITOR) {
     strip->input1 = load_data->effect.input1;
     strip->input2 = load_data->effect.input2;
   }
 
-  if (effect_get_num_inputs(strip->type) == 1) {
+  if (min_inputs == 1) {
     strip->blend_mode = strip->input1->blend_mode;
     strip->blend_opacity = strip->input1->blend_opacity;
   }
@@ -232,13 +233,13 @@ void add_image_init_alpha_mode(Main *bmain, Scene *scene, Strip *strip)
   }
 }
 
-Strip *add_image_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_image_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   Strip *strip = strip_alloc(
       seqbase, load_data->start_frame, load_data->channel, STRIP_TYPE_IMAGE);
   strip->len = load_data->image.count;
   StripData *data = strip->data;
-  data->stripdata = MEM_new_array_for_free<StripElem>(load_data->image.count, "stripelem");
+  data->stripdata = MEM_new_array<StripElem>(load_data->image.count, "stripelem");
 
   if (strip->len == 1) {
     strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
@@ -250,7 +251,7 @@ Strip *add_image_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *l
     strip->views_format = load_data->views_format;
   }
   if (load_data->stereo3d_format) {
-    strip->stereo3d_format = MEM_new_for_free<Stereo3dFormat>("strip stereo3d format");
+    strip->stereo3d_format = MEM_new<Stereo3dFormat>("strip stereo3d format");
     *strip->stereo3d_format = *load_data->stereo3d_format;
   }
 
@@ -273,6 +274,12 @@ Strip *add_image_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *l
 
     set_scale_to_fit(strip, ibuf->x, ibuf->y, scene->r.xsch, scene->r.ysch, load_data->fit_method);
     IMB_freeImBuf(ibuf);
+  }
+
+  /* Adjust starting length of strip from handle to handle.
+   * Note that this differs from the content `strip->len`, which is always 1 for single images. */
+  if (seq::transform_single_image_check(strip)) {
+    strip->right_handle_set(scene, load_data->start_frame + load_data->image.length);
   }
 
   strip_add_set_view_transform(scene, strip, load_data);
@@ -299,19 +306,19 @@ void add_sound_av_sync(Main *bmain, Scene *scene, Strip *strip, LoadData *load_d
   transform_translate_strip(scene, strip, frame_offset);
 }
 
-Strip *add_sound_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_sound_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
-  bSound *sound = BKE_sound_new_file(bmain, load_data->path); /* Handles relative paths. */
+  bSound *sound = BKE_sound_new_file_exists(bmain, load_data->path); /* Handles relative paths. */
   SoundInfo info;
   bool sound_loaded = BKE_sound_info_get(bmain, sound, &info);
 
   if (!sound_loaded && !load_data->allow_invalid_file) {
-    BKE_id_free(bmain, sound);
+    BKE_id_free_us(bmain, sound);
     return nullptr;
   }
 
   if (info.specs.channels == SOUND_CHANNELS_INVALID && !load_data->allow_invalid_file) {
-    BKE_id_free(bmain, sound);
+    BKE_id_free_us(bmain, sound);
     return nullptr;
   }
 
@@ -329,7 +336,7 @@ Strip *add_sound_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *l
 
   StripData *data = strip->data;
   /* We only need 1 element to store the filename. */
-  StripElem *se = data->stripdata = MEM_new_for_free<StripElem>("stripelem");
+  StripElem *se = data->stripdata = MEM_new<StripElem>("stripelem");
   BLI_path_split_dir_file(
       load_data->path, data->dirpath, sizeof(data->dirpath), se->filename, sizeof(se->filename));
 
@@ -368,14 +375,14 @@ void add_sound_av_sync(Main * /*bmain*/,
 
 Strip *add_sound_strip(Main * /*bmain*/,
                        Scene * /*scene*/,
-                       ListBase * /*seqbase*/,
+                       ListBaseT<Strip> * /*seqbase*/,
                        LoadData * /*load_data*/)
 {
   return nullptr;
 }
 #endif  // WITH_AUDASPACE
 
-Strip *add_meta_strip(Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_meta_strip(Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   /* Allocate strip. */
   Strip *strip_meta = strip_alloc(
@@ -393,7 +400,7 @@ Strip *add_meta_strip(Scene *scene, ListBase *seqbase, LoadData *load_data)
   return strip_meta;
 }
 
-Strip *add_movie_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *load_data)
+Strip *add_movie_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, LoadData *load_data)
 {
   char filepath[sizeof(load_data->path)];
   STRNCPY(filepath, load_data->path);
@@ -403,6 +410,7 @@ Strip *add_movie_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *l
   bool is_multiview_loaded = false;
   const int totfiles = seq_num_files(scene, load_data->views_format, load_data->use_multiview);
   Array<MovieReader *> anim_arr(totfiles, nullptr);
+
   int orig_width = 0;
   int orig_height = 0;
 
@@ -471,18 +479,23 @@ Strip *add_movie_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *l
     strip->views_format = load_data->views_format;
   }
   if (load_data->stereo3d_format) {
-    strip->stereo3d_format = MEM_new_for_free<Stereo3dFormat>("strip stereo3d format");
+    strip->stereo3d_format = MEM_new<Stereo3dFormat>("strip stereo3d format");
     *strip->stereo3d_format = *load_data->stereo3d_format;
   }
 
-  for (MovieReader *anim : anim_arr) {
-    if (anim) {
-      strip->runtime->movie_readers.append(anim);
+  BLI_SCOPED_DEFER([&]() {
+    for (MovieReader *mr : anim_arr) {
+      if (!mr) {
+        continue;
+      }
+      if (strip->intersects_frame(scene, scene->r.cfra)) {
+        strip->runtime->movie_readers.append(mr);
+      }
+      else {
+        MOV_close(mr);
+      }
     }
-    else {
-      break;
-    }
-  }
+  });
 
   if (anim_arr[0] != nullptr) {
     strip->len = MOV_get_duration_frames(anim_arr[0], IMB_TC_RECORD_RUN);
@@ -511,7 +524,7 @@ Strip *add_movie_strip(Main *bmain, Scene *scene, ListBase *seqbase, LoadData *l
   StripData *data = strip->data;
   /* We only need 1 element for MOVIE strips. */
   StripElem *se;
-  data->stripdata = se = MEM_new_for_free<StripElem>("stripelem");
+  data->stripdata = se = MEM_new<StripElem>("stripelem");
   data->stripdata->orig_width = orig_width;
   data->stripdata->orig_height = orig_height;
   data->stripdata->orig_fps = video_fps;

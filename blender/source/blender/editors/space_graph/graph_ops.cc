@@ -16,6 +16,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
+#include "BKE_scene.hh"
 
 #include "UI_view2d.hh"
 
@@ -31,6 +32,8 @@
 
 #include "WM_api.hh"
 #include "WM_types.hh"
+
+namespace blender {
 
 /* ************************** view-based operators **********************************/
 /* XXX should these really be here? */
@@ -78,7 +81,8 @@ static void graphview_cursor_apply(bContext *C, wmOperator *op)
        * NOTE: Preview range won't go into negative values,
        *       so only clamping once should be fine.
        */
-      CLAMP(scene->r.cfra, PSFRA, PEFRA);
+      const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
+      CLAMP(scene->r.cfra, playback_range.start_frame, playback_range.end_frame);
     }
     else {
       /* Prevent negative frames */
@@ -119,7 +123,7 @@ static void graphview_cursor_setprops(bContext *C, wmOperator *op, const wmEvent
   }
 
   /* convert from region coordinates to View2D 'tot' space */
-  blender::ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &viewx, &viewy);
+  ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &viewx, &viewy);
 
   /* store the values in the operator properties */
   /* NOTE: we don't clamp frame here, as it might be used for the drivers cursor */
@@ -222,8 +226,8 @@ static void GRAPH_OT_cursor_set(wmOperatorType *ot)
 static wmOperatorStatus graphview_curves_hide_exec(bContext *C, wmOperator *op)
 {
   bAnimContext ac;
-  ListBase anim_data = {nullptr, nullptr};
-  ListBase all_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> all_data = {nullptr, nullptr};
   int filter;
   const bool unselected = RNA_boolean_get(op->ptr, "unselected");
 
@@ -256,21 +260,21 @@ static wmOperatorStatus graphview_curves_hide_exec(bContext *C, wmOperator *op)
   ANIM_animdata_filter(
       &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+  for (bAnimListElem &ale : anim_data) {
     /* hack: skip object channels for now, since flushing those will always flush everything,
      * but they are always included */
     /* TODO: find out why this is the case, and fix that */
-    if (ale->type == ANIMTYPE_OBJECT) {
+    if (ale.type == ANIMTYPE_OBJECT) {
       continue;
     }
 
     /* change the hide setting, and unselect it... */
-    ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_CLEAR);
-    ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_SELECT, ACHANNEL_SETFLAG_CLEAR);
+    ANIM_channel_setting_set(&ac, &ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_CLEAR);
+    ANIM_channel_setting_set(&ac, &ale, ACHANNEL_SETTING_SELECT, ACHANNEL_SETFLAG_CLEAR);
 
     /* now, also flush selection status up/down as appropriate */
     ANIM_flush_setting_anim_channels(
-        &ac, &all_data, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_CLEAR);
+        &ac, &all_data, &ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_CLEAR);
   }
 
   /* cleanup */
@@ -287,22 +291,22 @@ static wmOperatorStatus graphview_curves_hide_exec(bContext *C, wmOperator *op)
     ANIM_animdata_filter(
         &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 
-    LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    for (bAnimListElem &ale : anim_data) {
       /* hack: skip object channels for now, since flushing those
        * will always flush everything, but they are always included */
 
       /* TODO: find out why this is the case, and fix that */
-      if (ale->type == ANIMTYPE_OBJECT) {
+      if (ale.type == ANIMTYPE_OBJECT) {
         continue;
       }
 
       /* change the hide setting, and unselect it... */
-      ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
-      ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_SELECT, ACHANNEL_SETFLAG_ADD);
+      ANIM_channel_setting_set(&ac, &ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
+      ANIM_channel_setting_set(&ac, &ale, ACHANNEL_SETTING_SELECT, ACHANNEL_SETFLAG_ADD);
 
       /* now, also flush selection status up/down as appropriate */
       ANIM_flush_setting_anim_channels(
-          &ac, &anim_data, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
+          &ac, &anim_data, &ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
     }
     ANIM_animdata_freelist(&anim_data);
   }
@@ -337,8 +341,8 @@ static void GRAPH_OT_hide(wmOperatorType *ot)
 static wmOperatorStatus graphview_curves_reveal_exec(bContext *C, wmOperator *op)
 {
   bAnimContext ac;
-  ListBase anim_data = {nullptr, nullptr};
-  ListBase all_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> all_data = {nullptr, nullptr};
   int filter;
   const bool select = RNA_boolean_get(op->ptr, "select");
 
@@ -363,28 +367,28 @@ static wmOperatorStatus graphview_curves_reveal_exec(bContext *C, wmOperator *op
   ANIM_animdata_filter(
       &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+  for (bAnimListElem &ale : anim_data) {
     /* hack: skip object channels for now, since flushing those will always flush everything,
      * but they are always included. */
     /* TODO: find out why this is the case, and fix that */
-    if (ale->type == ANIMTYPE_OBJECT) {
+    if (ale.type == ANIMTYPE_OBJECT) {
       continue;
     }
 
     /* select if it is not visible */
-    if (ANIM_channel_setting_get(&ac, ale, ACHANNEL_SETTING_VISIBLE) == 0) {
+    if (ANIM_channel_setting_get(&ac, &ale, ACHANNEL_SETTING_VISIBLE) == 0) {
       ANIM_channel_setting_set(&ac,
-                               ale,
+                               &ale,
                                ACHANNEL_SETTING_SELECT,
                                select ? ACHANNEL_SETFLAG_ADD : ACHANNEL_SETFLAG_CLEAR);
     }
 
     /* change the visibility setting */
-    ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
+    ANIM_channel_setting_set(&ac, &ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
 
     /* now, also flush selection status up/down as appropriate */
     ANIM_flush_setting_anim_channels(
-        &ac, &all_data, ale, ACHANNEL_SETTING_VISIBLE, eAnimChannels_SetFlag(true));
+        &ac, &all_data, &ale, ACHANNEL_SETTING_VISIBLE, eAnimChannels_SetFlag(true));
   }
 
   /* cleanup */
@@ -542,3 +546,5 @@ void graphedit_keymap(wmKeyConfig *keyconf)
 }
 
 /** \} */
+
+}  // namespace blender

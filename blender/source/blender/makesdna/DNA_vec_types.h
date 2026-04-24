@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace blender {
+
 /* types */
 
 /** vector of two shorts. */
@@ -70,11 +72,11 @@ struct rcti {
   int ymin, ymax;
 
 #ifdef __cplusplus
-  inline bool operator==(const rcti &other) const
+  bool operator==(const rcti &other) const
   {
     return xmin == other.xmin && xmax == other.xmax && ymin == other.ymin && ymax == other.ymax;
   }
-  inline bool operator!=(const rcti &other) const
+  bool operator!=(const rcti &other) const
   {
     return !(*this == other);
   }
@@ -95,3 +97,5 @@ struct DualQuat {
   float scale[4][4] = {};
   float scale_weight = 0;
 };
+
+}  // namespace blender

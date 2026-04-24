@@ -7,8 +7,10 @@
 #include "DEG_depsgraph.hh"
 #include "testing/testing.h"
 
-struct BlendFileData;
+namespace blender {
+
 struct Depsgraph;
+struct BlendFileData;
 
 class BlendfileLoadingBaseTest : public testing::Test {
  protected:
@@ -23,7 +25,7 @@ class BlendfileLoadingBaseTest : public testing::Test {
 
  protected:
   /* Frees the depsgraph & blendfile. */
-  virtual void TearDown();
+  void TearDown() override;
 
   /* Loads a blend file from the tests/files directory from SVN.
    * Returns 'ok' flag (true=good, false=bad) and sets `this->bfile`.
@@ -44,3 +46,5 @@ class BlendfileLoadingBaseTest : public testing::Test {
   /* Free the depsgraph if it's not nullptr. */
   virtual void depsgraph_free();
 };
+
+}  // namespace blender

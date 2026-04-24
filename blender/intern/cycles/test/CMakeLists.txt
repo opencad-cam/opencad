@@ -34,6 +34,8 @@ set(SRC
   render_graph_finalize_test.cpp
   util_aligned_malloc_test.cpp
   util_boundbox_test.cpp
+  util_cache_limiter_test.cpp
+  util_half_test.cpp
   util_ies_test.cpp
   util_math_test.cpp
   util_math_fast_test.cpp
@@ -42,10 +44,12 @@ set(SRC
   util_rgbe_test.cpp
   util_md5_test.cpp
   util_path_test.cpp
+  util_simd_test.cpp
   util_string_test.cpp
   util_task_test.cpp
   util_time_test.cpp
   util_transform_test.cpp
+  util_types_base_test.cpp
 )
 
 # Disable AVX tests on macOS. Rosetta has problems running them, and other
@@ -54,12 +58,14 @@ if(NOT APPLE)
   if(CXX_HAS_AVX2)
     list(APPEND SRC
       util_float8_avx2_test.cpp
+      util_half_avx2_test.cpp
     )
-    set_source_files_properties(util_float8_avx2_test.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_FLAGS}")
+    set_source_files_properties(util_float8_avx2_test.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_F16C_FLAGS}")
+    set_source_files_properties(util_half_avx2_test.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_F16C_FLAGS}")
   endif()
 endif()
 
 if(WITH_GTESTS)
-  set(INC_SYS )
+  set(INC_SYS "")
   blender_add_test_suite_executable(cycles "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 endif()

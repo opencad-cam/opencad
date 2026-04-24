@@ -18,7 +18,7 @@
 #include "BKE_attribute.hh"
 #include "BKE_attribute_legacy_convert.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -26,9 +26,11 @@
 
 #include <fmt/format.h>
 
-using blender::nodes::geo_eval_log::GeometryAttributeInfo;
+namespace blender {
 
-namespace blender::ui {
+using nodes::eval_log::GeometryAttributeInfo;
+
+namespace ui {
 
 static StringRef attribute_data_type_string(const eCustomDataType type)
 {
@@ -106,4 +108,5 @@ void attribute_search_add_items(StringRef str,
   }
 }
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

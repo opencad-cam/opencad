@@ -4,19 +4,24 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_bsdf_diffuse_cc {
+namespace blender {
+
+namespace nodes::node_shader_bsdf_diffuse_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({0.8f, 0.8f, 0.8f, 1.0f});
-  b.add_input<decl::Float>("Roughness")
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.add_input<decl::Color>("Color"_ustr).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_input<decl::Float>("Roughness"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_input<decl::Float>("Weight").available(false);
-  b.add_output<decl::Shader>("BSDF");
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Shader>("BSDF"_ustr);
 }
 
 static int node_shader_gpu_bsdf_diffuse(GPUMaterial *mat,
@@ -52,25 +57,28 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_bsdf_diffuse_cc
+}  // namespace nodes::node_shader_bsdf_diffuse_cc
 
 /* node type definition */
 void register_node_type_sh_bsdf_diffuse()
 {
-  namespace file_ns = blender::nodes::node_shader_bsdf_diffuse_cc;
+  namespace file_ns = nodes::node_shader_bsdf_diffuse_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeBsdfDiffuse", SH_NODE_BSDF_DIFFUSE);
+  sh_node_type_base(&ntype, "ShaderNodeBsdfDiffuse"_ustr, SH_NODE_BSDF_DIFFUSE);
   ntype.ui_name = "Diffuse BSDF";
   ntype.ui_description = "Lambertian and Oren-Nayar diffuse reflection";
   ntype.enum_name_legacy = "BSDF_DIFFUSE";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.add_ui_poll = object_shader_nodes_poll;
-  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Middle);
+  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_diffuse;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

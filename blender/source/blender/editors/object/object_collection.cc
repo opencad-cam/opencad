@@ -61,15 +61,15 @@ static const EnumPropertyItem *collection_object_active_itemf(bContext *C,
                                                               PropertyRNA * /*prop*/,
                                                               bool *r_free)
 {
+  if (C == nullptr) {
+    return rna_enum_dummy_NULL_items;
+  }
+
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Object *ob;
   EnumPropertyItem *item = nullptr, item_tmp = {0};
   int totitem = 0;
-
-  if (C == nullptr) {
-    return rna_enum_dummy_NULL_items;
-  }
 
   ob = context_object(C);
 
@@ -224,7 +224,7 @@ static wmOperatorStatus objects_remove_active_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   int single_collection_index = RNA_enum_get(op->ptr, "collection");
   Collection *single_collection = collection_object_active_find_index(
@@ -449,6 +449,116 @@ void COLLECTION_OT_create(wmOperatorType *ot)
   RNA_def_string(ot->srna, "name", nullptr, MAX_ID_NAME - 2, "Name", "Name of the new collection");
 }
 
+static bool collection_importer_add_poll(bContext *C)
+{
+  const Collection *collection = CTX_data_collection(C);
+  return BKE_collection_is_content_editable(collection) && BKE_collection_is_empty(collection);
+}
+
+static bool collection_importer_remove_poll(bContext *C)
+{
+  const Collection *collection = CTX_data_collection(C);
+  return collection->importer != nullptr;
+}
+
+static wmOperatorStatus collection_importer_add_exec(bContext *C, wmOperator *op)
+{
+  /* TODO - There should only be 1 importer in the hierarchy.
+   * This needs to be enforced either here or in the poll. */
+
+  using namespace blender;
+  Collection *collection = CTX_data_collection(C);
+
+  char name[MAX_ID_NAME - 2]; /* id name */
+  RNA_string_get(op->ptr, "name", name);
+
+  bke::FileHandlerType *fh = bke::file_handler_find(name);
+  if (!fh) {
+    BKE_reportf(op->reports, RPT_ERROR, "File handler '%s' not found", name);
+    return OPERATOR_CANCELLED;
+  }
+
+  if (!WM_operatortype_find(fh->import_operator, true)) {
+    BKE_reportf(
+        op->reports, RPT_ERROR, "File handler operator '%s' not found", fh->import_operator);
+    return OPERATOR_CANCELLED;
+  }
+
+  BKE_collection_importer_add(collection, fh->idname);
+
+  BKE_view_layer_need_resync_tag(CTX_data_view_layer(C));
+  DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);
+
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+static void COLLECTION_OT_importer_add(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add Importer";
+  ot->description = "Add Importer";
+  ot->idname = "COLLECTION_OT_importer_add";
+
+  /* api callbacks */
+  ot->exec = collection_importer_add_exec;
+  ot->poll = collection_importer_add_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", nullptr, MAX_ID_NAME - 2, "Name", "FileHandler idname");
+}
+
+static wmOperatorStatus collection_importer_remove_exec(bContext *C, wmOperator * /*op*/)
+{
+  Collection *collection = CTX_data_collection(C);
+  CollectionImport *data = collection->importer;
+
+  if (!data) {
+    return OPERATOR_CANCELLED;
+  }
+
+  BKE_collection_importer_free_data(data);
+  MEM_delete(data);
+
+  collection->importer = nullptr;
+
+  BKE_view_layer_need_resync_tag(CTX_data_view_layer(C));
+  DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);
+
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_PROPERTIES, nullptr);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus collection_importer_remove_invoke(bContext *C,
+                                                          wmOperator *op,
+                                                          const wmEvent * /*event*/)
+{
+  return WM_operator_confirm_ex(
+      C, op, IFACE_("Remove importer?"), nullptr, IFACE_("Delete"), ui::AlertIcon::None, false);
+}
+
+static void COLLECTION_OT_importer_remove(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Remove Importer";
+  ot->description = "Remove Importer";
+  ot->idname = "COLLECTION_OT_importer_remove";
+
+  /* api callbacks */
+  ot->invoke = collection_importer_remove_invoke;
+  ot->exec = collection_importer_remove_exec;
+  ot->poll = collection_importer_remove_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 static bool collection_exporter_common_check(const Collection *collection)
 {
   return collection != nullptr &&
@@ -475,7 +585,6 @@ static bool collection_export_all_poll(bContext *C)
 
 static wmOperatorStatus collection_exporter_add_exec(bContext *C, wmOperator *op)
 {
-  using namespace blender;
   Collection *collection = CTX_data_collection(C);
 
   char name[MAX_ID_NAME - 2]; /* id name */
@@ -524,7 +633,7 @@ static void COLLECTION_OT_exporter_add(wmOperatorType *ot)
 static wmOperatorStatus collection_exporter_remove_exec(bContext *C, wmOperator *op)
 {
   Collection *collection = CTX_data_collection(C);
-  ListBase *exporters = &collection->exporters;
+  ListBaseT<CollectionExport> *exporters = &collection->exporters;
 
   int index = RNA_int_get(op->ptr, "index");
   CollectionExport *data = static_cast<CollectionExport *>(BLI_findlink(exporters, index));
@@ -571,7 +680,6 @@ static void COLLECTION_OT_exporter_remove(wmOperatorType *ot)
 
 static wmOperatorStatus collection_exporter_move_exec(bContext *C, wmOperator *op)
 {
-  using namespace blender;
   Collection *collection = CTX_data_collection(C);
   const int dir = RNA_enum_get(op->ptr, "direction");
   const int from = collection->active_exporter_index;
@@ -621,7 +729,6 @@ static wmOperatorStatus collection_exporter_export(bContext *C,
                                                    Collection *collection,
                                                    const bool report_success)
 {
-  using namespace blender;
   bke::FileHandlerType *fh = bke::file_handler_find(data->fh_idname);
   if (!fh) {
     BKE_reportf(op->reports, RPT_ERROR, "File handler '%s' not found", data->fh_idname);
@@ -691,7 +798,7 @@ static wmOperatorStatus collection_exporter_export(bContext *C,
 static wmOperatorStatus collection_exporter_export_exec(bContext *C, wmOperator *op)
 {
   Collection *collection = CTX_data_collection(C);
-  ListBase *exporters = &collection->exporters;
+  ListBaseT<CollectionExport> *exporters = &collection->exporters;
 
   int index = RNA_int_get(op->ptr, "index");
   CollectionExport *data = static_cast<CollectionExport *>(BLI_findlink(exporters, index));
@@ -729,11 +836,11 @@ static wmOperatorStatus collection_export(bContext *C,
                                           Collection *collection,
                                           CollectionExportStats &stats)
 {
-  ListBase *exporters = &collection->exporters;
+  ListBaseT<CollectionExport> *exporters = &collection->exporters;
   int files_num = 0;
 
-  LISTBASE_FOREACH (CollectionExport *, data, exporters) {
-    if (collection_exporter_export(C, op, data, collection, false) != OPERATOR_FINISHED) {
+  for (CollectionExport &data : *exporters) {
+    if (collection_exporter_export(C, op, &data, collection, false) != OPERATOR_FINISHED) {
       /* Do not continue calling exporters if we encounter one that fails. */
       return OPERATOR_CANCELLED;
     }
@@ -799,8 +906,8 @@ static wmOperatorStatus collection_export_recursive(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  LISTBASE_FOREACH (LayerCollection *, child, &layer_collection->layer_collections) {
-    if (collection_export_recursive(C, op, child, stats) != OPERATOR_FINISHED) {
+  for (LayerCollection &child : layer_collection->layer_collections) {
+    if (collection_export_recursive(C, op, &child, stats) != OPERATOR_FINISHED) {
       return OPERATOR_CANCELLED;
     }
   }
@@ -813,8 +920,8 @@ static wmOperatorStatus wm_collection_export_all_exec(bContext *C, wmOperator *o
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   CollectionExportStats stats;
-  LISTBASE_FOREACH (LayerCollection *, layer_collection, &view_layer->layer_collections) {
-    if (collection_export_recursive(C, op, layer_collection, stats) != OPERATOR_FINISHED) {
+  for (LayerCollection &layer_collection : view_layer->layer_collections) {
+    if (collection_export_recursive(C, op, &layer_collection, stats) != OPERATOR_FINISHED) {
       return OPERATOR_CANCELLED;
     }
   }
@@ -847,6 +954,26 @@ static void WM_OT_collection_export_all(wmOperatorType *ot)
   ot->flag = 0;
 }
 
+static void collection_importer_menu_draw(const bContext * /*C*/, Menu *menu)
+{
+  using namespace blender;
+  ui::Layout &layout = *menu->layout;
+
+  /* Add all file handlers capable of being imported to the menu. */
+  bool at_least_one = false;
+  for (const auto &fh : bke::file_handlers()) {
+    if (STREQ(fh->idname, "IO_FH_usd") && WM_operatortype_find(fh->import_operator, true)) {
+      PointerRNA op_ptr = layout.op("COLLECTION_OT_importer_add", fh->label, ICON_NONE);
+      RNA_string_set(&op_ptr, "name", fh->idname);
+      at_least_one = true;
+    }
+  }
+
+  if (!at_least_one) {
+    layout.label(IFACE_("No file handlers available"), ICON_NONE);
+  }
+}
+
 static void collection_exporter_menu_draw(const bContext * /*C*/, Menu *menu)
 {
   ui::Layout &layout = *menu->layout;
@@ -866,9 +993,21 @@ static void collection_exporter_menu_draw(const bContext * /*C*/, Menu *menu)
   }
 }
 
+void collection_importer_register()
+{
+  MenuType *mt = MEM_new_zeroed<MenuType>(__func__);
+  STRNCPY_UTF8(mt->idname, "COLLECTION_MT_importer_add");
+  STRNCPY_UTF8(mt->label, N_("Add Importer"));
+  mt->draw = collection_importer_menu_draw;
+
+  WM_menutype_add(mt);
+  WM_operatortype_append(COLLECTION_OT_importer_add);
+  WM_operatortype_append(COLLECTION_OT_importer_remove);
+}
+
 void collection_exporter_register()
 {
-  MenuType *mt = MEM_callocN<MenuType>(__func__);
+  MenuType *mt = MEM_new_zeroed<MenuType>(__func__);
   STRNCPY_UTF8(mt->idname, "COLLECTION_MT_exporter_add");
   STRNCPY_UTF8(mt->label, N_("Add Exporter"));
   mt->draw = collection_exporter_menu_draw;
@@ -939,15 +1078,10 @@ static wmOperatorStatus collection_link_exec(bContext *C, wmOperator *op)
     return OPERATOR_FINISHED;
   }
 
-  /* Currently this should not be allowed (might be supported in the future though...). */
-  if (ID_IS_OVERRIDE_LIBRARY(&collection->id)) {
-    BKE_report(op->reports, RPT_ERROR, "Could not add the collection because it is overridden");
-    return OPERATOR_CANCELLED;
-  }
-  /* Linked collections are already checked for by using RNA_collection_local_itemf
-   * but operator can be called without invoke */
-  if (!ID_IS_EDITABLE(&collection->id)) {
-    BKE_report(op->reports, RPT_ERROR, "Could not add the collection because it is linked");
+  std::string reason;
+  if (!BKE_collection_is_content_editable(collection, &reason)) {
+    BKE_reportf(
+        op->reports, RPT_ERROR, "Cannot add objects to the collection. %s", reason.c_str());
     return OPERATOR_CANCELLED;
   }
 
@@ -1002,15 +1136,16 @@ static wmOperatorStatus collection_remove_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Object *ob = context_object(C);
   Collection *collection = static_cast<Collection *>(
-      CTX_data_pointer_get_type(C, "collection", &RNA_Collection).data);
+      CTX_data_pointer_get_type(C, "collection", RNA_Collection).data);
 
   if (!ob || !collection) {
     return OPERATOR_CANCELLED;
   }
-  if (!ID_IS_EDITABLE(collection) || ID_IS_OVERRIDE_LIBRARY(collection)) {
-    BKE_report(op->reports,
-               RPT_ERROR,
-               "Cannot remove an object from a linked or library override collection");
+
+  std::string reason;
+  if (!BKE_collection_is_content_editable(collection, &reason)) {
+    BKE_reportf(
+        op->reports, RPT_ERROR, "Cannot remove an object from the collection. %s", reason.c_str());
     return OPERATOR_CANCELLED;
   }
 
@@ -1110,7 +1245,7 @@ static wmOperatorStatus select_grouped_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
   Collection *collection = static_cast<Collection *>(
-      CTX_data_pointer_get_type(C, "collection", &RNA_Collection).data);
+      CTX_data_pointer_get_type(C, "collection", RNA_Collection).data);
 
   if (!collection) {
     return OPERATOR_CANCELLED;

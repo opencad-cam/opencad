@@ -239,10 +239,6 @@ inline const char *ShaderInterface::builtin_uniform_name(GPUUniformBuiltin u)
       return "color";
     case GPU_UNIFORM_BASE_INSTANCE:
       return "gpu_BaseInstance";
-    case GPU_UNIFORM_RESOURCE_CHUNK:
-      return "drw_resourceChunk";
-    case GPU_UNIFORM_RESOURCE_ID:
-      return "drw_ResourceID";
     case GPU_UNIFORM_SRGB_TRANSFORM:
       return "srgbTarget";
     case GPU_UNIFORM_SCENE_LINEAR_XFORM:
@@ -291,7 +287,7 @@ inline uint32_t ShaderInterface::set_input_name(ShaderInput *input,
     }
   }
 
-  input->name_offset = (uint32_t)(name - name_buffer_);
+  input->name_offset = uint32_t(name - name_buffer_);
   input->name_hash = BLI_hash_string(name);
   return name_len + 1; /* include NULL terminator */
 }

@@ -28,11 +28,14 @@
 #include "BLO_core_blend_header.hh"
 #include "BLO_readfile.hh"
 
+namespace blender {
+
 struct BlendFileData;
 struct BlendfileLinkAppendContext;
 struct BlendFileReadParams;
 struct BlendFileReadReport;
 struct BLOCacheStorage;
+struct BHeadN;
 struct BHeadSort;
 struct DNA_ReconstructInfo;
 struct IDNameLib_Map;
@@ -78,7 +81,7 @@ ENUM_OPERATORS(eFileDataFlag)
  */
 struct FileData {
   /** Linked list of BHeadN's. */
-  ListBase bhead_list = {};
+  ListBaseT<BHeadN> bhead_list = {};
   enum eFileDataFlag flags = eFileDataFlag(0);
   bool is_eof = false;
   BlenderHeader blender_header = {};
@@ -118,11 +121,19 @@ struct FileData {
 
   /** Used to retrieve ID names from (bhead+1). */
   int id_name_offset = 0;
-  /** Used to retrieve asset data from (bhead+1). NOTE: This may not be available in old files,
-   * will be -1 then! */
+  /**
+   * Used to retrieve asset data from (bhead+1). NOTE: This may not be available in old files,
+   * will be -1 then!
+   */
   int id_asset_data_offset = 0;
   int id_flag_offset = 0;
   int id_deep_hash_offset = 0;
+  /**
+   * Gives access to libraries' filepath and flag, useful for introspection of blendfiles'
+   * dependencies _without_ having to fully read them.
+   */
+  int library_filepath_offset = 0;
+  int library_flag_offset = 0;
   /** For do_versions patching. */
   int globalf = 0;
   int fileflags = 0;
@@ -141,7 +152,7 @@ struct FileData {
   OldNewMap *datamap = nullptr;
   OldNewMap *globmap = nullptr;
   /** Used to keep track of already loaded packed IDs to avoid loading them multiple times. */
-  std::shared_ptr<blender::Map<IDHash, ID *>> id_by_deep_hash;
+  std::shared_ptr<Map<IDHash, ID *>> id_by_deep_hash;
 
   /**
    * Store mapping from old ID pointers (the values they have in the .blend file) to new ones,
@@ -155,7 +166,7 @@ struct FileData {
   BHeadSort *bheadmap = nullptr;
   int tot_bheadmap = 0;
 
-  std::optional<blender::Map<blender::StringRefNull, BHead *>> bhead_idname_map;
+  std::optional<Map<StringRefNull, BHead *>> bhead_idname_map;
 
   /**
    * The root (main, local) Main.
@@ -194,6 +205,11 @@ struct FileData {
 
   /** Opaque handle to the storage system used for non-static allocation strings. */
   void *storage_handle = nullptr;
+
+  /**
+   * Set when reading a file from undo with incomplete preview, to trigger restart of preview jobs.
+   */
+  bool need_preview_render_restart = false;
 };
 
 /**
@@ -264,6 +280,19 @@ short blo_bhead_id_flag(const FileData *fd, const BHead *bhead);
  */
 AssetMetaData *blo_bhead_id_asset_data_address(const FileData *fd, const BHead *bhead);
 
+/**
+ * Return the stored filepath (may be relative) of a library ID.
+ *
+ * Warning! Caller's responsibility to ensure that the given bhead **is** a Library ID one!
+ */
+const char *blo_bhead_library_filepath(const FileData *fd, const BHead *bhead);
+/**
+ * Return the stored flags of a library ID.
+ *
+ * Warning! Caller's responsibility to ensure that the given bhead **is** a Library ID one!
+ */
+LibraryFlag blo_bhead_library_flag(const FileData *fd, const BHead *bhead);
+
 /* do versions stuff */
 
 /**
@@ -313,6 +342,7 @@ void blo_do_versions_440(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_450(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_500(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_510(FileData *fd, Library *lib, Main *bmain);
+void blo_do_versions_520(FileData *fd, Library *lib, Main *bmain);
 
 void do_versions_after_linking_250(Main *bmain);
 void do_versions_after_linking_260(Main *bmain);
@@ -328,6 +358,7 @@ void do_versions_after_linking_440(FileData *fd, Main *bmain);
 void do_versions_after_linking_450(FileData *fd, Main *bmain);
 void do_versions_after_linking_500(FileData *fd, Main *bmain);
 void do_versions_after_linking_510(FileData *fd, Main *bmain);
+void do_versions_after_linking_520(FileData *fd, Main *bmain);
 
 void do_versions_after_setup(Main *new_bmain,
                              BlendfileLinkAppendContext *lapp_context,
@@ -346,3 +377,5 @@ void *blo_read_get_new_globaldata_address(FileData *fd, const void *adr) ATTR_NO
  * data should be discarded). Also add an error report to `fd` including given `message`.
  */
 void blo_readfile_invalidate(FileData *fd, Main *bmain, const char *message) ATTR_NONNULL(1, 2, 3);
+
+}  // namespace blender

@@ -23,7 +23,7 @@ void USDPointsReader::create_object(Main *bmain)
 {
   PointCloud *pointcloud = BKE_pointcloud_add(bmain, name_.c_str());
   object_ = BKE_object_add_only_object(bmain, OB_POINTCLOUD, name_.c_str());
-  object_->data = pointcloud;
+  object_->data = id_cast<ID *>(pointcloud);
 }
 
 void USDPointsReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
@@ -31,7 +31,7 @@ void USDPointsReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
   const USDMeshReadParams params = create_mesh_read_params(time.GetValue(),
                                                            import_params_.mesh_read_flag);
 
-  PointCloud *pointcloud = static_cast<PointCloud *>(object_->data);
+  PointCloud *pointcloud = id_cast<PointCloud *>(object_->data);
 
   bke::GeometrySet geometry_set = bke::GeometrySet::from_pointcloud(
       pointcloud, bke::GeometryOwnershipType::Editable);
@@ -79,14 +79,18 @@ void USDPointsReader::read_geometry(bke::GeometrySet &geometry_set,
   points_prim_.GetWidthsAttr().Get(&usd_widths, params.motion_sample_time);
 
   if (!usd_widths.empty()) {
-    MutableSpan<float> radii = pointcloud->radius_for_write();
     Span<float> widths = Span(usd_widths.cdata(), usd_widths.size());
 
     const pxr::TfToken widths_interp = points_prim_.GetWidthsInterpolation();
     if (widths_interp == pxr::UsdGeomTokens->constant) {
-      radii.fill(widths[0] / 2.0f);
+      set_single_value(pointcloud->attributes_for_write(),
+                       "radius",
+                       bke::AttrDomain::Point,
+                       bke::AttrType::Float,
+                       bke::AttributeInitValue(widths[0] / 2.0f));
     }
     else {
+      MutableSpan<float> radii = pointcloud->radius_for_write();
       for (const int i_point : IndexRange(std::min(radii.size(), widths.size()))) {
         radii[i_point] = widths[i_point] / 2.0f;
       }

@@ -11,22 +11,23 @@
 
 #ifdef WITH_AUDASPACE_PY
 
-#  include <AUD_Sound.h>
+#  include "BKE_sound.hh"
+
 #  include <python/PyAPI.h>
 #  include <python/PySound.h>
 
-extern void *BKE_sound_get_factory(void *sound);
+namespace blender {
 
 static PyObject *AUD_getSoundFromPointer(PyObject * /*self*/, PyObject *args)
 {
   PyObject *res = nullptr;
   if (PyArg_Parse(args, "O:_sound_from_pointer", &res)) {
     if (res) {
-      AUD_Sound *sound = BKE_sound_get_factory(PyLong_AsVoidPtr(res));
+      AUD_Sound sound = BKE_sound_get_factory(PyLong_AsVoidPtr(res));
       if (sound) {
         Sound *obj = (Sound *)Sound_empty();
         if (obj) {
-          obj->sound = AUD_Sound_copy(sound);
+          obj->sound = new AUD_Sound(sound);
           return (PyObject *)obj;
         }
       }
@@ -41,7 +42,7 @@ static PyMethodDef meth_sound_from_pointer[] = {
      METH_O,
      "_sound_from_pointer(pointer)\n\n"
      "Returns the corresponding :class:`Factory` object.\n\n"
-     ":arg pointer: The pointer to the bSound object as long.\n"
+     ":param pointer: The pointer to the bSound object as long.\n"
      ":type pointer: long\n"
      ":return: The corresponding :class:`Factory` object.\n"
      ":rtype: :class:`Factory`"}};
@@ -60,5 +61,7 @@ PyObject *BPyInit_audaspace()
 
   return module;
 }
+
+}  // namespace blender
 
 #endif  // WITH_AUDASPACE_PY

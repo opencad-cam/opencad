@@ -21,6 +21,10 @@
 #include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
+namespace blender {
+
+const char *imb_file_extensions_dds[] = {".dds", nullptr};
+
 OIIO_NAMESPACE_USING
 using namespace blender::imbuf;
 
@@ -321,7 +325,7 @@ static void LoadDXTCImage(ImBuf *ibuf, Filesystem::IOMemReader &mem_reader)
     }
 
     ibuf->dds_data.size = mem_reader.size() - dds_header_size;
-    ibuf->dds_data.data = (uchar *)malloc(ibuf->dds_data.size);
+    ibuf->dds_data.data = static_cast<uchar *>(malloc(ibuf->dds_data.size));
     mem_reader.pread(ibuf->dds_data.data, ibuf->dds_data.size, dds_header_size);
     ibuf->dds_data.ownership = IB_TAKE_OWNERSHIP;
 
@@ -329,3 +333,5 @@ static void LoadDXTCImage(ImBuf *ibuf, Filesystem::IOMemReader &mem_reader)
     FlipDXTCImage(ibuf);
   }
 }
+
+}  // namespace blender

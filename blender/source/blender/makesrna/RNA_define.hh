@@ -18,6 +18,8 @@
 
 #include "RNA_types.hh"
 
+namespace blender {
+
 #ifdef UNIT_TEST
 #  define RNA_MAX_ARRAY_LENGTH 64
 #else
@@ -31,6 +33,11 @@
 struct Scene;
 
 BlenderRNA *RNA_create();
+/**
+ * Create a container for RNA types that are defined at runtime (in contrast to the main global
+ * #BlenderRNA which contains RNA types defined at startup from static data).
+ */
+BlenderRNA *RNA_create_runtime();
 void RNA_define_free(BlenderRNA *brna);
 void RNA_free(BlenderRNA *brna);
 
@@ -99,6 +106,7 @@ void RNA_def_struct_register_funcs(StructRNA *srna,
  * Paths must be compatible with #RNA_path_resolve & related functions.
  */
 void RNA_def_struct_path_func(StructRNA *srna, const char *path);
+void RNA_def_struct_path_func_runtime(StructRNA *srna, StructPathFunc path_fn);
 /**
  * Only used in one case when we name the struct for the purpose of useful error messages.
  */
@@ -652,6 +660,10 @@ void RNA_def_property_string_funcs_runtime(PropertyRNA *prop,
 void RNA_def_property_string_search_func_runtime(PropertyRNA *prop,
                                                  StringPropertySearchFunc search_fn,
                                                  eStringPropertySearchFlag search_flag);
+void RNA_def_property_pointer_funcs_runtime(PropertyRNA *prop,
+                                            PointerPropertyGetFunc getfunc,
+                                            PointerPropertySetFunc setfunc,
+                                            PointerPropertyTypeFunc typefunc);
 
 void RNA_def_property_translation_context(PropertyRNA *prop, const char *context);
 
@@ -716,7 +728,10 @@ const char *RNA_property_typename(PropertyType type);
 #define IS_DNATYPE_BOOLEAN_COMPAT(_str) \
   (IS_DNATYPE_INT_COMPAT(_str) || strcmp(_str, "int64_t") == 0 || strcmp(_str, "uint64_t") == 0)
 
-void RNA_identifier_sanitize(char *identifier, int property);
+bool RNA_validate_identifier(const char *identifier,
+                             bool is_property,
+                             const char **r_error = nullptr);
+void RNA_identifier_sanitize(char *identifier, bool is_property);
 
 /* Common arguments for length. */
 
@@ -732,3 +747,5 @@ extern const float rna_default_scale_3d[3];
 
 /** Maximum size for dynamic defined type descriptors, this value is arbitrary. */
 #define RNA_DYN_DESCR_MAX 1024
+
+}  // namespace blender

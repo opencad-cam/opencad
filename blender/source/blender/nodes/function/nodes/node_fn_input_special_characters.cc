@@ -8,8 +8,8 @@ namespace blender::nodes::node_fn_input_special_characters_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::String>("Line Break");
-  b.add_output<decl::String>("Tab").translation_context(BLT_I18NCONTEXT_ID_TEXT);
+  b.add_output<decl::String>("Line Break"_ustr);
+  b.add_output<decl::String>("Tab"_ustr).translation_context(BLT_I18NCONTEXT_ID_TEXT);
 }
 
 class MF_SpecialCharacters : public mf::MultiFunction {
@@ -46,10 +46,10 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  fn_node_type_base(
-      &ntype, "FunctionNodeInputSpecialCharacters", FN_NODE_INPUT_SPECIAL_CHARACTERS);
+  fn_cmp_node_type_base(
+      &ntype, "FunctionNodeInputSpecialCharacters"_ustr, FN_NODE_INPUT_SPECIAL_CHARACTERS);
   ntype.ui_name = "Special Characters";
   ntype.ui_description =
       "Output string characters that cannot be typed directly with the keyboard";
@@ -57,7 +57,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

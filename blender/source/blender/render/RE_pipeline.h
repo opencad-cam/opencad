@@ -12,9 +12,14 @@
 #include "DNA_listBase.h"
 #include "DNA_vec_types.h"
 
-namespace blender::gpu {
+class GHOST_IContext;
+
+namespace blender {
+
+namespace gpu {
 class Texture;
 }
+
 struct ExrHandle;
 struct ImBuf;
 struct Image;
@@ -91,7 +96,7 @@ struct RenderLayer {
 
   int rectx, recty;
 
-  ListBase passes;
+  ListBaseT<RenderPass> passes;
 };
 
 struct RenderResult {
@@ -120,10 +125,10 @@ struct RenderResult {
   rcti tilerect;
 
   /* the main buffers */
-  ListBase layers = {};
+  ListBaseT<RenderLayer> layers = {};
 
   /* multiView maps to a StringVector in OpenEXR */
-  ListBase views = {}; /* RenderView */
+  ListBaseT<RenderView> views = {};
 
   /* Render layer to display. */
   RenderLayer *renlay = nullptr;
@@ -193,23 +198,23 @@ void RE_FreeViewRender(struct ViewRender *view_render);
 /**
  * Only called on exit.
  */
-void RE_FreeAllRender(void);
+void RE_FreeAllRender();
 
 /**
  * On file load, free all interactive compositor renders.
  */
-void RE_FreeInteractiveCompositorRenders(void);
+void RE_FreeInteractiveCompositorRenders();
 
 /**
  * On file load, free render results.
  */
-void RE_FreeAllRenderResults(void);
+void RE_FreeAllRenderResults();
 
 /**
  * On file load or changes engines, free persistent render data.
  * Assumes no engines are currently rendering.
  */
-void RE_FreeAllPersistentData(void);
+void RE_FreeAllPersistentData();
 /**
  * Free persistent render data, optionally only for the given scene.
  */
@@ -218,13 +223,13 @@ void RE_FreePersistentData(const struct Scene *scene);
 /**
  * Free cached GPU textures to reduce memory usage.
  */
-void RE_FreeGPUTextureCaches(void);
+void RE_FreeGPUTextureCaches();
 
 /**
  * Free cached GPU textures, contexts and compositor to reduce memory usage,
  * when nothing in the UI requires them anymore.
  */
-void RE_FreeUnusedGPUResources(void);
+void RE_FreeUnusedGPUResources();
 
 /**
  * Get results and statistics.
@@ -240,7 +245,7 @@ void RE_ReleaseResult(struct Render *re);
 /**
  * Same as #RE_AcquireResultImage but creating the necessary views to store the result
  * fill provided result struct with a copy of thew views of what is done so far the
- * #RenderResult.views #ListBase needs to be freed after with #RE_ReleaseResultImageViews
+ * #RenderResult.views #ListBaseT needs to be freed after with #RE_ReleaseResultImageViews
  */
 void RE_AcquireResultImageViews(struct Render *re, struct RenderResult *rr);
 /**
@@ -313,7 +318,7 @@ void RE_create_render_pass(struct RenderResult *rr,
 void RE_InitState(struct Render *re,
                   struct Render *source,
                   struct RenderData *rd,
-                  struct ListBase *render_layers,
+                  ListBaseT<ViewLayer> *render_layers,
                   struct ViewLayer *single_layer,
                   int winx,
                   int winy,
@@ -431,15 +436,8 @@ void RE_current_scene_update_cb(struct Render *re,
                                 void *handle,
                                 void (*f)(void *handle, struct Scene *scene));
 
-void *RE_system_gpu_context_get(Render *re);
+GHOST_IContext *RE_system_gpu_context_get(Render *re);
 void *RE_blender_gpu_context_ensure(Render *re);
-
-/**
- * \param x: ranges from -1 to 1.
- *
- * TODO: Should move to kernel once... still unsure on how/where.
- */
-float RE_filter_value(int type, float x);
 
 bool RE_seq_render_active(struct Scene *scene, struct RenderData *rd);
 
@@ -463,8 +461,7 @@ void RE_pass_set_buffer_data(struct RenderPass *pass, float *data);
 /**
  * Ensure a GPU texture corresponding to the render buffer data exists.
  */
-blender::gpu::Texture *RE_pass_ensure_gpu_texture_cache(struct Render *re,
-                                                        struct RenderPass *rpass);
+gpu::Texture *RE_pass_ensure_gpu_texture_cache(struct Render *re, struct RenderPass *rpass);
 
 void RE_GetCameraWindow(struct Render *re, const struct Object *camera, float r_winmat[4][4]);
 /**
@@ -485,7 +482,8 @@ void RE_GetWindowMatrixWithOverscan(bool is_ortho,
 struct Scene *RE_GetScene(struct Render *re);
 void RE_SetScene(struct Render *re, struct Scene *sce);
 
-bool RE_is_rendering_allowed(struct Scene *scene,
+bool RE_is_rendering_allowed(const Main &bmain,
+                             struct Scene *scene,
                              struct ViewLayer *single_layer,
                              struct Object *camera_override,
                              struct ReportList *reports);
@@ -507,3 +505,5 @@ struct ImBuf *RE_RenderViewEnsureImBuf(const RenderResult *render_result, Render
 
 /* Returns true if the pass is a color (as opposite of data) and needs to be color managed. */
 bool RE_RenderPassIsColor(const RenderPass *render_pass);
+
+}  // namespace blender

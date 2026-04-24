@@ -8,6 +8,8 @@
 
 #include "BLI_hash.hh"
 #include "BLI_listbase.h"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
 
@@ -18,6 +20,7 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_metadata.hh"
 
 #include "BKE_cryptomatte.hh"
 #include "BKE_image.hh"
@@ -37,21 +40,23 @@ namespace blender::compositor {
  * Cached Image Key.
  */
 
-CachedImageKey::CachedImageKey(ImageUser image_user, std::string pass_name)
-    : image_user(image_user), pass_name(pass_name)
+CachedImageKey::CachedImageKey(const int layer_index,
+                               const std::string pass_name,
+                               const std::string view_name,
+                               const int frame)
+    : layer_index(layer_index), pass_name(pass_name), view_name(view_name), frame(frame)
 {
 }
 
 uint64_t CachedImageKey::hash() const
 {
-  return get_default_hash(image_user.framenr, image_user.layer, image_user.view, pass_name);
+  return get_default_hash(this->layer_index, this->view_name, this->pass_name, this->frame);
 }
 
 bool operator==(const CachedImageKey &a, const CachedImageKey &b)
 {
-  return a.image_user.framenr == b.image_user.framenr &&
-         a.image_user.layer == b.image_user.layer && a.image_user.view == b.image_user.view &&
-         a.pass_name == b.pass_name;
+  return a.layer_index == b.layer_index && a.pass_name == b.pass_name &&
+         a.view_name == b.view_name && a.frame == b.frame;
 }
 
 /* --------------------------------------------------------------------
@@ -63,7 +68,7 @@ bool operator==(const CachedImageKey &a, const CachedImageKey &b)
 static RenderLayer *get_render_layer(const RenderResult *render_result,
                                      const ImageUser &image_user)
 {
-  const ListBase *layers = &render_result->layers;
+  const ListBaseT<RenderLayer> *layers = &render_result->layers;
   return static_cast<RenderLayer *>(BLI_findlink(layers, image_user.layer));
 }
 
@@ -86,6 +91,21 @@ static RenderPass *get_render_pass(const RenderLayer *render_layer, const ImageU
   return static_cast<RenderPass *>(BLI_findlink(&render_layer->passes, image_user.pass));
 }
 
+/* Get the render pass in the given render result specified by the given image user. */
+static RenderPass *get_render_pass(const RenderResult *render_result, const ImageUser &image_user)
+{
+  if (!render_result) {
+    return nullptr;
+  }
+
+  const RenderLayer *render_layer = get_render_layer(render_result, image_user);
+  if (!render_layer) {
+    return nullptr;
+  }
+
+  return get_render_pass(render_layer, image_user);
+}
+
 /* Get the index of the view selected in the image user. If the image is not a multi-view image
  * or only has a single view, then zero is returned. Otherwise, if the image is a multi-view
  * image, the index of the selected view is returned. However, note that the value of the view
@@ -103,7 +123,7 @@ static int get_view_index(const Context &context,
     return 0;
   }
 
-  const ListBase *views = &render_result->views;
+  const ListBaseT<RenderView> *views = &render_result->views;
   /* There is only one view and its index is 0. */
   if (BLI_listbase_count_at_most(views, 2) < 2) {
     return 0;
@@ -186,7 +206,7 @@ static ImBuf *compute_linear_buffer(ImBuf *image_buffer)
 
   /* If no float buffer exists, assign it then compute a float buffer from it. This is the main
    * call of this function. */
-  if (!linear_image_buffer->float_buffer.data) {
+  if (!linear_image_buffer->float_data()) {
     IMB_assign_byte_buffer(
         linear_image_buffer, image_buffer->byte_buffer, IB_DO_NOT_TAKE_OWNERSHIP);
     IMB_float_from_byte(linear_image_buffer);
@@ -227,29 +247,12 @@ static ResultType float_type(const int channels_count)
   return ResultType::Color;
 }
 
-/* Returns the appropriate result type for the given image buffer, which represents the pass in the
- * given render result with the given image user. The type is determined based on the channels
- * count of the buffer for simple images, while channel IDs are also considered for multi-layer
- * images since 3-channel passes can be RGB without alpha and 4-channel passes can be XYZW 4D
- * vectors. */
-static ResultType get_result_type(const RenderResult *render_result,
-                                  const ImageUser &image_user,
-                                  const ImBuf *image_buffer)
+/* Returns the appropriate result type for the given render pass. The type is determined based on
+ * the channels count of the buffer for simple images, while channel IDs are also considered for
+ * multi-layer images since 3-channel passes can be RGB without alpha and 4-channel passes can be
+ * XYZW 4D vectors. */
+static ResultType get_pass_type(const RenderPass *render_pass)
 {
-  if (!render_result) {
-    return float_type(image_buffer->channels);
-  }
-
-  const RenderLayer *render_layer = get_render_layer(render_result, image_user);
-  if (!render_layer) {
-    return float_type(image_buffer->channels);
-  }
-
-  const RenderPass *render_pass = get_render_pass(render_layer, image_user);
-  if (!render_pass) {
-    return float_type(image_buffer->channels);
-  }
-
   switch (render_pass->channels) {
     case 1:
       return ResultType::Float;
@@ -307,29 +310,37 @@ CachedImage::CachedImage(Context &context,
     return;
   }
 
-  this->populate_meta_data(render_result, image_user_for_pass);
+  if (BKE_image_is_multilayer(image)) {
+    const RenderPass *render_pass = get_render_pass(render_result, image_user_for_pass);
+    this->result.set_type(get_pass_type(render_pass));
+  }
+
+  this->populate_cryptomatte_meta_data(render_result, image_user_for_pass);
 
   BKE_image_release_renderresult(nullptr, image, render_result);
 
   ImBuf *image_buffer = BKE_image_acquire_ibuf(image, &image_user_for_pass, nullptr);
   ImBuf *linear_image_buffer = compute_linear_buffer(image_buffer);
 
+  this->populate_meta_data(image_buffer);
+
   const bool use_half_float = linear_image_buffer->foptions.flag & OPENEXR_HALF;
   this->result.set_precision(use_half_float ? ResultPrecision::Half : ResultPrecision::Full);
-
-  this->result.set_type(get_result_type(render_result, image_user_for_pass, linear_image_buffer));
+  if (!BKE_image_is_multilayer(image)) {
+    this->result.set_type(float_type(linear_image_buffer->channels));
+  }
 
   /* For GPU, we wrap the texture returned by IMB module and free it ourselves in destructor. For
    * CPU, we allocate the result and copy to it from the image buffer. */
   if (context.use_gpu()) {
-    texture_ = IMB_create_gpu_texture("Image Texture", linear_image_buffer, true, true);
+    texture_ = IMB_create_gpu_texture("Image Texture", linear_image_buffer, true, true, false);
     GPU_texture_update_mipmap_chain(texture_);
     this->result.wrap_external(texture_);
   }
   else {
     const int2 size = int2(image_buffer->x, image_buffer->y);
     Result buffer_result(context, float_type(image_buffer->channels), ResultPrecision::Full);
-    buffer_result.wrap_external(linear_image_buffer->float_buffer.data, size);
+    buffer_result.wrap_external(linear_image_buffer->float_data_for_write(), size);
     this->result.allocate_texture(size, false);
 
     if (buffer_result.type() == ResultType::Color && result.type() == ResultType::Float4) {
@@ -345,28 +356,29 @@ CachedImage::CachedImage(Context &context,
       });
     }
     else {
-      result.get_cpp_type().to_static_type_tag<float, float2, float3, float4, Color>(
-          [&](auto type_tag) {
-            using T = typename decltype(type_tag)::type;
-            if constexpr (std::is_same_v<T, void>) {
-              /* Unsupported type. */
-              BLI_assert_unreachable();
-            }
-            else {
-              parallel_for(result.domain().data_size, [&](const int2 texel) {
-                result.store_pixel(texel, buffer_result.load_pixel<T>(texel));
-              });
-            }
+      result.get_cpp_type().to_static_type<float, float2, float3, float4, Color>(
+          [&]<typename T>() {
+            parallel_for(result.domain().data_size, [&](const int2 texel) {
+              result.store_pixel(texel, buffer_result.load_pixel<T>(texel));
+            });
           });
     }
+    buffer_result.release();
+  }
+
+  if (image_buffer->flags & IB_has_display_window) {
+    this->result.domain().display_size = int2(image_buffer->display_size);
+    this->result.domain().data_offset = int2(image_buffer->data_offset);
+    this->result.transform(
+        math::from_location<float3x3>(float2(int2(image_buffer->display_offset))));
   }
 
   IMB_freeImBuf(linear_image_buffer);
   BKE_image_release_ibuf(image, image_buffer, nullptr);
 }
 
-void CachedImage::populate_meta_data(const RenderResult *render_result,
-                                     const ImageUser &image_user)
+void CachedImage::populate_cryptomatte_meta_data(const RenderResult *render_result,
+                                                 const ImageUser &image_user)
 {
   if (!render_result) {
     return;
@@ -424,6 +436,17 @@ void CachedImage::populate_meta_data(const RenderResult *render_result,
       false);
 }
 
+void CachedImage::populate_meta_data(const ImBuf *image_buffer)
+{
+  IMB_metadata_foreach(
+      image_buffer,
+      [](const char *key, const char *value, void *user_data) {
+        compositor::MetaData *meta_data = static_cast<compositor::MetaData *>(user_data);
+        meta_data->fields.add(key, value);
+      },
+      &this->result.meta_data);
+}
+
 CachedImage::~CachedImage()
 {
   this->result.release();
@@ -465,7 +488,14 @@ Result CachedImageContainer::get(Context &context,
   ImageUser image_user_for_frame = *image_user;
   BKE_image_user_frame_calc(image, &image_user_for_frame, context.get_frame_number());
 
-  const CachedImageKey key(image_user_for_frame, pass_name);
+  /* A view of 0 is a special value that means the current view being rendered so use the context
+   * view name. For other values, just convert the view index into a string and use it as the name,
+   * while this is not correct it works as the cache key and is very fast compared to reading the
+   * views from file and finding out their name. */
+  const std::string view_name = image_user->view == 0 ? std::string(context.get_view_name()) :
+                                                        std::to_string(image_user->view);
+
+  const CachedImageKey key(image_user->layer, pass_name, view_name, image_user_for_frame.framenr);
 
   const std::string library_key = image->id.lib ? image->id.lib->id.name : "";
   const std::string id_key = std::string(image->id.name) + library_key;

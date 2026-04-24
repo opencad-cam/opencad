@@ -52,9 +52,11 @@
 #include <cstdio>
 #include <cstring>
 
+namespace blender {
+
 static CLG_LogRef LOG = {"anim.action"};
 
-namespace blender::animrig {
+namespace animrig {
 
 namespace {
 /**
@@ -77,7 +79,7 @@ constexpr const char *layer_default_name = "Layer";
 
 static animrig::Layer &ActionLayer_alloc()
 {
-  ActionLayer *layer = MEM_new_for_free<ActionLayer>(__func__);
+  ActionLayer *layer = MEM_new<ActionLayer>(__func__);
   return layer->wrap();
 }
 
@@ -87,10 +89,10 @@ template<typename T> static void grow_array(T **array, int *num, const int add_n
 {
   BLI_assert(add_num > 0);
   const int new_array_num = *num + add_num;
-  T *new_array = MEM_calloc_arrayN<T>(new_array_num, "animrig::action/grow_array");
+  T *new_array = MEM_new_array_zeroed<T>(new_array_num, "animrig::action/grow_array");
 
-  blender::uninitialized_relocate_n(*array, *num, new_array);
-  MEM_SAFE_FREE(*array);
+  uninitialized_relocate_n(*array, *num, new_array);
+  MEM_SAFE_DELETE(*array);
 
   *array = new_array;
   *num = new_array_num;
@@ -107,13 +109,13 @@ static void grow_array_and_insert(T **array, int *num, const int index, T item)
 {
   BLI_assert(index >= 0 && index <= *num);
   const int new_array_num = *num + 1;
-  T *new_array = MEM_calloc_arrayN<T>(new_array_num, __func__);
+  T *new_array = MEM_new_array_zeroed<T>(new_array_num, __func__);
 
-  blender::uninitialized_relocate_n(*array, index, new_array);
+  uninitialized_relocate_n(*array, index, new_array);
   new_array[index] = item;
-  blender::uninitialized_relocate_n(*array + index, *num - index, new_array + index + 1);
+  uninitialized_relocate_n(*array + index, *num - index, new_array + index + 1);
 
-  MEM_SAFE_FREE(*array);
+  MEM_SAFE_DELETE(*array);
 
   *array = new_array;
   *num = new_array_num;
@@ -124,16 +126,16 @@ template<typename T> static void shrink_array(T **array, int *num, const int shr
   BLI_assert(shrink_num > 0);
   const int new_array_num = *num - shrink_num;
   if (new_array_num == 0) {
-    MEM_freeN(*array);
+    MEM_delete(*array);
     *array = nullptr;
     *num = 0;
     return;
   }
 
-  T *new_array = MEM_calloc_arrayN<T>(new_array_num, __func__);
+  T *new_array = MEM_new_array_zeroed<T>(new_array_num, __func__);
 
-  blender::uninitialized_move_n(*array, new_array_num, new_array);
-  MEM_freeN(*array);
+  uninitialized_move_n(*array, new_array_num, new_array);
+  MEM_delete(*array);
 
   *array = new_array;
   *num = new_array_num;
@@ -143,11 +145,11 @@ template<typename T> static void shrink_array_and_remove(T **array, int *num, co
 {
   BLI_assert(index >= 0 && index < *num);
   const int new_array_num = *num - 1;
-  T *new_array = MEM_calloc_arrayN<T>(new_array_num, __func__);
+  T *new_array = MEM_new_array_zeroed<T>(new_array_num, __func__);
 
-  blender::uninitialized_move_n(*array, index, new_array);
-  blender::uninitialized_move_n(*array + index + 1, *num - index - 1, new_array + index);
-  MEM_freeN(*array);
+  uninitialized_move_n(*array, index, new_array);
+  uninitialized_move_n(*array + index + 1, *num - index - 1, new_array + index);
+  MEM_delete(*array);
 
   *array = new_array;
   *num = new_array_num;
@@ -162,14 +164,14 @@ template<typename T> static void shrink_array_and_swap_remove(T **array, int *nu
 {
   BLI_assert(index >= 0 && index < *num);
   const int new_array_num = *num - 1;
-  T *new_array = MEM_calloc_arrayN<T>(new_array_num, __func__);
+  T *new_array = MEM_new_array_zeroed<T>(new_array_num, __func__);
 
-  blender::uninitialized_move_n(*array, index, new_array);
+  uninitialized_move_n(*array, index, new_array);
   if (index < new_array_num) {
     new_array[index] = (*array)[new_array_num];
-    blender::uninitialized_move_n(*array + index + 1, *num - index - 2, new_array + index + 1);
+    uninitialized_move_n(*array + index + 1, *num - index - 2, new_array + index + 1);
   }
-  MEM_freeN(*array);
+  MEM_delete(*array);
 
   *array = new_array;
   *num = new_array_num;
@@ -215,24 +217,12 @@ static void array_shift_range(
 
 bool Action::is_empty() const
 {
-  /* The check for emptiness has to include the check for an empty `groups` ListBase because of the
-   * animation filtering code. With the functions `rearrange_action_channels` and
+  /* The check for emptiness has to include the check for an empty `groups` ListBaseT because of
+   * the animation filtering code. With the functions `rearrange_action_channels` and
    * `join_groups_action_temp` the ownership of FCurves is temporarily transferred to the `groups`
-   * ListBase leaving `curves` potentially empty. */
+   * ListBaseT leaving `curves` potentially empty. */
   return this->layer_array_num == 0 && this->slot_array_num == 0 &&
          BLI_listbase_is_empty(&this->curves) && BLI_listbase_is_empty(&this->groups);
-}
-bool Action::is_action_legacy() const
-{
-  /* This is a valid legacy Action only if there is no layered info. */
-  return this->layer_array_num == 0 && this->slot_array_num == 0;
-}
-bool Action::is_action_layered() const
-{
-  /* This is a valid layered Action if there is ANY layered info (because that
-   * takes precedence) or when there is no legacy info. */
-  return this->layer_array_num > 0 || this->slot_array_num > 0 ||
-         (BLI_listbase_is_empty(&this->curves) && BLI_listbase_is_empty(&this->groups));
 }
 
 Span<const Layer *> Action::layers() const
@@ -262,7 +252,8 @@ Layer &Action::layer_add(const std::optional<StringRefNull> name)
     STRNCPY_UTF8(new_layer.name, DATA_(layer_default_name));
   }
 
-  grow_array_and_append<::ActionLayer *>(&this->layer_array, &this->layer_array_num, &new_layer);
+  grow_array_and_append<blender::ActionLayer *>(
+      &this->layer_array, &this->layer_array_num, &new_layer);
   this->layer_active_index = this->layer_array_num - 1;
 
   /* If this is the first layer in this Action, it means that it could have been
@@ -445,7 +436,7 @@ void Action::slot_identifier_define(Slot &slot, const StringRefNull new_identifi
 void Action::slot_identifier_propagate(Main &bmain, const Slot &slot)
 {
   /* Just loop over all animatable IDs in the main database. */
-  ListBase *lb;
+  ListBaseT<ID> *lb;
   ID *id;
   FOREACH_MAIN_LISTBASE_BEGIN (&bmain, lb) {
     FOREACH_MAIN_LISTBASE_ID_BEGIN (lb, id) {
@@ -506,7 +497,7 @@ Slot &Action::slot_add()
   BLI_strncpy_utf8(slot.identifier + 2, DATA_(slot_default_name), ARRAY_SIZE(slot.identifier) - 2);
 
   /* Append the Slot to the Action. */
-  grow_array_and_append<::ActionSlot *>(&this->slot_array, &this->slot_array_num, &slot);
+  grow_array_and_append<blender::ActionSlot *>(&this->slot_array, &this->slot_array_num, &slot);
 
   slot_identifier_ensure_unique(*this, slot);
 
@@ -892,12 +883,12 @@ static float2 get_frame_range_of_fcurves(Span<const FCurve *> fcurves,
 
 Layer *Layer::duplicate_with_shallow_strip_copies(const StringRefNull allocation_name) const
 {
-  ActionLayer *copy = MEM_new_for_free<ActionLayer>(allocation_name.c_str());
+  ActionLayer *copy = MEM_new<ActionLayer>(allocation_name.c_str());
   *copy = *reinterpret_cast<const ActionLayer *>(this);
 
   /* Make a shallow copy of the Strips, without copying their data. */
-  copy->strip_array = MEM_calloc_arrayN<ActionStrip *>(this->strip_array_num,
-                                                       allocation_name.c_str());
+  copy->strip_array = MEM_new_array_zeroed<ActionStrip *>(this->strip_array_num,
+                                                          allocation_name.c_str());
   for (int i : this->strips().index_range()) {
     Strip *strip_copy = MEM_new<Strip>(allocation_name.c_str(), *this->strip(i));
     copy->strip_array[i] = strip_copy;
@@ -911,7 +902,7 @@ Layer::~Layer()
   for (Strip *strip : this->strips()) {
     MEM_delete(strip);
   }
-  MEM_SAFE_FREE(this->strip_array);
+  MEM_SAFE_DELETE(this->strip_array);
   this->strip_array_num = 0;
 }
 
@@ -937,7 +928,8 @@ Strip &Layer::strip_add(Action &owning_action, const Strip::Type strip_type)
   Strip &strip = Strip::create(owning_action, strip_type);
 
   /* Add the new strip to the strip array. */
-  grow_array_and_append<::ActionStrip *>(&this->strip_array, &this->strip_array_num, &strip);
+  grow_array_and_append<blender::ActionStrip *>(
+      &this->strip_array, &this->strip_array_num, &strip);
 
   return strip;
 }
@@ -989,7 +981,7 @@ int64_t Layer::find_strip_index(const Strip &strip) const
 
 Slot::Slot()
 {
-  /* Zero-initialize the DNA struct. 'this' is a C++ class, and shouldn't be memset like this. */
+  /* Zero-initialize the DNA struct. 'this' is a C++ class, and shouldn't be `memset` like this. */
   _DNA_internal_memzero(this, sizeof(ActionSlot));
   this->runtime = MEM_new<SlotRuntime>(__func__);
 }
@@ -1166,7 +1158,8 @@ void Slot::identifier_ensure_prefix()
 Action &action_add(Main &bmain, const StringRefNull name)
 {
   bAction *dna_action = BKE_action_add(&bmain, name.c_str());
-  id_us_clear_real(&dna_action->id);
+  BLI_assert(dna_action->id.us == 1);
+  id_us_min(&dna_action->id);
   return dna_action->wrap();
 }
 
@@ -1565,7 +1558,7 @@ std::optional<std::pair<Action *, Slot *>> get_action_slot_pair(ID &animated_id)
 Strip &Strip::create(Action &owning_action, const Strip::Type type)
 {
   /* Create the strip. */
-  ActionStrip *strip = MEM_new_for_free<ActionStrip>(__func__);
+  ActionStrip *strip = MEM_new<ActionStrip>(__func__);
   strip->strip_type = int8_t(type);
 
   /* Create the strip's data on the owning Action. */
@@ -1633,8 +1626,8 @@ template<> StripKeyframeData &Strip::data<StripKeyframeData>(Action &owning_acti
 StripKeyframeData::StripKeyframeData(const StripKeyframeData &other)
     : ActionStripKeyframeData(other)
 {
-  this->channelbag_array = MEM_calloc_arrayN<ActionChannelbag *>(other.channelbag_array_num,
-                                                                 __func__);
+  this->channelbag_array = MEM_new_array_zeroed<ActionChannelbag *>(other.channelbag_array_num,
+                                                                    __func__);
   Span<const Channelbag *> channelbags_src = other.channelbags();
   for (int i : channelbags_src.index_range()) {
     this->channelbag_array[i] = MEM_new<animrig::Channelbag>(__func__, *other.channelbag(i));
@@ -1646,7 +1639,7 @@ StripKeyframeData::~StripKeyframeData()
   for (Channelbag *channelbag_for_slot : this->channelbags()) {
     MEM_delete(channelbag_for_slot);
   }
-  MEM_SAFE_FREE(this->channelbag_array);
+  MEM_SAFE_DELETE(this->channelbag_array);
   this->channelbag_array_num = 0;
 }
 
@@ -1935,6 +1928,31 @@ Vector<FCurve *> Channelbag::fcurve_create_many(Main *bmain,
   return new_fcurves;
 }
 
+FCurve &Channelbag::fcurve_clone(const FCurve &old_fcurve,
+                                 const StringRefNull new_path,
+                                 const int new_array_index,
+                                 const StringRef new_group_name)
+{
+  FCurve *new_fcurve = this->fcurve_find({new_path, new_array_index});
+  if (new_fcurve) {
+    MEM_delete(new_fcurve->bezt);
+    new_fcurve->bezt = MEM_dupalloc(old_fcurve.bezt);
+    MEM_delete(new_fcurve->fpt);
+    new_fcurve->fpt = MEM_dupalloc(old_fcurve.fpt);
+    new_fcurve->totvert = old_fcurve.totvert;
+  }
+  else {
+    new_fcurve = BKE_fcurve_copy(&old_fcurve);
+    MEM_delete(new_fcurve->rna_path);
+    new_fcurve->rna_path = BLI_strdup(new_path.data());
+    new_fcurve->array_index = new_array_index;
+    this->fcurve_append(*new_fcurve);
+  }
+  bActionGroup &agrp = this->channel_group_ensure(new_group_name.data());
+  this->fcurve_assign_to_channel_group(*new_fcurve, agrp);
+  return *new_fcurve;
+}
+
 void Channelbag::fcurve_append(FCurve &fcurve)
 {
   /* Appended F-Curves don't belong to any group yet, so better make sure their
@@ -2085,7 +2103,7 @@ static void cyclic_keying_ensure_cycle_range_exists(FCurve &fcurve, const float2
   /* Reallocate the array to make space for the 2nd point. */
   fcurve.totvert++;
   fcurve.bezt = static_cast<BezTriple *>(
-      MEM_reallocN(fcurve.bezt, sizeof(BezTriple) * fcurve.totvert));
+      MEM_realloc_uninitialized(fcurve.bezt, sizeof(BezTriple) * fcurve.totvert));
 
   /* Duplicate and offset the keyframe. */
   fcurve.bezt[1] = fcurve.bezt[0];
@@ -2125,7 +2143,7 @@ SingleKeyingResult StripKeyframeData::keyframe_insert(Main *bmain,
     return SingleKeyingResult::CANNOT_CREATE_FCURVE;
   }
 
-  if (!BKE_fcurve_is_keyframable(fcurve)) {
+  if (!BKE_fcurve_is_keyframable(*fcurve)) {
     /* TODO: handle this properly, in a way that can be communicated to the user. */
     CLOG_WARN(&LOG,
               "FCurve %s[%d] for slot %s doesn't allow inserting keys.\n",
@@ -2176,17 +2194,17 @@ Channelbag::Channelbag(const Channelbag &other)
   this->slot_handle = other.slot_handle;
 
   this->fcurve_array_num = other.fcurve_array_num;
-  this->fcurve_array = MEM_calloc_arrayN<FCurve *>(other.fcurve_array_num, __func__);
+  this->fcurve_array = MEM_new_array_zeroed<FCurve *>(other.fcurve_array_num, __func__);
   for (int i = 0; i < other.fcurve_array_num; i++) {
     const FCurve *fcu_src = other.fcurve_array[i];
     this->fcurve_array[i] = BKE_fcurve_copy(fcu_src);
   }
 
   this->group_array_num = other.group_array_num;
-  this->group_array = MEM_calloc_arrayN<bActionGroup *>(other.group_array_num, __func__);
+  this->group_array = MEM_new_array_zeroed<bActionGroup *>(other.group_array_num, __func__);
   for (int i = 0; i < other.group_array_num; i++) {
     const bActionGroup *group_src = other.group_array[i];
-    this->group_array[i] = static_cast<bActionGroup *>(MEM_dupallocN(group_src));
+    this->group_array[i] = MEM_dupalloc(group_src);
     this->group_array[i]->channelbag = this;
   }
 
@@ -2200,13 +2218,13 @@ Channelbag::~Channelbag()
   for (FCurve *fcu : this->fcurves()) {
     BKE_fcurve_free(fcu);
   }
-  MEM_SAFE_FREE(this->fcurve_array);
+  MEM_SAFE_DELETE(this->fcurve_array);
   this->fcurve_array_num = 0;
 
   for (bActionGroup *group : this->channel_groups()) {
-    MEM_SAFE_FREE(group);
+    MEM_SAFE_DELETE(group);
   }
-  MEM_SAFE_FREE(this->group_array);
+  MEM_SAFE_DELETE(this->group_array);
   this->group_array_num = 0;
 }
 
@@ -2297,7 +2315,7 @@ int Channelbag::channel_group_containing_index(const int fcurve_array_index)
 
 bActionGroup &Channelbag::channel_group_create(StringRefNull name)
 {
-  bActionGroup *new_group = MEM_new_for_free<bActionGroup>(__func__);
+  bActionGroup *new_group = MEM_new<bActionGroup>(__func__);
 
   /* Find the end fcurve index of the current channel groups, to be used as the
    * start of the new channel group. */
@@ -2407,7 +2425,7 @@ void Channelbag::channel_group_remove_raw(const int group_index)
 {
   BLI_assert(group_index >= 0 && group_index < this->channel_groups().size());
 
-  MEM_SAFE_FREE(this->group_array[group_index]);
+  MEM_SAFE_DELETE(this->group_array[group_index]);
   shrink_array_and_remove(&this->group_array, &this->group_array_num, group_index);
 }
 
@@ -2439,15 +2457,8 @@ void Channelbag::restore_channel_group_invariants()
   }
 }
 
-bool ChannelGroup::is_legacy() const
-{
-  return this->channelbag == nullptr;
-}
-
 Span<FCurve *> ChannelGroup::fcurves()
 {
-  BLI_assert(!this->is_legacy());
-
   if (this->fcurve_range_length == 0) {
     return {};
   }
@@ -2458,8 +2469,6 @@ Span<FCurve *> ChannelGroup::fcurves()
 
 Span<const FCurve *> ChannelGroup::fcurves() const
 {
-  BLI_assert(!this->is_legacy());
-
   if (this->fcurve_range_length == 0) {
     return {};
   }
@@ -2630,14 +2639,14 @@ Vector<FCurve *> fcurves_in_span_filtered(Span<FCurve *> fcurves,
   return found;
 }
 
-Vector<FCurve *> fcurves_in_listbase_filtered(ListBase /* FCurve * */ fcurves,
+Vector<FCurve *> fcurves_in_listbase_filtered(ListBaseT<FCurve> fcurves,
                                               FunctionRef<bool(const FCurve &fcurve)> predicate)
 {
   Vector<FCurve *> found;
 
-  LISTBASE_FOREACH (FCurve *, fcurve, &fcurves) {
-    if (predicate(*fcurve)) {
-      found.append(fcurve);
+  for (FCurve &fcurve : fcurves) {
+    if (predicate(fcurve)) {
+      found.append(&fcurve);
     }
   }
 
@@ -2911,7 +2920,7 @@ ID *action_slot_get_id_best_guess(Main &bmain, Slot &slot, ID *primary_id)
   return users[0];
 }
 
-slot_handle_t first_slot_handle(const ::bAction &dna_action)
+slot_handle_t first_slot_handle(const blender::bAction &dna_action)
 {
   const Action &action = dna_action.wrap();
   if (action.slot_array_num == 0) {
@@ -2948,58 +2957,6 @@ void assert_baklava_phase_1_invariants(const Strip &strip)
   BLI_assert(strip.frame_offset == 0.0);
 }
 
-Action *convert_to_layered_action(Main &bmain, const Action &legacy_action)
-{
-  if (!legacy_action.is_action_legacy()) {
-    return nullptr;
-  }
-
-  std::string suffix = "_layered";
-  /* In case the legacy action has a long name it is shortened to make space for the suffix. */
-  char legacy_name[MAX_ID_NAME - 10];
-  /* Offsetting the id.name to remove the ID prefix (AC) which gets added back later. */
-  STRNCPY_UTF8(legacy_name, legacy_action.id.name + 2);
-
-  const std::string layered_action_name = std::string(legacy_name) + suffix;
-  bAction *dna_action = BKE_action_add(&bmain, layered_action_name.c_str());
-
-  Action &converted_action = dna_action->wrap();
-  Slot &slot = converted_action.slot_add();
-  Layer &layer = converted_action.layer_add(legacy_action.id.name);
-  Strip &strip = layer.strip_add(converted_action, Strip::Type::Keyframe);
-  BLI_assert(strip.data<StripKeyframeData>(converted_action).channelbag_array_num == 0);
-  Channelbag *bag = &strip.data<StripKeyframeData>(converted_action).channelbag_for_slot_add(slot);
-
-  const int fcu_count = BLI_listbase_count(&legacy_action.curves);
-  bag->fcurve_array = MEM_calloc_arrayN<FCurve *>(fcu_count, "Convert to layered action");
-  bag->fcurve_array_num = fcu_count;
-
-  int i = 0;
-  Map<FCurve *, FCurve *> old_new_fcurve_map;
-  LISTBASE_FOREACH_INDEX (FCurve *, fcu, &legacy_action.curves, i) {
-    bag->fcurve_array[i] = BKE_fcurve_copy(fcu);
-    bag->fcurve_array[i]->grp = nullptr;
-    old_new_fcurve_map.add(fcu, bag->fcurve_array[i]);
-  }
-
-  LISTBASE_FOREACH (bActionGroup *, group, &legacy_action.groups) {
-    /* The resulting group might not have the same name, because the legacy system allowed
-     * duplicate names while the new system ensures uniqueness. */
-    bActionGroup &converted_group = bag->channel_group_create(group->name);
-    LISTBASE_FOREACH (FCurve *, fcu, &group->channels) {
-      if (fcu->grp != group) {
-        /* Since the group listbase points to the action listbase, it won't stop iterating when
-         * reaching the end of the group but iterate to the end of the action FCurves. */
-        break;
-      }
-      FCurve *new_fcurve = old_new_fcurve_map.lookup(fcu);
-      bag->fcurve_assign_to_channel_group(*new_fcurve, converted_group);
-    }
-  }
-
-  return &converted_action;
-}
-
 /**
  * Clone information from the given slot into this slot while retaining important info like the
  * slot handle and runtime data. This copies the identifier which might clash with other
@@ -3007,7 +2964,7 @@ Action *convert_to_layered_action(Main &bmain, const Action &legacy_action)
  */
 static void clone_slot(const Slot &from, Slot &to)
 {
-  ActionSlotRuntimeHandle *runtime = to.runtime;
+  SlotRuntime *runtime = to.runtime;
   slot_handle_t handle = to.handle;
   *reinterpret_cast<ActionSlot *>(&to) = *reinterpret_cast<const ActionSlot *>(&from);
   to.runtime = runtime;
@@ -3110,4 +3067,5 @@ Slot &duplicate_slot(Action &action, const Slot &slot)
   return cloned_slot;
 }
 
-}  // namespace blender::animrig
+}  // namespace animrig
+}  // namespace blender

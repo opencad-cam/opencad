@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace blender {
+
 /** Used in `readfile.cc` and `editfont.cc`. */
 #define MAXTEXTBOX 256
 
@@ -91,6 +93,25 @@ enum {
   CU_TAPER_RADIUS_MULTIPLY = 1,
   /** Add the radius of the bevel point to the taper radius. */
   CU_TAPER_RADIUS_ADD = 2,
+};
+
+/** #Curve.fill_solver */
+enum CurveFillSolverType {
+  /**
+   * Fast filling without support for self-intersections.
+   * Uses `BLI_scanfill`.
+   */
+  CU_FILL_SOLVER_SWEEP_LINE = 0,
+  /**
+   * Constrained Delaunay Triangulation with self-intersection and fill rule support.
+   */
+  CU_FILL_SOLVER_CDT = 1,
+};
+
+/** #Curve.fill_rule */
+enum CurveFillRuleType {
+  CU_FILL_RULE_EVEN_ODD = 0,
+  CU_FILL_RULE_NONZERO = 1,
 };
 
 /* Curve.overflow. */
@@ -238,3 +259,5 @@ enum {
 
 /* indicates point has been seen during surface duplication */
 #define SURF_SEEN (1 << 2)
+
+}  // namespace blender

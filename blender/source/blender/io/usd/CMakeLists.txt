@@ -10,9 +10,9 @@ if(UNIX AND NOT APPLE)
   add_definitions(-D_GLIBCXX_PERMIT_BACKWARD_HASH)
 endif()
 if(WIN32)
-  add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DBOOST_DEBUG_PYTHON)
+  # We need to keep BOOST_DEBUG_PYTHON for the vendored copy of boost inside USD.
+  add_definitions(-DBOOST_DEBUG_PYTHON)
 endif()
-add_definitions(-DBOOST_ALL_NO_LIB)
 
 # Pre-compiled Linux libraries are made with GCC, and USD uses some extensions
 # which lead to an incompatible ABI for Clang. Using those extensions with
@@ -32,11 +32,11 @@ if(WIN32)
   # Some USD library headers trigger the "unreferenced formal parameter"
   # warning alert.
   # Silence them by restore warn C4100 back to w4
-  remove_cc_flag("/w34100")
+  remove_c_and_cxx_flag("/w34100")
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
     # USD currently does not support the new preprocessor,
     # so we remove it here and disable sse2neon
-    remove_cc_flag("/Zc:preprocessor")
+    remove_c_and_cxx_flag("/Zc:preprocessor")
     add_definitions(-DDISABLE_SSE2NEON)
   endif()
 endif()
@@ -53,11 +53,6 @@ set(INC
 )
 
 set(INC_SYS
-  ${USD_INCLUDE_DIRS}
-  ${BOOST_INCLUDE_DIR}
-  ${TBB_INCLUDE_DIRS}
-  ${PYTHON_INCLUDE_DIR}
-
 )
 
 set(SRC
@@ -67,6 +62,7 @@ set(SRC
   intern/usd_blend_shape_utils.cc
   intern/usd_capi_export.cc
   intern/usd_capi_import.cc
+  intern/usd_colorspace_utils.cc
   intern/usd_hierarchy_iterator.cc
   intern/usd_hook.cc
   intern/usd_instancing_utils.cc
@@ -111,12 +107,15 @@ set(SRC
   intern/usd_skel_root_utils.cc
 
   usd.hh
+  usd_api_hook.hh
+  usd_api_modifier.hh
   usd_private.hh
 
   intern/usd_armature_utils.hh
   intern/usd_asset_utils.hh
   intern/usd_attribute_utils.hh
   intern/usd_blend_shape_utils.hh
+  intern/usd_colorspace_utils.hh
   intern/usd_exporter_context.hh
   intern/usd_hash_types.hh
   intern/usd_hierarchy_iterator.hh
@@ -124,6 +123,7 @@ set(SRC
   intern/usd_instancing_utils.hh
   intern/usd_light_convert.hh
   intern/usd_mesh_utils.hh
+  intern/usd_precomp.hh
   intern/usd_utils.hh
 
   intern/usd_writer_abstract.hh
@@ -210,16 +210,11 @@ set(LIB
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   bf_io_common
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::nodes
   PRIVATE bf::windowmanager
-)
-
-list(APPEND LIB
-  ${BOOST_PYTHON_LIBRARIES}
-  ${PYTHON_LIBRARIES}
-  ${USD_LIBRARIES}
-  ${TBB_LIBRARIES}
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::optional::usd
+  PRIVATE bf::dependencies::optional::tbb
 )
 
 if(WITH_MATERIALX)

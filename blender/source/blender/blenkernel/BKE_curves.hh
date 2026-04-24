@@ -26,23 +26,23 @@
 #include "BKE_attribute_storage.hh"
 #include "BKE_curves.h"
 
+namespace blender {
+
 struct BlendDataReader;
 struct BlendWriter;
 struct MDeformVert;
-namespace blender::bke {
+namespace bke {
 class AttributeAccessor;
 class MutableAttributeAccessor;
 enum class AttrDomain : int8_t;
 struct AttributeAccessorFunctions;
-}  // namespace blender::bke
-namespace blender::bke::bake {
+}  // namespace bke
+namespace bke::bake {
 struct BakeMaterialsList;
 }
-namespace blender {
 class GVArray;
-}
 
-namespace blender::bke {
+namespace bke {
 
 namespace curves::nurbs {
 
@@ -152,7 +152,7 @@ class CurvesGeometryRuntime {
  * directly from the struct rather than storing a pointer to avoid more complicated ownership
  * handling.
  */
-class CurvesGeometry : public ::CurvesGeometry {
+class CurvesGeometry : public blender::CurvesGeometry {
  public:
   CurvesGeometry();
   /**
@@ -513,17 +513,17 @@ class CurvesGeometry : public ::CurvesGeometry {
     Vector<CustomDataLayer, 16> &point_layers;
     Vector<CustomDataLayer, 16> &curve_layers;
     AttributeStorage::BlendWriteData attribute_data;
-    explicit BlendWriteData(ResourceScope &scope);
+    explicit BlendWriteData(BlendWriter *writer, ResourceScope &scope);
   };
   /**
    * This function needs to be called before `blend_write` and before the `CurvesGeometry` struct
    * is written because it can mutate the `CustomData` and `AttributeStorage` structs.
    */
-  void blend_write_prepare(BlendWriteData &write_data);
+  void blend_write_prepare(BlendWriteData &write_data, bool use_5_0_compatibility);
   void blend_write(BlendWriter &writer, ID &id, const BlendWriteData &write_data);
 };
 
-static_assert(sizeof(blender::bke::CurvesGeometry) == sizeof(::CurvesGeometry));
+static_assert(sizeof(bke::CurvesGeometry) == sizeof(CurvesGeometry));
 
 /**
  * Used to propagate deformation data through modifier evaluation so that sculpt tools can work on
@@ -893,7 +893,7 @@ int knots_num(int points_num, int8_t order, bool cyclic);
  * Calculate the total number of control points for a NURBS curve including virtual/repeated points
  * for a cyclic/closed curve.
  */
-int control_points_num(int num_control_points, int8_t order, bool cyclic);
+int control_points_num(int points_num, int8_t order, bool cyclic);
 
 /**
  * Depending on KnotsMode calculates knots or copies custom knots into given `MutableSpan`.
@@ -1180,13 +1180,15 @@ struct CurvesSurfaceTransforms {
   CurvesSurfaceTransforms(const Object &curves_ob, const Object *surface_ob);
 };
 
-}  // namespace blender::bke
+}  // namespace bke
 
-inline blender::bke::CurvesGeometry &CurvesGeometry::wrap()
+inline bke::CurvesGeometry &CurvesGeometry::wrap()
 {
-  return *reinterpret_cast<blender::bke::CurvesGeometry *>(this);
+  return *reinterpret_cast<bke::CurvesGeometry *>(this);
 }
-inline const blender::bke::CurvesGeometry &CurvesGeometry::wrap() const
+inline const bke::CurvesGeometry &CurvesGeometry::wrap() const
 {
-  return *reinterpret_cast<const blender::bke::CurvesGeometry *>(this);
+  return *reinterpret_cast<const bke::CurvesGeometry *>(this);
 }
+
+}  // namespace blender

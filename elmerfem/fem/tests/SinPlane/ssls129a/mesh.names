@@ -1,5 +1,0 @@
-! ----- names for bodies -----
-$ VOL                                                                              = 1
-! ----- names for boundaries -----
-$ DROITE                        GAUCHE                                                                           = 1
-$ GAUCHE                                                                           = 2

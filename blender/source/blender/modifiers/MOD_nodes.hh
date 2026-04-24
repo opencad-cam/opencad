@@ -9,17 +9,19 @@
 #include "BLI_array.hh"
 #include "NOD_socket_usage_inference_fwd.hh"
 
+namespace blender {
+
 struct NodesModifierData;
 struct NodesModifierDataBlock;
 struct Object;
 struct NodesModifierPackedBake;
 struct NodesModifierBake;
 
-namespace blender::bke::bake {
+namespace bke::bake {
 struct ModifierCache;
 }
-namespace blender::nodes::geo_eval_log {
-class GeoNodesLog;
+namespace nodes::eval_log {
+class NodesEvalLog;
 }
 
 /**
@@ -29,8 +31,6 @@ class GeoNodesLog;
  */
 void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd);
 
-namespace blender {
-
 class NodesModifierUsageInferenceCache {
  private:
   uint64_t input_values_hash_ = 0;
@@ -39,7 +39,7 @@ class NodesModifierUsageInferenceCache {
   Array<nodes::socket_usage_inference::SocketUsage> inputs;
   Array<nodes::socket_usage_inference::SocketUsage> outputs;
 
-  void ensure(const NodesModifierData &nmd);
+  void ensure(const Object &object, const NodesModifierData &nmd);
   void reset();
 };
 
@@ -50,7 +50,7 @@ struct NodesModifierRuntime {
    * This is a shared pointer because we might want to keep it around in some cases after the
    * evaluation (e.g. for gizmo backpropagation).
    */
-  std::shared_ptr<nodes::geo_eval_log::GeoNodesLog> eval_log;
+  std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
   /**
    * Simulation cache that is shared between original and evaluated modifiers. This allows the
    * original modifier to be removed, without also removing the simulation state which may still be

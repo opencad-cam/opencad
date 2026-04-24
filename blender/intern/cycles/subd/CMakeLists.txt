@@ -28,7 +28,9 @@ set(SRC_HEADERS
 )
 
 set(LIB
-
+  PUBLIC cycles_scene
+  PRIVATE bf::dependencies::openimageio
+  PUBLIC bf::dependencies::optional::opensubdiv
 )
 
 include_directories(${INC})

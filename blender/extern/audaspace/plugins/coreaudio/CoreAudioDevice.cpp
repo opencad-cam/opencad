@@ -99,7 +99,7 @@ CoreAudioDevice::CoreAudioDevice(DeviceSpecs specs, int buffersize) : m_buffersi
 		specs.channels = CHANNELS_STEREO;
 	if(specs.format == FORMAT_INVALID)
 		specs.format = FORMAT_FLOAT32;
-	if(specs.rate == RATE_INVALID)
+	if(specs.rate == static_cast<SampleRate>(RATE_INVALID))
 		specs.rate = RATE_48000;
 
 	m_specs = specs;
@@ -157,7 +157,7 @@ CoreAudioDevice::CoreAudioDevice(DeviceSpecs specs, int buffersize) : m_buffersi
 
 	stream_basic_description.mSampleRate = m_specs.rate;
 	stream_basic_description.mFormatID = kAudioFormatLinearPCM;
-	stream_basic_description.mFormatFlags |= kAudioFormatFlagsNativeEndian | kLinearPCMFormatFlagIsPacked;
+	stream_basic_description.mFormatFlags |= AudioFormatFlags(kAudioFormatFlagsNativeEndian) | AudioFormatFlags(kLinearPCMFormatFlagIsPacked);
 	stream_basic_description.mBytesPerPacket = stream_basic_description.mBytesPerFrame = AUD_DEVICE_SAMPLE_SIZE(m_specs);
 	stream_basic_description.mFramesPerPacket = 1;
 	stream_basic_description.mChannelsPerFrame = m_specs.channels;

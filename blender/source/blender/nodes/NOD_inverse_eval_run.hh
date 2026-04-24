@@ -8,11 +8,13 @@
 
 #include "BLI_compute_context.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
+
+namespace blender {
 
 struct NodesModifierData;
 
-namespace blender::nodes::inverse_eval {
+namespace nodes::inverse_eval {
 
 using bke::SocketValueVariant;
 
@@ -35,13 +37,13 @@ struct SocketToUpdate {
 bool backpropagate_socket_values(bContext &C,
                                  Object &object,
                                  NodesModifierData &nmd,
-                                 geo_eval_log::GeoNodesLog &eval_log,
+                                 eval_log::NodesEvalLog &eval_log,
                                  Span<SocketToUpdate> sockets_to_update);
 
 /**
  * Attempts to get the value for a specific socket from the log.
  */
-std::optional<SocketValueVariant> get_logged_socket_value(geo_eval_log::GeoTreeLog &tree_log,
+std::optional<SocketValueVariant> get_logged_socket_value(eval_log::NodeTreeLog &tree_log,
                                                           const bNodeSocket &socket);
 
 /**
@@ -52,4 +54,6 @@ std::optional<bke::SocketValueVariant> convert_single_socket_value(
     const bNodeSocket &new_socket,
     const bke::SocketValueVariant &old_value);
 
-}  // namespace blender::nodes::inverse_eval
+}  // namespace nodes::inverse_eval
+
+}  // namespace blender

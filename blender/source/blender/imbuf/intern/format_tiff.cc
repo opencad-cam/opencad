@@ -12,6 +12,10 @@
 #include "IMB_filetype.hh"
 #include "IMB_imbuf_types.hh"
 
+namespace blender {
+
+const char *imb_file_extensions_tiff[] = {".tif", ".tiff", ".tx", nullptr};
+
 OIIO_NAMESPACE_USING
 using namespace blender::imbuf;
 
@@ -44,7 +48,7 @@ ImBuf *imb_load_tiff(const uchar *mem, size_t size, int flags, ImFileColorSpace 
 
 bool imb_save_tiff(ImBuf *ibuf, const char *filepath, int flags)
 {
-  const bool is_16bit = ((ibuf->foptions.flag & TIF_16BIT) && ibuf->float_buffer.data);
+  const bool is_16bit = ((ibuf->foptions.flag & TIF_16BIT) && ibuf->float_data());
   const int file_channels = ibuf->planes >> 3;
   const TypeDesc data_format = is_16bit ? TypeDesc::UINT16 : TypeDesc::UINT8;
 
@@ -73,3 +77,5 @@ bool imb_save_tiff(ImBuf *ibuf, const char *filepath, int flags)
 
   return imb_oiio_write(ctx, filepath, file_spec);
 }
+
+}  // namespace blender

@@ -15,7 +15,7 @@ NODE_STORAGE_FUNCS(NodeGeometryCurveSelectHandles)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Bool>("Selection").field_source();
+  b.add_output<decl::Bool>("Selection"_ustr).field_source();
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -26,8 +26,7 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryCurveSelectHandles *data = MEM_new_for_free<NodeGeometryCurveSelectHandles>(
-      __func__);
+  NodeGeometryCurveSelectHandles *data = MEM_new<NodeGeometryCurveSelectHandles>(__func__);
 
   data->handle_type = GEO_NODE_CURVE_HANDLE_AUTO;
   data->mode = GEO_NODE_CURVE_HANDLE_LEFT | GEO_NODE_CURVE_HANDLE_RIGHT;
@@ -84,7 +83,6 @@ class HandleTypeFieldInput final : public bke::CurvesFieldInput {
         type_(type),
         mode_(mode)
   {
-    category_ = Category::Generated;
   }
 
   GVArray get_varray_for_context(const bke::CurvesGeometry &curves,
@@ -104,7 +102,7 @@ class HandleTypeFieldInput final : public bke::CurvesFieldInput {
     return get_default_hash(int(mode_), int(type_));
   }
 
-  bool is_equal_to(const fn::FieldNode &other) const final
+  bool is_equal_to(const fn::FieldInput &other) const final
   {
     if (const HandleTypeFieldInput *other_handle_selection =
             dynamic_cast<const HandleTypeFieldInput *>(&other))
@@ -127,16 +125,16 @@ static void node_geo_exec(GeoNodeExecParams params)
       (GeometryNodeCurveHandleType)storage.handle_type);
   const GeometryNodeCurveHandleMode mode = (GeometryNodeCurveHandleMode)storage.mode;
 
-  Field<bool> selection_field{std::make_shared<HandleTypeFieldInput>(handle_type, mode)};
-  params.set_output("Selection", std::move(selection_field));
+  Field<bool> selection_field = Field<bool>::from_input<HandleTypeFieldInput>(handle_type, mode);
+  params.set_output("Selection"_ustr, std::move(selection_field));
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
   geo_node_type_base(
-      &ntype, "GeometryNodeCurveHandleTypeSelection", GEO_NODE_CURVE_HANDLE_TYPE_SELECTION);
+      &ntype, "GeometryNodeCurveHandleTypeSelection"_ustr, GEO_NODE_CURVE_HANDLE_TYPE_SELECTION);
   ntype.ui_name = "Handle Type Selection";
   ntype.ui_description = "Provide a selection based on the handle types of Bézier control points";
   ntype.enum_name_legacy = "CURVE_HANDLE_TYPE_SELECTION";
@@ -144,13 +142,13 @@ static void node_register()
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.initfunc = node_init;
-  blender::bke::node_type_storage(ntype,
-                                  "NodeGeometryCurveSelectHandles",
-                                  node_free_standard_storage,
-                                  node_copy_standard_storage);
+  bke::node_type_storage(ntype,
+                         "NodeGeometryCurveSelectHandles",
+                         node_free_standard_storage,
+                         node_copy_standard_storage);
   ntype.draw_buttons = node_layout;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

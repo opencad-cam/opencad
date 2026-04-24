@@ -17,6 +17,8 @@
 
 #include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Interpolation
  * \{ */
@@ -828,7 +830,7 @@ float normalize_vn_vn(float *array_tar, const float *array_src, const int size)
     mul_vn_vn_fl(array_tar, array_src, size, 1.0f / d_sqrt);
   }
   else {
-    copy_vn_fl(array_tar, size, 0.0f);
+    std::fill_n(array_tar, size, 0.0f);
     d_sqrt = 0.0f;
   }
   return d_sqrt;
@@ -991,33 +993,6 @@ void interp_vn_vn(float *array_tar, const float *array_src, const float t, const
   }
 }
 
-void copy_vn_i(int *array_tar, const int size, const int val)
-{
-  int *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
-void copy_vn_short(short *array_tar, const int size, const short val)
-{
-  short *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
-void copy_vn_fl(float *array_tar, const int size, const float val)
-{
-  float *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1075,3 +1050,5 @@ void interp_v2_v2v2_db(double target[2], const double a[2], const double b[2], c
 }
 
 /** \} */
+
+}  // namespace blender

@@ -338,7 +338,7 @@ void Canvas::loadMap(const char *iFileName, const char *iMapName, uint iNbLevels
   qimg = &newMap;
 #endif
   /* OCIO_TODO: support different input color space */
-  ImBuf *qimg = IMB_load_image_from_filepath(filePath.c_str(), 0);
+  blender::ImBuf *qimg = blender::IMB_load_image_from_filepath(filePath.c_str(), 0);
   if (qimg == nullptr) {
     cerr << "Could not load image file " << filePath << endl;
     return;
@@ -352,10 +352,10 @@ void Canvas::loadMap(const char *iFileName, const char *iMapName, uint iNbLevels
     qimg = &scaledImg;
   }
 #endif
-  ImBuf *scaledImg;
+  blender::ImBuf *scaledImg;
   if ((qimg->x != width()) || (qimg->y != height())) {
     scaledImg = IMB_dupImBuf(qimg);
-    IMB_scale(scaledImg, width(), height(), IMBScaleFilter::Box, false);
+    blender::IMB_scale(scaledImg, width(), height(), blender::IMBScaleFilter::Box, false);
   }
 
   // deal with color image
@@ -382,9 +382,10 @@ void Canvas::loadMap(const char *iFileName, const char *iMapName, uint iNbLevels
   GrayImage tmp(w, h);
   uchar *pix;
 
+  uchar *qimg_byte_data = qimg->byte_data_for_write();
   for (y = 0; y < h; ++y) {
     for (x = 0; x < w; ++x) {
-      pix = qimg->byte_buffer.data + y * rowbytes + x * 4;
+      pix = qimg_byte_data + y * rowbytes + x * 4;
       float c = (pix[0] * 11 + pix[1] * 16 + pix[2] * 5) / 32;
       tmp.setPixel(x, y, c);
     }
@@ -414,14 +415,15 @@ void Canvas::loadMap(const char *iFileName, const char *iMapName, uint iNbLevels
 #endif
 
     // soc  QImage qtmp(ow, oh, QImage::Format_RGB32);
-    ImBuf *qtmp = IMB_allocImBuf(ow, oh, 32, IB_byte_data);
+    blender::ImBuf *qtmp = IMB_allocImBuf(ow, oh, 32, blender::IB_byte_data);
 
     // int k = (1 << i);
+    uchar *qtmp_byte_data = qtmp->byte_data_for_write();
     for (y = 0; y < oh; ++y) {
       for (x = 0; x < ow; ++x) {
         int c = pyramid->pixel(x, y, i);  // 255 * pyramid->pixel(x, y, i);
         // soc qtmp.setPixel(x, y, qRgb(c, c, c));
-        pix = qtmp->byte_buffer.data + y * rowbytes + x * 4;
+        pix = qtmp_byte_data + y * rowbytes + x * 4;
         pix[0] = pix[1] = pix[2] = c;
       }
     }
@@ -429,7 +431,7 @@ void Canvas::loadMap(const char *iFileName, const char *iMapName, uint iNbLevels
     stringstream filepath;
     filepath << base;
     filepath << i << ".bmp";
-    qtmp->ftype = IMB_FTYPE_BMP;
+    qtmp->ftype = blender::IMB_FTYPE_BMP;
     IMB_save_image(qtmp, const_cast<char *>(filepath.str().c_str()), 0);
   }
 
@@ -452,14 +454,14 @@ void Canvas::loadMap(const char *iFileName, const char *iMapName, uint iNbLevels
 float Canvas::readMapPixel(const char *iMapName, int level, int x, int y)
 {
   if (_maps.empty()) {
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       cout << "readMapPixel warning: no map was loaded " << endl;
     }
     return -1;
   }
   mapsMap::iterator m = _maps.find(iMapName);
   if (m == _maps.end()) {
-    if (G.debug & G_DEBUG_FREESTYLE) {
+    if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
       cout << "readMapPixel warning: no map was loaded with the name " << iMapName << endl;
     }
     return -1;

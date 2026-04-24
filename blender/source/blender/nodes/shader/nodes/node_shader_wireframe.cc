@@ -11,12 +11,14 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_wireframe_cc {
+namespace blender {
+
+namespace nodes::node_shader_wireframe_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Size").default_value(0.01f).min(0.0f).max(100.0f);
-  b.add_output<decl::Float>("Factor", "Fac");
+  b.add_input<decl::Float>("Size"_ustr).default_value(0.01f).min(0.0f).max(100.0f);
+  b.add_output<decl::Float>("Factor"_ustr, "Fac"_ustr);
 }
 
 static void node_shader_buts_wireframe(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -47,16 +49,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_wireframe_cc
+}  // namespace nodes::node_shader_wireframe_cc
 
 /* node type definition */
 void register_node_type_sh_wireframe()
 {
-  namespace file_ns = blender::nodes::node_shader_wireframe_cc;
+  namespace file_ns = nodes::node_shader_wireframe_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeWireframe", SH_NODE_WIREFRAME);
+  sh_node_type_base(&ntype, "ShaderNodeWireframe"_ustr, SH_NODE_WIREFRAME);
   ntype.ui_name = "Wireframe";
   ntype.ui_description =
       "Retrieve the edges of an object as it appears to Cycles.\nNote: as meshes are triangulated "
@@ -68,5 +70,7 @@ void register_node_type_sh_wireframe()
   ntype.gpu_fn = file_ns::node_shader_gpu_wireframe;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

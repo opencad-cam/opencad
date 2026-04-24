@@ -118,7 +118,7 @@ class MATERIAL_PT_gpencil_strokecolor(GPMaterialButtonsPanel, Panel):
         ma = context.material
         if ma is not None and ma.grease_pencil is not None:
             gpcolor = ma.grease_pencil
-            self.layout.prop(gpcolor, "show_stroke", text="")
+            self.layout.enabled = not gpcolor.lock
 
     def draw(self, context):
         layout = self.layout
@@ -133,6 +133,18 @@ class MATERIAL_PT_gpencil_strokecolor(GPMaterialButtonsPanel, Panel):
             col.prop(gpcolor, "mode")
 
             col.prop(gpcolor, "stroke_style", text="Style")
+
+            if gpcolor.mode in {'DOTS', 'BOX'}:
+                col.prop(gpcolor, "placement_mode")
+                if gpcolor.placement_mode == 'COUNT':
+                    col.prop(gpcolor, "placement_count")
+                    col.separator()
+                elif gpcolor.placement_mode == 'DENSITY':
+                    col.prop(gpcolor, "placement_density")
+                    col.separator()
+                elif gpcolor.placement_mode == 'RADIUS':
+                    col.prop(gpcolor, "placement_radius_spacing")
+                    col.separator()
 
             col.prop(gpcolor, "color", text="Base Color")
             col.prop(gpcolor, "use_stroke_holdout")
@@ -156,6 +168,54 @@ class MATERIAL_PT_gpencil_strokecolor(GPMaterialButtonsPanel, Panel):
                 col.prop(gpcolor, "use_overlap_strokes")
 
 
+class MATERIAL_PT_gpencil_random(GPMaterialButtonsPanel, Panel):
+    bl_label = "Randomize"
+    bl_parent_id = "MATERIAL_PT_gpencil_strokecolor"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        ma = context.material
+        gpcolor = ma.grease_pencil
+        if ma is not None and gpcolor is not None:
+            return gpcolor.mode in {'DOTS', 'BOX'}
+        return False
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        ma = context.material
+        gpcolor = ma.grease_pencil
+        if ma is not None and gpcolor is not None:
+            layout.use_property_split = False
+            layout.prop(gpcolor, "use_randomization", text=self.bl_label if self.is_popover else "")
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        ma = context.material
+        gpcolor = ma.grease_pencil
+        if ma is not None and gpcolor is not None:
+            col = layout.column()
+            col.enabled = gpcolor.use_randomization
+
+            col.prop(gpcolor, "random_size_factor", slider=True)
+            col.prop(gpcolor, "random_strength_factor", slider=True)
+            col.prop(gpcolor, "random_rotation_factor", slider=True)
+
+            col.separator()
+
+            col.prop(gpcolor, "random_hue_factor", slider=True)
+            col.prop(gpcolor, "random_saturation_factor", slider=True)
+            col.prop(gpcolor, "random_value_factor", slider=True)
+
+            col.separator()
+
+            col.prop(gpcolor, "random_noise_scale", slider=True)
+
+
 class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
     bl_label = "Fill"
     bl_parent_id = "MATERIAL_PT_gpencil_surface"
@@ -163,7 +223,7 @@ class MATERIAL_PT_gpencil_fillcolor(GPMaterialButtonsPanel, Panel):
     def draw_header(self, context):
         ma = context.material
         gpcolor = ma.grease_pencil
-        self.layout.prop(gpcolor, "show_fill", text="")
+        self.layout.enabled = not gpcolor.lock
 
     def draw(self, context):
         layout = self.layout
@@ -259,6 +319,7 @@ classes = (
     MATERIAL_PT_gpencil_material_presets,
     MATERIAL_PT_gpencil_surface,
     MATERIAL_PT_gpencil_strokecolor,
+    MATERIAL_PT_gpencil_random,
     MATERIAL_PT_gpencil_fillcolor,
     MATERIAL_PT_gpencil_settings,
     MATERIAL_PT_gpencil_animation,

@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace blender {
+
 struct ReportList;
 struct Scene;
 struct ScrArea;
@@ -72,6 +74,10 @@ void TEXTURE_OT_slot_copy(wmOperatorType *ot);
 void TEXTURE_OT_slot_paste(wmOperatorType *ot);
 void TEXTURE_OT_slot_move(wmOperatorType *ot);
 
+/* `render_texture_cache.cc` */
+
+void RENDER_OT_generate_texture_cache(wmOperatorType *ot);
+
 /* `render_internal.cc` */
 
 /* Base class for all WM_JOB_TYPE_RENDER jobs. */
@@ -99,3 +105,5 @@ void RENDER_OT_view_cancel(wmOperatorType *ot);
 /* `render_opengl.cc` */
 
 void RENDER_OT_opengl(wmOperatorType *ot);
+
+}  // namespace blender

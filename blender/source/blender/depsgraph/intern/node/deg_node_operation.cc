@@ -129,6 +129,8 @@ const char *operationCodeAsString(OperationCode opcode)
       return "BONE_DONE";
     case OperationCode::BONE_SEGMENTS:
       return "BONE_SEGMENTS";
+    case OperationCode::BONE_VISIBILITY:
+      return "BONE_VISIBILITY";
     /* Particle System. */
     case OperationCode::PARTICLE_SYSTEM_INIT:
       return "PARTICLE_SYSTEM_INIT";
@@ -197,6 +199,8 @@ const char *operationCodeAsString(OperationCode opcode)
     /* Sequencer. */
     case OperationCode::SEQUENCES_EVAL:
       return "SEQUENCES_EVAL";
+    case OperationCode::COMPOSITOR_EVAL:
+      return "COMPOSITOR_EVAL";
     /* instancing. */
     case OperationCode::INSTANCER:
       return "INSTANCER";

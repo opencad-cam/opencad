@@ -12,7 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_listbase.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
@@ -87,7 +87,7 @@ struct PointCloudBatchCache {
 
 static PointCloudBatchCache *pointcloud_batch_cache_get(PointCloud &pointcloud)
 {
-  return static_cast<PointCloudBatchCache *>(pointcloud.batch_cache);
+  return pointcloud.batch_cache;
 }
 
 static bool pointcloud_batch_cache_valid(PointCloud &pointcloud)
@@ -118,8 +118,8 @@ static void pointcloud_batch_cache_init(PointCloud &pointcloud)
   }
 
   cache->eval_cache.mat_len = BKE_id_material_used_with_fallback_eval(pointcloud.id);
-  cache->eval_cache.surface_per_mat = static_cast<gpu::Batch **>(
-      MEM_callocN(sizeof(gpu::Batch *) * cache->eval_cache.mat_len, __func__));
+  cache->eval_cache.surface_per_mat = MEM_new_array_zeroed<gpu::Batch *>(cache->eval_cache.mat_len,
+                                                                         __func__);
 
   cache->is_dirty = false;
 }
@@ -168,7 +168,7 @@ static void pointcloud_batch_cache_clear(PointCloud &pointcloud)
       GPU_BATCH_DISCARD_SAFE(cache->eval_cache.surface_per_mat[i]);
     }
   }
-  MEM_SAFE_FREE(cache->eval_cache.surface_per_mat);
+  MEM_SAFE_DELETE(cache->eval_cache.surface_per_mat);
 
   pointcloud_discard_attributes(*cache);
 }
@@ -184,7 +184,7 @@ void DRW_pointcloud_batch_cache_validate(PointCloud *pointcloud)
 void DRW_pointcloud_batch_cache_free(PointCloud *pointcloud)
 {
   pointcloud_batch_cache_clear(*pointcloud);
-  MEM_delete(static_cast<PointCloudBatchCache *>(pointcloud->batch_cache));
+  MEM_delete(pointcloud->batch_cache);
   pointcloud->batch_cache = nullptr;
 }
 
@@ -311,9 +311,9 @@ gpu::Batch **pointcloud_surface_shaded_get(PointCloud *pointcloud,
   VectorSet<std::string> attrs_needed;
 
   for (GPUMaterial *gpu_material : Span<GPUMaterial *>(gpu_materials, mat_len)) {
-    ListBase gpu_attrs = GPU_material_attributes(gpu_material);
-    LISTBASE_FOREACH (GPUMaterialAttribute *, gpu_attr, &gpu_attrs) {
-      const StringRef name = gpu_attr->name;
+    ListBaseT<GPUMaterialAttribute> gpu_attrs = GPU_material_attributes(gpu_material);
+    for (GPUMaterialAttribute &gpu_attr : gpu_attrs) {
+      const StringRef name = gpu_attr.name;
       if (!attributes.contains(name)) {
         continue;
       }

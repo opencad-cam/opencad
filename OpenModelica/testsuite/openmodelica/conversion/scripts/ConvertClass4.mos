@@ -1,4 +1,0 @@
-convertClass("Modelica.SIunits", "Modelica.Units.SI");
-convertClass("Modelica.SIunits.Icons", "Modelica.Units.Icons");
-convertClass("Modelica.SIunits.Conversions", "Modelica.Units.Conversions")
-convertClass("Modelica.SIunits.Conversions.NonSIunits", "Modelica.Units.NonSI")

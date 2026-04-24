@@ -245,18 +245,18 @@ static AssetShelf *update_active_shelf(const bContext &C,
 
   /* Case 2 (no active shelf or the poll of it isn't succeeding anymore. Poll all shelf types to
    * determine a new active one): */
-  LISTBASE_FOREACH (AssetShelf *, shelf, &shelf_regiondata.shelves) {
-    if (shelf == shelf_regiondata.active_shelf) {
+  for (AssetShelf &shelf : shelf_regiondata.shelves) {
+    if (&shelf == shelf_regiondata.active_shelf) {
       continue;
     }
 
-    if (type_poll_for_non_popup(C, ensure_shelf_has_type(*shelf), space_type)) {
+    if (type_poll_for_non_popup(C, ensure_shelf_has_type(shelf), space_type)) {
       /* Found a valid previously activated shelf, reactivate it. */
-      activate_shelf(shelf_regiondata, *shelf);
+      activate_shelf(shelf_regiondata, shelf);
       if (on_reactivate) {
-        on_reactivate(*shelf);
+        on_reactivate(shelf);
       }
-      return shelf;
+      return &shelf;
     }
   }
 
@@ -371,6 +371,37 @@ void region_message_subscribe(const wmRegionMessageSubscribeParams *params)
   msg_sub_value_region_tag_redraw.notify = ED_region_do_msg_notify_tag_redraw;
   WM_msg_subscribe_rna_prop(
       mbus, &workspace->id, workspace, WorkSpace, tools, &msg_sub_value_region_tag_redraw);
+
+  {
+    wmMsgSubscribeValue msg_sub_value_region_clear_remote_libraries{};
+    msg_sub_value_region_clear_remote_libraries.owner = region;
+    msg_sub_value_region_clear_remote_libraries.user_data = region;
+    msg_sub_value_region_clear_remote_libraries.notify = [](/* Follow wmMsgNotifyFn spec */
+                                                            bContext *C,
+                                                            wmMsgSubscribeKey * /*msg_key*/,
+                                                            wmMsgSubscribeValue *msg_val) {
+      ARegion *region = static_cast<ARegion *>(msg_val->owner);
+      RegionAssetShelf *shelf_regiondata = RegionAssetShelf::get_from_asset_shelf_region(*region);
+      AssetShelf *active_shelf = shelf_regiondata->active_shelf;
+      if (blender::asset_system::is_or_contains_remote_libraries(
+              active_shelf->settings.asset_library_reference))
+      {
+        asset::list::clear(&active_shelf->settings.asset_library_reference, C);
+      }
+    };
+    WM_msg_subscribe_rna_prop(mbus,
+                              nullptr,
+                              &U,
+                              PreferencesSystem,
+                              use_online_access,
+                              &msg_sub_value_region_clear_remote_libraries);
+    WM_msg_subscribe_rna_prop(mbus,
+                              nullptr,
+                              &U,
+                              PreferencesExperimental,
+                              use_remote_asset_libraries,
+                              &msg_sub_value_region_clear_remote_libraries);
+  }
 }
 
 void region_init(wmWindowManager *wm, ARegion *region)
@@ -733,7 +764,7 @@ int context(const bContext *C, const char *member, bContextDataResult *result)
       return CTX_RESULT_NO_DATA;
     }
 
-    CTX_data_pointer_set(result, &screen->id, &RNA_AssetShelf, active_shelf);
+    CTX_data_pointer_set(result, &screen->id, RNA_AssetShelf, active_shelf);
     return CTX_RESULT_OK;
   }
 
@@ -745,7 +776,7 @@ int context(const bContext *C, const char *member, bContextDataResult *result)
 
     CTX_data_pointer_set(result,
                          &screen->id,
-                         &RNA_AssetLibraryReference,
+                         RNA_AssetLibraryReference,
                          &active_shelf->settings.asset_library_reference);
     return CTX_RESULT_OK;
   }
@@ -763,7 +794,7 @@ int context(const bContext *C, const char *member, bContextDataResult *result)
     }
 
     const PointerRNA *asset_ptr = CTX_store_ptr_lookup(
-        but_context, "asset", &RNA_AssetRepresentation);
+        but_context, "asset", RNA_AssetRepresentation);
     if (!asset_ptr) {
       return CTX_RESULT_NO_DATA;
     }
@@ -777,7 +808,7 @@ int context(const bContext *C, const char *member, bContextDataResult *result)
 
 static PointerRNA active_shelf_ptr_from_context(const bContext *C)
 {
-  return CTX_data_pointer_get_type(C, "asset_shelf", &RNA_AssetShelf);
+  return CTX_data_pointer_get_type(C, "asset_shelf", RNA_AssetShelf);
 }
 
 AssetShelf *active_shelf_from_context(const bContext *C)
@@ -889,7 +920,7 @@ static void asset_shelf_header_draw(const bContext *C, Header *header)
 
 static void header_regiontype_register(ARegionType *region_type, const int space_type)
 {
-  HeaderType *ht = MEM_callocN<HeaderType>(__func__);
+  HeaderType *ht = MEM_new_zeroed<HeaderType>(__func__);
   STRNCPY_UTF8(ht->idname, "ASSETSHELF_HT_settings");
   ht->space_type = space_type;
   ht->region_type = RGN_TYPE_ASSET_SHELF_HEADER;
@@ -916,23 +947,24 @@ void types_register(ARegionType *region_type, const int space_type)
 
 void type_unlink(const Main &bmain, const AssetShelfType &shelf_type)
 {
-  LISTBASE_FOREACH (bScreen *, screen, &bmain.screens) {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-        ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase : &sl->regionbase;
-        LISTBASE_FOREACH (ARegion *, region, regionbase) {
-          if (region->regiontype != RGN_TYPE_ASSET_SHELF) {
+  for (bScreen &screen : bmain.screens) {
+    for (ScrArea &area : screen.areabase) {
+      for (SpaceLink &sl : area.spacedata) {
+        ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
+                                                                         &sl.regionbase;
+        for (ARegion &region : *regionbase) {
+          if (region.regiontype != RGN_TYPE_ASSET_SHELF) {
             continue;
           }
 
           RegionAssetShelf *shelf_regiondata = RegionAssetShelf::get_from_asset_shelf_region(
-              *region);
+              region);
           if (!shelf_regiondata) {
             continue;
           }
-          LISTBASE_FOREACH (AssetShelf *, shelf, &shelf_regiondata->shelves) {
-            if (shelf->type == &shelf_type) {
-              shelf->type = nullptr;
+          for (AssetShelf &shelf : shelf_regiondata->shelves) {
+            if (shelf.type == &shelf_type) {
+              shelf.type = nullptr;
             }
           }
 
@@ -955,10 +987,10 @@ void type_unlink(const Main &bmain, const AssetShelfType &shelf_type)
 void show_catalog_in_visible_shelves(const bContext &C, const StringRefNull catalog_path)
 {
   wmWindowManager *wm = CTX_wm_manager(&C);
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    const bScreen *screen = WM_window_get_active_screen(win);
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      if (AssetShelf *shelf = asset::shelf::active_shelf_from_area(area)) {
+  for (wmWindow &win : wm->windows) {
+    const bScreen *screen = WM_window_get_active_screen(&win);
+    for (ScrArea &area : screen->areabase) {
+      if (AssetShelf *shelf = asset::shelf::active_shelf_from_area(&area)) {
         settings_set_catalog_path_enabled(*shelf, catalog_path.c_str());
       }
     }

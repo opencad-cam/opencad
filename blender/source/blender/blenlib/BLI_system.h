@@ -6,20 +6,22 @@
 
 #include <stdio.h>
 
+namespace blender {
+
 /** \file
  * \ingroup bli
  */
 
-int BLI_cpu_support_sse2(void);
-int BLI_cpu_support_sse42(void);
+int BLI_cpu_support_sse2();
+int BLI_cpu_support_sse42();
 /**
  * Write a backtrace into a file for systems which support it.
  */
 void BLI_system_backtrace_with_os_info(FILE *fp, const void *os_info);
 void BLI_system_backtrace(FILE *fp);
 
-/** Get CPU brand, result is to be MEM_freeN()-ed. */
-char *BLI_cpu_brand_string(void);
+/** Get CPU brand, result is to be MEM_delete()-ed. */
+char *BLI_cpu_brand_string();
 
 /**
  * Obtain the hostname from the system.
@@ -34,9 +36,9 @@ char *BLI_cpu_brand_string(void);
 void BLI_hostname_get(char *buffer, size_t buffer_maxncpy);
 
 /** Get maximum addressable memory in megabytes. */
-size_t BLI_system_memory_max_in_megabytes(void);
+size_t BLI_system_memory_max_in_megabytes();
 /** Get maximum addressable memory in megabytes (clamped to #INT_MAX). */
-int BLI_system_memory_max_in_megabytes_int(void);
+int BLI_system_memory_max_in_megabytes_int();
 
 /* For `getpid`. */
 #ifdef WIN32
@@ -60,3 +62,5 @@ void BLI_windows_exception_show_dialog(const char *filepath_crashlog,
 #else
 #  define BLI_SYSTEM_PID_H <unistd.h>
 #endif
+
+}  // namespace blender

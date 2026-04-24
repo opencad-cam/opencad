@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_bounds.hh"
 #include "BLI_bounds_types.hh"
 #include "BLI_math_vector_types.hh"
@@ -21,41 +17,41 @@
 
 #include "node_composite_util.hh"
 
-/* **************** Crop  ******************** */
-
 namespace blender::nodes::node_composite_crop_cc {
 
-static void cmp_node_crop_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Int>("X")
+  b.add_input<decl::Int>("X"_ustr)
       .default_value(0)
       .min(0)
 
       .description("The X position of the lower left corner of the crop region");
-  b.add_input<decl::Int>("Y")
+  b.add_input<decl::Int>("Y"_ustr)
       .default_value(0)
       .min(0)
 
       .description("The Y position of the lower left corner of the crop region");
-  b.add_input<decl::Int>("Width")
+  b.add_input<decl::Int>("Width"_ustr)
       .default_value(1920)
       .min(1)
 
       .description("The width of the crop region");
-  b.add_input<decl::Int>("Height")
+  b.add_input<decl::Int>("Height"_ustr)
       .default_value(1080)
       .min(1)
 
       .description("The height of the crop region");
-  b.add_input<decl::Bool>("Alpha Crop")
+  b.add_input<decl::Bool>("Alpha Crop"_ustr)
       .default_value(false)
 
       .description(
@@ -158,7 +154,7 @@ class CropOperation : public NodeOperation {
   {
     const Bounds<int2> bounds = this->compute_cropping_bounds();
 
-    gpu::Shader *shader = this->context().get_shader("compositor_image_crop");
+    gpu::Shader *shader = this->context().get_shader("compositor_image_crop_float4");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_2iv(shader, "lower_bound", bounds.min);
@@ -238,29 +234,27 @@ class CropOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new CropOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_crop_cc
-
-static void register_node_type_cmp_crop()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_crop_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeCrop", CMP_NODE_CROP);
+  cmp_node_type_base(&ntype, "CompositorNodeCrop"_ustr, CMP_NODE_CROP);
   ntype.ui_name = "Crop";
   ntype.ui_description =
       "Crops image to a smaller region, either making the cropped area transparent or resizing "
       "the image";
   ntype.enum_name_legacy = "CROP";
   ntype.nclass = NODE_CLASS_DISTORT;
-  ntype.declare = file_ns::cmp_node_crop_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_crop)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_crop_cc

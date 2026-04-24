@@ -8,12 +8,15 @@
  * \ingroup bke
  */
 
+#include "DNA_listBase.h"
+
 #include "BLI_enum_flags.hh"
 #include "BLI_sys_types.h"
 
+namespace blender {
+
 struct Camera;
 struct ImBuf;
-struct ListBase;
 struct MovieClip;
 struct MovieClipUser;
 struct MovieDistortion;
@@ -124,7 +127,8 @@ void BKE_tracking_clipboard_paste_tracks(MovieTracking *tracking,
  *
  * It is required that caller will append at least one marker to avoid degenerate tracks.
  */
-MovieTrackingTrack *BKE_tracking_track_add_empty(MovieTracking *tracking, ListBase *tracks_list);
+MovieTrackingTrack *BKE_tracking_track_add_empty(MovieTracking *tracking,
+                                                 ListBaseT<MovieTrackingTrack> *tracks_list);
 /**
  * Add new track to a specified tracks base.
  *
@@ -135,7 +139,7 @@ MovieTrackingTrack *BKE_tracking_track_add_empty(MovieTracking *tracking, ListBa
  * pattern and search regions.
  */
 MovieTrackingTrack *BKE_tracking_track_add(MovieTracking *tracking,
-                                           ListBase *tracksbase,
+                                           ListBaseT<MovieTrackingTrack> *tracksbase,
                                            float x,
                                            float y,
                                            int framenr,
@@ -150,7 +154,8 @@ MovieTrackingTrack *BKE_tracking_track_duplicate(MovieTrackingTrack *track);
  * if it's not name of specified track will be changed
  * keeping names of all other tracks unchanged.
  */
-void BKE_tracking_track_unique_name(ListBase *tracksbase, MovieTrackingTrack *track);
+void BKE_tracking_track_unique_name(ListBaseT<MovieTrackingTrack> *tracksbase,
+                                    MovieTrackingTrack *track);
 /**
  * Free specified track, only frees contents of a structure
  * (if track is allocated in heap, it shall be handled outside).
@@ -175,7 +180,7 @@ void BKE_tracking_tracks_first_last_frame_minmax(/*const*/ MovieTrackingTrack **
                                                  int *r_first_frame,
                                                  int *r_last_frame);
 
-int BKE_tracking_count_selected_tracks_in_list(const ListBase *tracks_list);
+int BKE_tracking_count_selected_tracks_in_list(const ListBaseT<MovieTrackingTrack> *tracks_list);
 int BKE_tracking_count_selected_tracks_in_active_object(/*const*/ MovieTracking *tracking);
 
 /**
@@ -238,9 +243,8 @@ void BKE_tracking_tracks_average(MovieTrackingTrack *dst_track,
                                  /*const*/ MovieTrackingTrack **src_tracks,
                                  int num_src_tracks);
 
-MovieTrackingTrack *BKE_tracking_track_get_for_selection_index(MovieTracking *tracking,
-                                                               int selection_index,
-                                                               ListBase **r_tracksbase);
+MovieTrackingTrack *BKE_tracking_track_get_for_selection_index(
+    MovieTracking *tracking, int selection_index, ListBaseT<MovieTrackingTrack> **r_tracksbase);
 
 float *BKE_tracking_track_get_mask(int frame_width,
                                    int frame_height,
@@ -255,12 +259,12 @@ float BKE_tracking_track_get_weight_for_marker(MovieClip *clip,
  * Selection.
  */
 
-void BKE_tracking_track_select(ListBase *tracksbase,
+void BKE_tracking_track_select(ListBaseT<MovieTrackingTrack> *tracksbase,
                                MovieTrackingTrack *track,
                                eTrackArea area,
                                bool extend);
 void BKE_tracking_track_deselect(MovieTrackingTrack *track, eTrackArea area);
-void BKE_tracking_tracks_deselect_all(ListBase *tracksbase);
+void BKE_tracking_tracks_deselect_all(ListBaseT<MovieTrackingTrack> *tracksbase);
 
 /* --------------------------------------------------------------------
  * Marker.
@@ -342,11 +346,12 @@ void BKE_tracking_marker_get_subframe_position(MovieTrackingTrack *track,
 /**
  * Creates new plane track out of selected point tracks.
  */
-MovieTrackingPlaneTrack *BKE_tracking_plane_track_add(MovieTracking *tracking,
-                                                      ListBase *plane_tracks_base,
-                                                      ListBase *tracks,
-                                                      int framenr);
-void BKE_tracking_plane_track_unique_name(ListBase *plane_tracks_base,
+MovieTrackingPlaneTrack *BKE_tracking_plane_track_add(
+    MovieTracking *tracking,
+    ListBaseT<MovieTrackingPlaneTrack> *plane_tracks_base,
+    ListBaseT<MovieTrackingTrack> *tracks,
+    int framenr);
+void BKE_tracking_plane_track_unique_name(ListBaseT<MovieTrackingPlaneTrack> *plane_tracks_base,
                                           MovieTrackingPlaneTrack *plane_track);
 /**
  * Free specified plane track, only frees contents of a structure
@@ -361,7 +366,7 @@ bool BKE_tracking_plane_track_has_marker_at_frame(MovieTrackingPlaneTrack *plane
 bool BKE_tracking_plane_track_has_enabled_marker_at_frame(MovieTrackingPlaneTrack *plane_track,
                                                           int framenr);
 
-void BKE_tracking_plane_tracks_deselect_all(ListBase *plane_tracks_base);
+void BKE_tracking_plane_tracks_deselect_all(ListBaseT<MovieTrackingPlaneTrack> *plane_tracks_base);
 
 bool BKE_tracking_plane_track_has_point_track(MovieTrackingPlaneTrack *plane_track,
                                               MovieTrackingTrack *track);
@@ -510,19 +515,6 @@ ImBuf *BKE_tracking_distort_frame(MovieTracking *tracking,
                                   int calibration_height,
                                   float overscan);
 
-/* Given the size of an image that will be distorted/undistorted by the given tracking, compute the
- * number of pixels that the image will grow/shrink by in each of the four bounds of the image as a
- * result of the distortion/undistortion. The deltas for the bounds are positive for expansion and
- * negative for shrinking. */
-void BKE_tracking_distortion_bounds_deltas(MovieDistortion *distortion,
-                                           const int size[2],
-                                           const int calibration_size[2],
-                                           const bool undistort,
-                                           int *r_right,
-                                           int *r_left,
-                                           int *r_bottom,
-                                           int *r_top);
-
 /* --------------------------------------------------------------------
  * Image sampling.
  */
@@ -669,7 +661,7 @@ void BKE_tracking_reconstruction_scale(MovieTracking *tracking, float scale[3]);
  * Detect features using FAST detector.
  */
 void BKE_tracking_detect_fast(MovieTracking *tracking,
-                              ListBase *tracksbase,
+                              ListBaseT<MovieTrackingTrack> *tracksbase,
                               ImBuf *ibuf,
                               int framenr,
                               int margin,
@@ -682,7 +674,7 @@ void BKE_tracking_detect_fast(MovieTracking *tracking,
  * Detect features using Harris detector.
  */
 void BKE_tracking_detect_harris(MovieTracking *tracking,
-                                ListBase *tracksbase,
+                                ListBaseT<MovieTrackingTrack> *tracksbase,
                                 ImBuf *ibuf,
                                 int framenr,
                                 int margin,
@@ -807,3 +799,5 @@ void BKE_tracking_get_rna_path_prefix_for_plane_track(const MovieTracking *track
 
 #define PLANE_TRACK_VIEW_SELECTED(plane_track) \
   ((((plane_track)->flag & PLANE_TRACK_HIDDEN) == 0) && ((plane_track)->flag & SELECT))
+
+}  // namespace blender

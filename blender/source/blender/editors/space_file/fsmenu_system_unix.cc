@@ -33,10 +33,13 @@
 #  include <mntent.h>
 
 #  include "CLG_log.h"
+
 static CLG_LogRef LOG = {"system.path"};
 #endif
 
 #include "fsmenu.hh"
+
+namespace blender {
 
 struct FSMenu;
 
@@ -112,7 +115,7 @@ static GHash *fsmenu_xdg_user_dirs_parse(const char *home)
 static void fsmenu_xdg_user_dirs_free(GHash *xdg_map)
 {
   if (xdg_map != nullptr) {
-    BLI_ghash_free(xdg_map, MEM_freeN, MEM_freeN);
+    BLI_ghash_free(xdg_map, MEM_delete_void, MEM_delete_void);
   }
 }
 
@@ -132,7 +135,8 @@ static void fsmenu_xdg_insert_entry(GHash *xdg_map,
                                     const char *home)
 {
   char xdg_path_buf[FILE_MAXDIR];
-  const char *xdg_path = (const char *)(xdg_map ? BLI_ghash_lookup(xdg_map, key) : nullptr);
+  const char *xdg_path = static_cast<const char *>(xdg_map ? BLI_ghash_lookup(xdg_map, key) :
+                                                             nullptr);
   if (xdg_path == nullptr) {
     BLI_path_join(xdg_path_buf, sizeof(xdg_path_buf), home, default_path);
     xdg_path = xdg_path_buf;
@@ -271,3 +275,5 @@ void fsmenu_read_system(FSMenu *fsmenu, int read_bookmarks)
     }
   }
 }
+
+}  // namespace blender

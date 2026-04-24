@@ -25,6 +25,9 @@
 #include "BKE_customdata.hh"
 #include "BKE_data_transfer.h"
 #include "BKE_mesh_remap.hh"
+#include "BKE_node.hh"
+#include "BKE_node_runtime.hh"
+#include "BKE_node_tree_interface.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -34,7 +37,9 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
+
+namespace blender {
 
 const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
     RNA_ENUM_ITEM_HEADING(N_("Modify"), nullptr),
@@ -553,9 +558,9 @@ const EnumPropertyItem rna_enum_shrinkwrap_face_cull_items[] = {
 };
 
 const EnumPropertyItem rna_enum_node_warning_type_items[] = {
-    {int(blender::nodes::NodeWarningType::Error), "ERROR", ICON_CANCEL, "Error", ""},
-    {int(blender::nodes::NodeWarningType::Warning), "WARNING", ICON_ERROR, "Warning", ""},
-    {int(blender::nodes::NodeWarningType::Info), "INFO", ICON_INFO, "Info", ""},
+    {int(nodes::NodeWarningType::Error), "ERROR", ICON_CANCEL, "Error", ""},
+    {int(nodes::NodeWarningType::Warning), "WARNING", ICON_ERROR, "Warning", ""},
+    {int(nodes::NodeWarningType::Info), "INFO", ICON_INFO, "Info", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -830,6 +835,8 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+}  // namespace blender
+
 #ifdef RNA_RUNTIME
 
 #  include <algorithm>
@@ -842,12 +849,17 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 #  include "DNA_object_force_types.h"
 #  include "DNA_particle_types.h"
 
+#  include "BLI_listbase.h"
+#  include "BLI_string.h"
+#  include "BLI_string_utf8.h"
+
 #  include "BKE_cachefile.hh"
 #  include "BKE_compute_contexts.hh"
 #  include "BKE_context.hh"
 #  include "BKE_curveprofile.h"
 #  include "BKE_deform.hh"
 #  include "BKE_fluid.h"
+#  include "BKE_lib_id.hh"
 #  include "BKE_material.hh"
 #  include "BKE_mesh_runtime.hh"
 #  include "BKE_modifier.hh"
@@ -865,27 +877,36 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 
 #  include "MOD_nodes.hh"
 
+#  include "NOD_nodes_srna.hh"
+
 #  include "ED_object.hh"
 
 #  ifdef WITH_ALEMBIC
 #    include "ABC_alembic.h"
 #  endif
 
+namespace blender {
+
 static void rna_UVProject_projectors_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
-  UVProjectModifierData *uvp = (UVProjectModifierData *)ptr->data;
-  rna_iterator_array_begin(
-      iter, ptr, (void *)uvp->projectors, sizeof(Object *), uvp->projectors_num, 0, nullptr);
+  UVProjectModifierData *uvp = static_cast<UVProjectModifierData *>(ptr->data);
+  rna_iterator_array_begin(iter,
+                           ptr,
+                           static_cast<void *>(uvp->projectors),
+                           sizeof(Object *),
+                           uvp->projectors_num,
+                           0,
+                           nullptr);
 }
 
 static StructRNA *rna_Modifier_refine(PointerRNA *ptr)
 {
-  ModifierData *md = (ModifierData *)ptr->data;
+  ModifierData *md = static_cast<ModifierData *>(ptr->data);
   const ModifierTypeInfo *modifier_type = BKE_modifier_get_info(ModifierType(md->type));
   if (modifier_type != nullptr) {
-    return modifier_type->srna;
+    return *modifier_type->srna;
   }
-  return &RNA_Modifier;
+  return RNA_Modifier;
 }
 
 static void rna_Modifier_name_set(PointerRNA *ptr, const char *value)
@@ -901,7 +922,7 @@ static void rna_Modifier_name_set(PointerRNA *ptr, const char *value)
 
   /* make sure the name is truly unique */
   if (ptr->owner_id) {
-    Object *ob = (Object *)ptr->owner_id;
+    Object *ob = id_cast<Object *>(ptr->owner_id);
     BKE_modifier_unique_name(&ob->modifiers, md);
   }
 
@@ -980,7 +1001,7 @@ static void rna_Modifier_use_pin_to_last_set(PointerRNA *ptr, bool value)
       md_iter = md_iter->prev;
     }
   }
-  blender::ed::object::modifier_move_to_index(nullptr, RPT_ERROR, object, md, to_index, true);
+  ed::object::modifier_move_to_index(nullptr, RPT_ERROR, object, md, to_index, true);
 }
 
 /* Vertex Groups */
@@ -1035,19 +1056,19 @@ RNA_MOD_VGROUP_NAME_SET(GreasePencilBuild, target_vgname);
 
 static void rna_ExplodeModifier_vgroup_get(PointerRNA *ptr, char *value)
 {
-  ExplodeModifierData *emd = (ExplodeModifierData *)ptr->data;
+  ExplodeModifierData *emd = static_cast<ExplodeModifierData *>(ptr->data);
   rna_object_vgroup_name_index_get(ptr, value, emd->vgroup);
 }
 
 static int rna_ExplodeModifier_vgroup_length(PointerRNA *ptr)
 {
-  ExplodeModifierData *emd = (ExplodeModifierData *)ptr->data;
+  ExplodeModifierData *emd = static_cast<ExplodeModifierData *>(ptr->data);
   return rna_object_vgroup_name_index_length(ptr, emd->vgroup);
 }
 
 static void rna_ExplodeModifier_vgroup_set(PointerRNA *ptr, const char *value)
 {
-  ExplodeModifierData *emd = (ExplodeModifierData *)ptr->data;
+  ExplodeModifierData *emd = static_cast<ExplodeModifierData *>(ptr->data);
   rna_object_vgroup_name_index_set(ptr, value, &emd->vgroup);
 }
 
@@ -1079,7 +1100,7 @@ static void modifier_object_set(Object *self, Object **ob_p, int type, PointerRN
 
   if (!self || ob != self) {
     if (!ob || type == OB_EMPTY || ob->type == type) {
-      id_lib_extern((ID *)ob);
+      id_lib_extern(id_cast<ID *>(ob));
       *ob_p = ob;
     }
   }
@@ -1123,12 +1144,12 @@ static void rna_HookModifier_object_set(PointerRNA *ptr,
                                         PointerRNA value,
                                         ReportList * /*reports*/)
 {
-  Object *owner = (Object *)ptr->owner_id;
+  Object *owner = id_cast<Object *>(ptr->owner_id);
   HookModifierData *hmd = static_cast<HookModifierData *>(ptr->data);
-  Object *ob = (Object *)value.data;
+  Object *ob = static_cast<Object *>(value.data);
 
   hmd->object = ob;
-  id_lib_extern((ID *)ob);
+  id_lib_extern(id_cast<ID *>(ob));
   BKE_object_modifier_hook_reset(owner, hmd);
 }
 
@@ -1153,7 +1174,7 @@ static bool rna_HookModifier_object_override_apply(Main *bmain,
   /* We need a special handling here because setting hook target resets invert parent matrix,
    * which is evil in our case. */
   HookModifierData *hmd = static_cast<HookModifierData *>(ptr_dst->data);
-  Object *owner = (Object *)ptr_dst->owner_id;
+  Object *owner = id_cast<Object *>(ptr_dst->owner_id);
   Object *target_dst = static_cast<Object *>(RNA_property_pointer_get(ptr_dst, prop_dst).data);
   Object *target_src = static_cast<Object *>(RNA_property_pointer_get(ptr_src, prop_src).data);
 
@@ -1174,7 +1195,7 @@ static bool rna_HookModifier_object_override_apply(Main *bmain,
 
 static void rna_HookModifier_subtarget_set(PointerRNA *ptr, const char *value)
 {
-  Object *owner = (Object *)ptr->owner_id;
+  Object *owner = id_cast<Object *>(ptr->owner_id);
   HookModifierData *hmd = static_cast<HookModifierData *>(ptr->data);
 
   STRNCPY(hmd->subtarget, value);
@@ -1203,7 +1224,7 @@ static void rna_HookModifier_vertex_indices_set(HookModifierData *hmd,
                                                 int indices_num)
 {
   if (indices_num <= 0) {
-    MEM_SAFE_FREE(hmd->indexar);
+    MEM_SAFE_DELETE(hmd->indexar);
     hmd->indexar_num = 0;
   }
   else {
@@ -1217,7 +1238,7 @@ static void rna_HookModifier_vertex_indices_set(HookModifierData *hmd,
 
     /* Copy and sort the index array. */
     size_t size = sizeof(int) * indices_num;
-    int *buffer = MEM_malloc_arrayN<int>(size_t(indices_num), "hook indexar");
+    int *buffer = MEM_new_array_uninitialized<int>(size_t(indices_num), "hook indexar");
     memcpy(buffer, indices, size);
 
     qsort(buffer, indices_num, sizeof(int), BLI_sortutil_cmp_int);
@@ -1226,13 +1247,13 @@ static void rna_HookModifier_vertex_indices_set(HookModifierData *hmd,
     for (int i = 1; i < indices_num; i++) {
       if (buffer[i] == buffer[i - 1]) {
         BKE_reportf(reports, RPT_ERROR, "Duplicate index %d in vertex_indices_set", buffer[i]);
-        MEM_freeN(buffer);
+        MEM_delete(buffer);
         return;
       }
     }
 
     /* Success - save the new array. */
-    MEM_SAFE_FREE(hmd->indexar);
+    MEM_SAFE_DELETE(hmd->indexar);
     hmd->indexar = buffer;
     hmd->indexar_num = indices_num;
   }
@@ -1240,15 +1261,15 @@ static void rna_HookModifier_vertex_indices_set(HookModifierData *hmd,
 
 static PointerRNA rna_UVProjector_object_get(PointerRNA *ptr)
 {
-  Object **ob = (Object **)ptr->data;
+  Object **ob = static_cast<Object **>(ptr->data);
   return RNA_id_pointer_create(reinterpret_cast<ID *>(*ob));
 }
 
 static void rna_UVProjector_object_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
 {
-  Object **ob_p = (Object **)ptr->data;
-  Object *ob = (Object *)value.data;
-  id_lib_extern((ID *)ob);
+  Object **ob_p = static_cast<Object **>(ptr->data);
+  Object *ob = static_cast<Object *>(value.data);
+  id_lib_extern(id_cast<ID *>(ob));
   *ob_p = ob;
 }
 
@@ -1258,8 +1279,8 @@ static void rna_UVProjector_object_set(PointerRNA *ptr, PointerRNA value, Report
 
 static void rna_fluid_set_type(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  FluidModifierData *fmd = (FluidModifierData *)ptr->data;
-  Object *ob = (Object *)ptr->owner_id;
+  FluidModifierData *fmd = static_cast<FluidModifierData *>(ptr->data);
+  Object *ob = id_cast<Object *>(ptr->owner_id);
 
   /* nothing changed */
   if ((fmd->type & MOD_FLUID_TYPE_DOMAIN) && fmd->domain) {
@@ -1289,7 +1310,7 @@ static void rna_fluid_set_type(Main *bmain, Scene *scene, PointerRNA *ptr)
 static void rna_MultiresModifier_level_range(
     PointerRNA *ptr, int *min, int *max, int * /*softmin*/, int * /*softmax*/)
 {
-  MultiresModifierData *mmd = (MultiresModifierData *)ptr->data;
+  MultiresModifierData *mmd = static_cast<MultiresModifierData *>(ptr->data);
 
   *min = 0;
   *max = max_ii(0, mmd->totlvl); /* intentionally _not_ -1 */
@@ -1297,24 +1318,24 @@ static void rna_MultiresModifier_level_range(
 
 static bool rna_MultiresModifier_external_get(PointerRNA *ptr)
 {
-  Object *ob = (Object *)ptr->owner_id;
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Object *ob = id_cast<Object *>(ptr->owner_id);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
 
   return CustomData_external_test(&mesh->corner_data, CD_MDISPS);
 }
 
 static void rna_MultiresModifier_filepath_get(PointerRNA *ptr, char *value)
 {
-  Object *ob = (Object *)ptr->owner_id;
-  CustomDataExternal *external = ((Mesh *)ob->data)->corner_data.external;
+  Object *ob = id_cast<Object *>(ptr->owner_id);
+  CustomDataExternal *external = (id_cast<Mesh *>(ob->data))->corner_data.external;
 
   strcpy(value, (external) ? external->filepath : "");
 }
 
 static void rna_MultiresModifier_filepath_set(PointerRNA *ptr, const char *value)
 {
-  Object *ob = (Object *)ptr->owner_id;
-  CustomDataExternal *external = ((Mesh *)ob->data)->corner_data.external;
+  Object *ob = id_cast<Object *>(ptr->owner_id);
+  CustomDataExternal *external = (id_cast<Mesh *>(ob->data))->corner_data.external;
 
   if (external && !STREQ(external->filepath, value)) {
     STRNCPY(external->filepath, value);
@@ -1324,52 +1345,52 @@ static void rna_MultiresModifier_filepath_set(PointerRNA *ptr, const char *value
 
 static int rna_MultiresModifier_filepath_length(PointerRNA *ptr)
 {
-  Object *ob = (Object *)ptr->owner_id;
-  CustomDataExternal *external = ((Mesh *)ob->data)->corner_data.external;
+  Object *ob = id_cast<Object *>(ptr->owner_id);
+  CustomDataExternal *external = (id_cast<Mesh *>(ob->data))->corner_data.external;
 
   return strlen((external) ? external->filepath : "");
 }
 
 static int rna_ShrinkwrapModifier_face_cull_get(PointerRNA *ptr)
 {
-  ShrinkwrapModifierData *swm = (ShrinkwrapModifierData *)ptr->data;
+  ShrinkwrapModifierData *swm = static_cast<ShrinkwrapModifierData *>(ptr->data);
   return swm->shrinkOpts & MOD_SHRINKWRAP_CULL_TARGET_MASK;
 }
 
 static void rna_ShrinkwrapModifier_face_cull_set(PointerRNA *ptr, int value)
 {
-  ShrinkwrapModifierData *swm = (ShrinkwrapModifierData *)ptr->data;
+  ShrinkwrapModifierData *swm = static_cast<ShrinkwrapModifierData *>(ptr->data);
   swm->shrinkOpts = (swm->shrinkOpts & ~MOD_SHRINKWRAP_CULL_TARGET_MASK) | value;
 }
 
 static bool rna_MeshDeformModifier_is_bound_get(PointerRNA *ptr)
 {
-  return (((MeshDeformModifierData *)ptr->data)->bindcagecos != nullptr);
+  return ((static_cast<MeshDeformModifierData *>(ptr->data))->bindcagecos != nullptr);
 }
 
 static PointerRNA rna_SoftBodyModifier_settings_get(PointerRNA *ptr)
 {
-  Object *ob = (Object *)ptr->owner_id;
-  return RNA_pointer_create_with_parent(*ptr, &RNA_SoftBodySettings, ob->soft);
+  Object *ob = id_cast<Object *>(ptr->owner_id);
+  return RNA_pointer_create_with_parent(*ptr, RNA_SoftBodySettings, ob->soft);
 }
 
 static PointerRNA rna_SoftBodyModifier_point_cache_get(PointerRNA *ptr)
 {
-  Object *ob = (Object *)ptr->owner_id;
-  return RNA_pointer_create_with_parent(*ptr, &RNA_PointCache, ob->soft->shared->pointcache);
+  Object *ob = id_cast<Object *>(ptr->owner_id);
+  return RNA_pointer_create_with_parent(*ptr, RNA_PointCache, ob->soft->shared->pointcache);
 }
 
 static PointerRNA rna_CollisionModifier_settings_get(PointerRNA *ptr)
 {
-  Object *ob = (Object *)ptr->owner_id;
-  return RNA_pointer_create_with_parent(*ptr, &RNA_CollisionSettings, ob->pd);
+  Object *ob = id_cast<Object *>(ptr->owner_id);
+  return RNA_pointer_create_with_parent(*ptr, RNA_CollisionSettings, ob->pd);
 }
 
 /* Special update function for setting the number of segments of the modifier that also resamples
  * the segments in the custom profile. */
 static void rna_BevelModifier_update_segments(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  BevelModifierData *bmd = (BevelModifierData *)ptr->data;
+  BevelModifierData *bmd = static_cast<BevelModifierData *>(ptr->data);
   if (RNA_enum_get(ptr, "profile_type") == MOD_BEVEL_PROFILE_CUSTOM) {
     short segments = short(RNA_int_get(ptr, "segments"));
     BKE_curveprofile_init(bmd->custom_profile, segments);
@@ -1382,19 +1403,19 @@ static void rna_BevelModifier_weight_attribute_visit_for_search(
     PointerRNA *ptr,
     PropertyRNA * /*prop*/,
     const char * /*edit_text*/,
-    blender::FunctionRef<void(StringPropertySearchVisitParams)> visit_fn)
+    FunctionRef<void(StringPropertySearchVisitParams)> visit_fn)
 {
-  Object *ob = (Object *)ptr->owner_id;
+  Object *ob = id_cast<Object *>(ptr->owner_id);
   if (ob->type != OB_MESH) {
     return;
   }
-  PointerRNA mesh_ptr = RNA_id_pointer_create(static_cast<ID *>(ob->data));
+  PointerRNA mesh_ptr = RNA_id_pointer_create(ob->data);
   PropertyRNA *attributes_prop = RNA_struct_find_property(&mesh_ptr, "attributes");
   RNA_PROP_BEGIN (&mesh_ptr, itemptr, attributes_prop) {
-    const CustomDataLayer *layer = static_cast<const CustomDataLayer *>(itemptr.data);
-    if (blender::bke::allow_procedural_attribute_access(layer->name)) {
+    const StringRefNull name = rna_Attribute_name_get(itemptr);
+    if (bke::allow_procedural_attribute_access(name)) {
       StringPropertySearchVisitParams visit_params{};
-      visit_params.text = layer->name;
+      visit_params.text = name;
       visit_fn(visit_params);
     }
   }
@@ -1403,7 +1424,7 @@ static void rna_BevelModifier_weight_attribute_visit_for_search(
 
 static void rna_UVProjectModifier_num_projectors_set(PointerRNA *ptr, int value)
 {
-  UVProjectModifierData *md = (UVProjectModifierData *)ptr->data;
+  UVProjectModifierData *md = static_cast<UVProjectModifierData *>(ptr->data);
   int a;
 
   md->projectors_num = std::clamp(value, 1, MOD_UVPROJECT_MAXPROJECTORS);
@@ -1414,7 +1435,7 @@ static void rna_UVProjectModifier_num_projectors_set(PointerRNA *ptr, int value)
 
 static void rna_OceanModifier_init_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  OceanModifierData *omd = (OceanModifierData *)ptr->data;
+  OceanModifierData *omd = static_cast<OceanModifierData *>(ptr->data);
 
   BKE_ocean_free_modifier_cache(omd);
   rna_Modifier_update(bmain, scene, ptr);
@@ -1422,7 +1443,7 @@ static void rna_OceanModifier_init_update(Main *bmain, Scene *scene, PointerRNA 
 
 static void rna_OceanModifier_ocean_chop_set(PointerRNA *ptr, float value)
 {
-  OceanModifierData *omd = (OceanModifierData *)ptr->data;
+  OceanModifierData *omd = static_cast<OceanModifierData *>(ptr->data);
   float old_value = omd->chop_amount;
 
   omd->chop_amount = value;
@@ -1434,7 +1455,7 @@ static void rna_OceanModifier_ocean_chop_set(PointerRNA *ptr, float value)
 
 static bool rna_LaplacianDeformModifier_is_bind_get(PointerRNA *ptr)
 {
-  LaplacianDeformModifierData *lmd = (LaplacianDeformModifierData *)ptr->data;
+  LaplacianDeformModifierData *lmd = static_cast<LaplacianDeformModifierData *>(ptr->data);
   return ((lmd->flag & MOD_LAPLACIANDEFORM_BIND) && (lmd->vertexco != nullptr));
 }
 
@@ -1448,11 +1469,11 @@ static bool rna_LaplacianDeformModifier_is_bind_get(PointerRNA *ptr)
 
 static void rna_CurveModifier_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  CurveModifierData *cmd = (CurveModifierData *)ptr->data;
+  CurveModifierData *cmd = static_cast<CurveModifierData *>(ptr->data);
   rna_Modifier_update(bmain, scene, ptr);
   DEG_relations_tag_update(bmain);
   if (cmd->object != nullptr) {
-    Curve *curve = static_cast<Curve *>(cmd->object->data);
+    Curve *curve = id_cast<Curve *>(cmd->object->data);
     if ((curve->flag & CU_PATH) == 0) {
       DEG_id_tag_update(&curve->id, ID_RECALC_GEOMETRY);
     }
@@ -1461,11 +1482,11 @@ static void rna_CurveModifier_dependency_update(Main *bmain, Scene *scene, Point
 
 static void rna_ArrayModifier_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  ArrayModifierData *amd = (ArrayModifierData *)ptr->data;
+  ArrayModifierData *amd = static_cast<ArrayModifierData *>(ptr->data);
   rna_Modifier_update(bmain, scene, ptr);
   DEG_relations_tag_update(bmain);
   if (amd->curve_ob != nullptr) {
-    Curve *curve = static_cast<Curve *>(amd->curve_ob->data);
+    Curve *curve = id_cast<Curve *>(amd->curve_ob->data);
     if ((curve->flag & CU_PATH) == 0) {
       DEG_id_tag_update(&curve->id, ID_RECALC_GEOMETRY);
     }
@@ -1474,7 +1495,7 @@ static void rna_ArrayModifier_dependency_update(Main *bmain, Scene *scene, Point
 
 static void rna_DataTransferModifier_use_data_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  DataTransferModifierData *dtmd = (DataTransferModifierData *)ptr->data;
+  DataTransferModifierData *dtmd = static_cast<DataTransferModifierData *>(ptr->data);
 
   if (!(dtmd->flags & MOD_DATATRANSFER_USE_VERT)) {
     dtmd->data_types &= ~DT_TYPE_VERT_ALL;
@@ -1494,7 +1515,7 @@ static void rna_DataTransferModifier_use_data_update(Main *bmain, Scene *scene, 
 
 static void rna_DataTransferModifier_data_types_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  DataTransferModifierData *dtmd = (DataTransferModifierData *)ptr->data;
+  DataTransferModifierData *dtmd = static_cast<DataTransferModifierData *>(ptr->data);
   const int item_types = BKE_object_data_transfer_get_dttypes_item_types(dtmd->data_types);
 
   if (item_types & ME_VERT) {
@@ -1518,8 +1539,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
                                                                                 PropertyRNA *prop,
                                                                                 bool *r_free)
 {
-  using namespace blender;
-  DataTransferModifierData *dtmd = (DataTransferModifierData *)ptr->data;
+  DataTransferModifierData *dtmd = static_cast<DataTransferModifierData *>(ptr->data);
   EnumPropertyItem *item = nullptr, tmp_item = {0};
   int totitem = 0;
 
@@ -1549,7 +1569,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
 
       RNA_enum_item_add_separator(&item, &totitem);
 
-      const ListBase *defbase = BKE_object_defgroup_list(ob_src);
+      const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob_src);
       for (i = 0, dg = static_cast<const bDeformGroup *>(defbase->first); dg; i++, dg = dg->next) {
         tmp_item.value = i;
         tmp_item.identifier = tmp_item.name = dg->name;
@@ -1651,8 +1671,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_dst_itemf(
                                                                                 PropertyRNA *prop,
                                                                                 bool *r_free)
 {
-  using namespace blender;
-  DataTransferModifierData *dtmd = (DataTransferModifierData *)ptr->data;
+  DataTransferModifierData *dtmd = static_cast<DataTransferModifierData *>(ptr->data);
   EnumPropertyItem *item = nullptr, tmp_item = {0};
   int totitem = 0;
 
@@ -1677,7 +1696,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_dst_itemf(
 
         RNA_enum_item_add_separator(&item, &totitem);
 
-        const ListBase *defbase = BKE_object_defgroup_list(ob_dst);
+        const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob_dst);
         for (i = 0, dg = static_cast<const bDeformGroup *>(defbase->first); dg; i++, dg = dg->next)
         {
           tmp_item.value = i;
@@ -1696,7 +1715,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_dst_itemf(
       Object *ob_dst = CTX_data_active_object(C); /* XXX Is this OK? */
 
       if (ob_dst && ob_dst->data) {
-        Mesh *me_dst = static_cast<Mesh *>(ob_dst->data);
+        Mesh *me_dst = id_cast<Mesh *>(ob_dst->data);
         const VectorSet<StringRefNull> uv_map_names = me_dst->uv_map_names();
         const int num_data = uv_map_names.size();
 
@@ -1724,7 +1743,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_dst_itemf(
       if (ob_dst && ob_dst->data) {
         eCustomDataType types[2] = {CD_PROP_COLOR, CD_PROP_BYTE_COLOR};
 
-        Mesh *me_dst = static_cast<Mesh *>(ob_dst->data);
+        Mesh *me_dst = id_cast<Mesh *>(ob_dst->data);
         CustomData *cdata = STREQ(RNA_property_identifier(prop), "layers_vcol_vert_select_dst") ?
                                 &me_dst->vert_data :
                                 &me_dst->corner_data;
@@ -1756,7 +1775,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_mix_mode_itemf(bContext 
                                                                        PropertyRNA * /*prop*/,
                                                                        bool *r_free)
 {
-  DataTransferModifierData *dtmd = (DataTransferModifierData *)ptr->data;
+  DataTransferModifierData *dtmd = static_cast<DataTransferModifierData *>(ptr->data);
   EnumPropertyItem *item = nullptr;
   int totitem = 0;
 
@@ -1794,9 +1813,9 @@ static const EnumPropertyItem *rna_DataTransferModifier_mix_mode_itemf(bContext 
 
 static void rna_CorrectiveSmoothModifier_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  CorrectiveSmoothModifierData *csmd = (CorrectiveSmoothModifierData *)ptr->data;
+  CorrectiveSmoothModifierData *csmd = static_cast<CorrectiveSmoothModifierData *>(ptr->data);
 
-  MEM_SAFE_FREE(csmd->delta_cache.deltas);
+  MEM_SAFE_DELETE(csmd->delta_cache.deltas);
 
   rna_Modifier_update(bmain, scene, ptr);
 }
@@ -1805,11 +1824,10 @@ static void rna_CorrectiveSmoothModifier_rest_source_update(Main *bmain,
                                                             Scene *scene,
                                                             PointerRNA *ptr)
 {
-  CorrectiveSmoothModifierData *csmd = (CorrectiveSmoothModifierData *)ptr->data;
+  CorrectiveSmoothModifierData *csmd = static_cast<CorrectiveSmoothModifierData *>(ptr->data);
 
   if (csmd->rest_source != MOD_CORRECTIVESMOOTH_RESTSOURCE_BIND) {
-    blender::implicit_sharing::free_shared_data(&csmd->bind_coords,
-                                                &csmd->bind_coords_sharing_info);
+    implicit_sharing::free_shared_data(&csmd->bind_coords, &csmd->bind_coords_sharing_info);
     csmd->bind_coords_num = 0;
   }
 
@@ -1818,13 +1836,13 @@ static void rna_CorrectiveSmoothModifier_rest_source_update(Main *bmain,
 
 static bool rna_CorrectiveSmoothModifier_is_bind_get(PointerRNA *ptr)
 {
-  CorrectiveSmoothModifierData *csmd = (CorrectiveSmoothModifierData *)ptr->data;
+  CorrectiveSmoothModifierData *csmd = static_cast<CorrectiveSmoothModifierData *>(ptr->data);
   return (csmd->bind_coords != nullptr);
 }
 
 static bool rna_SurfaceDeformModifier_is_bound_get(PointerRNA *ptr)
 {
-  return (((SurfaceDeformModifierData *)ptr->data)->verts != nullptr);
+  return ((static_cast<SurfaceDeformModifierData *>(ptr->data))->verts != nullptr);
 }
 
 static bool rna_ParticleInstanceModifier_particle_system_poll(PointerRNA *ptr,
@@ -1851,7 +1869,7 @@ static PointerRNA rna_ParticleInstanceModifier_particle_system_get(PointerRNA *p
   }
 
   psys = static_cast<ParticleSystem *>(BLI_findlink(&psmd->ob->particlesystem, psmd->psys - 1));
-  PointerRNA rptr = RNA_pointer_create_discrete((ID *)psmd->ob, &RNA_ParticleSystem, psys);
+  PointerRNA rptr = RNA_pointer_create_discrete(id_cast<ID *>(psmd->ob), RNA_ParticleSystem, psys);
   return rptr;
 }
 
@@ -1907,25 +1925,57 @@ static bool rna_NodesModifier_node_group_poll(PointerRNA * /*ptr*/, PointerRNA v
 
 static void rna_NodesModifier_node_group_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  Object *object = (Object *)ptr->owner_id;
+  Object *object = id_cast<Object *>(ptr->owner_id);
   NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
   rna_Modifier_dependency_update(bmain, scene, ptr);
   MOD_nodes_update_interface(object, nmd);
 }
 
-static blender::nodes::geo_eval_log::GeoTreeLog *get_nodes_modifier_log(NodesModifierData &nmd)
+static StructRNA *rna_NodesModifierProperties_refine(PointerRNA *ptr)
+{
+  auto *nmd = ptr->data_as<NodesModifierData>();
+  if (!nmd->node_group || ID_MISSING(nmd->node_group)) {
+    return RNA_NodesModifierPropertiesEmpty;
+  }
+  return nmd->node_group->runtime->geometry_nodes_srna_data->properties_struct;
+}
+
+static std::optional<std::string> rna_NodesModifierProperties_path(const PointerRNA *ptr)
+{
+  const auto *nmd = ptr->data_as<NodesModifierData>();
+  return fmt::format("modifiers[\"{}\"].properties", BLI_str_escape(nmd->modifier.name));
+}
+
+static IDProperty **rna_Modifier_idprops(PointerRNA *ptr)
+{
+  auto *md = ptr->data_as<ModifierData>();
+  return &md->system_properties;
+}
+
+static PointerRNA rna_NodesModifierProperties_get(PointerRNA *ptr)
+{
+  auto *nmd = ptr->data_as<NodesModifierData>();
+  if (!nmd->node_group) {
+    return PointerRNA_NULL;
+  }
+  return RNA_pointer_create_with_parent(*ptr, RNA_NodesModifierProperties, nmd);
+}
+
+static nodes::eval_log::NodeTreeLog *get_nodes_modifier_log(const Object &object,
+                                                            NodesModifierData &nmd)
 {
   if (!nmd.runtime->eval_log) {
     return nullptr;
   }
-  blender::bke::ModifierComputeContext compute_context{nullptr, nmd};
-  return &nmd.runtime->eval_log->get_tree_log(compute_context.hash());
+  bke::DataBlockComputeContext data_block_context{nullptr, object.id};
+  bke::ModifierComputeContext modifier_context{&data_block_context, nmd};
+  return &nmd.runtime->eval_log->get_tree_log(modifier_context.hash());
 }
 
-static blender::Span<blender::nodes::geo_eval_log::NodeWarning> get_node_modifier_warnings(
-    NodesModifierData &nmd)
+static Span<nodes::eval_log::NodeWarning> get_node_modifier_warnings(const Object &object,
+                                                                     NodesModifierData &nmd)
 {
-  if (auto *log = get_nodes_modifier_log(nmd)) {
+  if (auto *log = get_nodes_modifier_log(object, nmd)) {
     log->ensure_node_warnings(nmd);
     return log->all_warnings;
   }
@@ -1935,60 +1985,103 @@ static blender::Span<blender::nodes::geo_eval_log::NodeWarning> get_node_modifie
 static void rna_NodesModifier_node_warnings_iterator_begin(CollectionPropertyIterator *iter,
                                                            PointerRNA *ptr)
 {
+  Object &object = id_cast<Object &>(*iter->parent.owner_id);
   NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
   iter->internal.count.item = 0;
-  iter->valid = !get_node_modifier_warnings(*nmd).is_empty();
+  iter->valid = !get_node_modifier_warnings(object, *nmd).is_empty();
 }
 
 static void rna_NodesModifier_node_warnings_iterator_next(CollectionPropertyIterator *iter)
 {
+  Object &object = id_cast<Object &>(*iter->parent.owner_id);
   NodesModifierData *nmd = static_cast<NodesModifierData *>(iter->parent.data);
   iter->internal.count.item++;
-  iter->valid = get_node_modifier_warnings(*nmd).size() > iter->internal.count.item;
+  iter->valid = get_node_modifier_warnings(object, *nmd).size() > iter->internal.count.item;
 }
 
 static PointerRNA rna_NodesModifier_node_warnings_iterator_get(CollectionPropertyIterator *iter)
 {
+  Object &object = id_cast<Object &>(*iter->parent.owner_id);
   NodesModifierData *nmd = static_cast<NodesModifierData *>(iter->parent.data);
-  blender::Span warnings = get_node_modifier_warnings(*nmd);
+  Span warnings = get_node_modifier_warnings(object, *nmd);
   return RNA_pointer_create_with_parent(
-      iter->parent, &RNA_NodesModifierWarning, (void *)&warnings[iter->internal.count.item]);
+      iter->parent, RNA_NodesModifierWarning, (void *)&warnings[iter->internal.count.item]);
 }
 
 static int rna_NodesModifier_node_warnings_length(PointerRNA *ptr)
 {
+  Object &object = id_cast<Object &>(*ptr->owner_id);
   NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
-  return get_node_modifier_warnings(*nmd).size();
+  return get_node_modifier_warnings(object, *nmd).size();
 }
 
 static void rna_NodesModifierWarning_message_get(PointerRNA *ptr, char *r_value)
 {
-  const auto *warning = static_cast<const blender::nodes::geo_eval_log::NodeWarning *>(ptr->data);
+  const auto *warning = static_cast<const nodes::eval_log::NodeWarning *>(ptr->data);
   strcpy(r_value, warning->message.c_str());
 }
 
 static int rna_NodesModifierWarning_message_length(PointerRNA *ptr)
 {
-  const auto *warning = static_cast<const blender::nodes::geo_eval_log::NodeWarning *>(ptr->data);
+  const auto *warning = static_cast<const nodes::eval_log::NodeWarning *>(ptr->data);
   return warning->message.size();
 }
 
 static int rna_NodesModifierWarning_type_get(PointerRNA *ptr)
 {
-  const auto *warning = static_cast<const blender::nodes::geo_eval_log::NodeWarning *>(ptr->data);
+  const auto *warning = static_cast<const nodes::eval_log::NodeWarning *>(ptr->data);
   return int(warning->type);
 }
 
-static IDProperty **rna_NodesModifier_properties(PointerRNA *ptr)
+static bool rna_NodesModifier_is_input_visible(PointerRNA nmd_ptr,
+                                               ReportList *reports,
+                                               const char *identifier)
 {
-  NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
-  NodesModifierSettings *settings = &nmd->settings;
-  return &settings->properties;
+  const Object &object = *id_cast<Object *>(nmd_ptr.owner_id);
+  const NodesModifierData *nmd = nmd_ptr.data_as<NodesModifierData>();
+  bNodeTree *ntree = nmd->node_group;
+  if (ntree == nullptr) {
+    return false;
+  }
+
+  nmd->runtime->usage_cache.ensure(object, *nmd);
+  const auto &input_usages = nmd->runtime->usage_cache.inputs;
+
+  const int index = ntree->interface_input_index_by_identifier(identifier);
+  if (index != -1) {
+    return input_usages[index].is_visible;
+  }
+
+  BKE_reportf(reports, RPT_ERROR, "Input '%s' not found", identifier);
+  return false;
+}
+
+static bool rna_NodesModifier_is_input_used(PointerRNA nmd_ptr,
+                                            ReportList *reports,
+                                            const char *identifier)
+{
+  const Object &object = *id_cast<Object *>(nmd_ptr.owner_id);
+  const NodesModifierData *nmd = nmd_ptr.data_as<NodesModifierData>();
+  bNodeTree *ntree = nmd->node_group;
+  if (ntree == nullptr) {
+    return false;
+  }
+
+  nmd->runtime->usage_cache.ensure(object, *nmd);
+  const auto &input_usages = nmd->runtime->usage_cache.inputs;
+
+  const int index = ntree->interface_input_index_by_identifier(identifier);
+  if (index != -1) {
+    return input_usages[index].is_used;
+  }
+
+  BKE_reportf(reports, RPT_ERROR, "Input '%s' not found", identifier);
+  return false;
 }
 
 static void rna_Lineart_start_level_set(PointerRNA *ptr, int value)
 {
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)ptr->data;
+  GreasePencilLineartModifierData *lmd = static_cast<GreasePencilLineartModifierData *>(ptr->data);
 
   value = std::clamp(value, 0, 128);
   lmd->level_start = value;
@@ -1997,7 +2090,7 @@ static void rna_Lineart_start_level_set(PointerRNA *ptr, int value)
 
 static void rna_Lineart_end_level_set(PointerRNA *ptr, int value)
 {
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)ptr->data;
+  GreasePencilLineartModifierData *lmd = static_cast<GreasePencilLineartModifierData *>(ptr->data);
 
   value = std::clamp(value, 0, 128);
   lmd->level_end = value;
@@ -2007,12 +2100,12 @@ static void rna_Lineart_end_level_set(PointerRNA *ptr, int value)
 static const NodesModifierData *find_nodes_modifier_by_bake(const Object &object,
                                                             const NodesModifierBake &bake)
 {
-  LISTBASE_FOREACH (const ModifierData *, md, &object.modifiers) {
-    if (md->type != eModifierType_Nodes) {
+  for (const ModifierData &md : object.modifiers) {
+    if (md.type != eModifierType_Nodes) {
       continue;
     }
-    const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
-    const blender::Span<NodesModifierBake> bakes{nmd->bakes, nmd->bakes_num};
+    const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(&md);
+    const Span<NodesModifierBake> bakes{nmd->bakes, nmd->bakes_num};
     if (bakes.contains_ptr(&bake)) {
       return nmd;
     }
@@ -2035,7 +2128,7 @@ static PointerRNA rna_NodesModifierBake_node_get(PointerRNA *ptr)
   }
   BLI_assert(tree != nullptr);
   return RNA_pointer_create_discrete(
-      const_cast<ID *>(&tree->id), &RNA_Node, const_cast<bNode *>(node));
+      const_cast<ID *>(&tree->id), RNA_Node, const_cast<bNode *>(node));
 }
 
 static StructRNA *rna_NodesModifierBake_data_block_typef(PointerRNA *ptr)
@@ -2170,9 +2263,9 @@ static void rna_GreasePencilOpacityModifier_opacity_factor_max_set(PointerRNA *p
 static const GreasePencilDashModifierData *find_grease_pencil_dash_modifier_of_segment(
     const Object &ob, const GreasePencilDashModifierSegment &dash_segment)
 {
-  LISTBASE_FOREACH (const ModifierData *, md, &ob.modifiers) {
-    if (md->type == eModifierType_GreasePencilDash) {
-      const auto *dmd = reinterpret_cast<const GreasePencilDashModifierData *>(md);
+  for (const ModifierData &md : ob.modifiers) {
+    if (md.type == eModifierType_GreasePencilDash) {
+      const auto *dmd = reinterpret_cast<const GreasePencilDashModifierData *>(&md);
       if (dmd->segments().contains_ptr(&dash_segment)) {
         return dmd;
       }
@@ -2210,7 +2303,7 @@ static void rna_GreasePencilDashModifierSegment_name_set(PointerRNA *ptr, const 
   const std::string oldname = dash_segment->name;
   STRNCPY_UTF8(dash_segment->name, value);
   BLI_uniquename_cb(
-      [dmd, dash_segment](const blender::StringRef name) {
+      [dmd, dash_segment](const StringRef name) {
         for (const GreasePencilDashModifierSegment &ds : dmd->segments()) {
           if (&ds != dash_segment && ds.name == name) {
             return true;
@@ -2274,9 +2367,9 @@ const EnumPropertyItem *grease_pencil_build_time_mode_filter(bContext * /*C*/,
 static const GreasePencilTimeModifierData *find_grease_pencil_time_modifier_of_segment(
     const Object &ob, const GreasePencilTimeModifierSegment &time_segment)
 {
-  LISTBASE_FOREACH (const ModifierData *, md, &ob.modifiers) {
-    if (md->type == eModifierType_GreasePencilTime) {
-      const auto *tmd = reinterpret_cast<const GreasePencilTimeModifierData *>(md);
+  for (const ModifierData &md : ob.modifiers) {
+    if (md.type == eModifierType_GreasePencilTime) {
+      const auto *tmd = reinterpret_cast<const GreasePencilTimeModifierData *>(&md);
       if (tmd->segments().contains_ptr(&time_segment)) {
         return tmd;
       }
@@ -2314,7 +2407,7 @@ static void rna_GreasePencilTimeModifierSegment_name_set(PointerRNA *ptr, const 
   const std::string oldname = segment->name;
   STRNCPY_UTF8(segment->name, value);
   BLI_uniquename_cb(
-      [tmd, segment](const blender::StringRef name) {
+      [tmd, segment](const StringRef name) {
         for (const GreasePencilTimeModifierSegment &ds : tmd->segments()) {
           if (&ds != segment && ds.name == name) {
             return true;
@@ -2390,7 +2483,11 @@ static void rna_GreasePencilShrinkwrapModifier_face_cull_set(PointerRNA *ptr, in
   smd->shrink_opts = (smd->shrink_opts & ~MOD_SHRINKWRAP_CULL_TARGET_MASK) | value;
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_modifier_panel_open_prop(StructRNA *srna, const char *identifier, const int id)
 {
@@ -5876,6 +5973,7 @@ static void rna_def_modifier_weightvg_mask(BlenderRNA * /*brna*/,
 
   prop = RNA_def_property(srna, "mask_tex_use_channel", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, weightvg_mask_tex_used_items);
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR);
   RNA_def_property_ui_text(prop, "Use Channel", "Which texture channel to use for masking");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
@@ -8022,10 +8120,28 @@ static void rna_def_modifier_nodes_warning(BlenderRNA *brna)
   RNA_def_property_enum_funcs(prop, "rna_NodesModifierWarning_type_get", nullptr, nullptr);
 }
 
+static void rna_def_modifier_nodes_properties(BlenderRNA *brna)
+{
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "NodesModifierProperties", nullptr);
+  RNA_def_struct_ui_text(srna, "Geometry Nodes Modifier Properties", "");
+  RNA_def_struct_refine_func(srna, "rna_NodesModifierProperties_refine");
+  RNA_def_struct_system_idprops_func(srna, "rna_Modifier_idprops");
+  RNA_def_struct_path_func(srna, "rna_NodesModifierProperties_path");
+
+  srna = RNA_def_struct(brna, "NodesModifierPropertiesEmpty", nullptr);
+  RNA_def_struct_ui_text(srna, "Geometry Nodes Modifier Empty Properties", "");
+  RNA_def_struct_system_idprops_func(srna, "rna_Modifier_idprops");
+  RNA_def_struct_path_func(srna, "rna_NodesModifierProperties_path");
+}
+
 static void rna_def_modifier_nodes(BlenderRNA *brna)
 {
   StructRNA *srna;
   PropertyRNA *prop;
+  FunctionRNA *func;
+  PropertyRNA *parm;
 
   rna_def_modifier_nodes_data_block(brna);
 
@@ -8037,13 +8153,11 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
 
   rna_def_modifier_nodes_warning(brna);
 
+  rna_def_modifier_nodes_properties(brna);
+
   srna = RNA_def_struct(brna, "NodesModifier", "Modifier");
   RNA_def_struct_ui_text(srna, "Nodes Modifier", "");
   RNA_def_struct_sdna(srna, "NodesModifierData");
-  /* NOTE: `RNA_def_struct_idprops_func` should be removed once #132129 is implemented.
-   * Similar to the issue with Operator (for node tools), see #rna_def_operator. */
-  RNA_def_struct_idprops_func(srna, "rna_NodesModifier_properties");
-  RNA_def_struct_system_idprops_func(srna, "rna_NodesModifier_properties");
   RNA_def_struct_ui_icon(srna, ICON_GEOMETRY_NODES);
 
   RNA_define_lib_overridable(true);
@@ -8104,6 +8218,24 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
   RNA_def_property_override_clear_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
 
+  func = RNA_def_function(srna, "is_input_visible", "rna_NodesModifier_is_input_visible");
+  RNA_def_function_flag(func, FUNC_SELF_AS_RNA | FUNC_USE_REPORTS);
+  RNA_def_function_ui_description(
+      func, "Check whether an input is currently visible based on modifier settings.");
+  parm = RNA_def_string(func, "identifier", "Identifier", 0, "", "The identifier of the input");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "result", false, "Result", "");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "is_input_used", "rna_NodesModifier_is_input_used");
+  RNA_def_function_flag(func, FUNC_SELF_AS_RNA | FUNC_USE_REPORTS);
+  RNA_def_function_ui_description(
+      func, "Check whether an input is currently used based on modifier settings.");
+  parm = RNA_def_string(func, "identifier", "Identifier", 0, "", "The identifier of the input");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "result", false, "Result", "");
+  RNA_def_function_return(func, parm);
+
   rna_def_modifier_panel_open_prop(
       srna, "open_output_attributes_panel", NODES_MODIFIER_PANEL_OUTPUT_ATTRIBUTES);
   rna_def_modifier_panel_open_prop(srna, "open_manage_panel", NODES_MODIFIER_PANEL_MANAGE);
@@ -8113,6 +8245,12 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   rna_def_modifier_panel_open_prop(
       srna, "open_bake_data_blocks_panel", NODES_MODIFIER_PANEL_BAKE_DATA_BLOCKS);
   rna_def_modifier_panel_open_prop(srna, "open_warnings_panel", NODES_MODIFIER_PANEL_WARNINGS);
+
+  prop = RNA_def_property(srna, "properties", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "NodesModifierProperties");
+  RNA_def_property_ui_text(prop, "Properties", "");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_NodesModifierProperties_get", nullptr, nullptr, nullptr);
 
   RNA_define_lib_overridable(false);
 }
@@ -8610,6 +8748,7 @@ static void rna_def_modifier_grease_pencil_color(BlenderRNA *brna)
   RNA_def_property_ui_range(prop, 0.0, 2.0, 0.1, 3);
   RNA_def_property_float_sdna(prop, nullptr, "hsv[2]");
   RNA_def_property_ui_text(prop, "Value", "Color value factor");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR);
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   RNA_define_lib_overridable(false);
@@ -9019,6 +9158,12 @@ static void rna_def_modifier_grease_pencil_lineart(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, modifier_lineart_silhouette_filtering);
   RNA_def_property_ui_text(prop, "Silhouette Filtering", "Select contour or silhouette");
   RNA_def_property_update(prop, 0, "rna_Modifier_dependency_update");
+
+  prop = RNA_def_property(srna, "fill_strokes", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "fill_strokes", 0);
+  RNA_def_property_ui_text(
+      prop, "Fill Strokes", "Generate filled strokes instead of only outline");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "use_multiple_levels", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "use_multiple_levels", 0);
@@ -11388,5 +11533,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   rna_def_modifier_grease_pencil_build(brna);
   rna_def_modifier_grease_pencil_texture(brna);
 }
+
+}  // namespace blender
 
 #endif

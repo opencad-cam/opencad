@@ -111,7 +111,7 @@ void OBJMesh::clear()
   normal_coords_ = {};
   face_order_ = {};
   if (face_smooth_groups_) {
-    MEM_freeN(face_smooth_groups_);
+    MEM_delete(face_smooth_groups_);
     face_smooth_groups_ = nullptr;
   }
 }
@@ -245,7 +245,7 @@ void OBJMesh::calc_face_order()
   /* Sort faces by their material index. */
   face_order_.reinitialize(material_indices_span.size());
   array_utils::fill_index_range(face_order_.as_mutable_span());
-  blender::parallel_sort(face_order_.begin(), face_order_.end(), [&](int a, int b) {
+  parallel_sort(face_order_.begin(), face_order_.end(), [&](int a, int b) {
     int mat_a = material_indices_span[a];
     int mat_b = material_indices_span[b];
     if (mat_a != mat_b) {
@@ -353,19 +353,11 @@ void OBJMesh::store_normal_coords_and_indices()
     case bke::MeshNormalDomain::Point: {
       const Span<float3> vert_normals = export_mesh_->vert_normals();
       Array<int> vert_normal_indices(vert_normals.size());
-      const bke::LooseVertCache &verts_no_face = export_mesh_->verts_no_face();
-      if (verts_no_face.count == 0) {
-        for (const int vert : vert_normals.index_range()) {
-          vert_normal_indices[vert] = add_normal(vert_normals[vert]);
-        }
-      }
-      else {
-        for (const int vert : vert_normals.index_range()) {
-          if (!verts_no_face.is_loose_bits[vert]) {
-            vert_normal_indices[vert] = add_normal(vert_normals[vert]);
-          }
-        }
-      }
+      const IndexMask &verts_no_face = export_mesh_->verts_no_face();
+      IndexMaskMemory memory;
+      const IndexMask verts = verts_no_face.complement(vert_normals.index_range(), memory);
+      verts.foreach_index(
+          [&](const int vert) { vert_normal_indices[vert] = add_normal(vert_normals[vert]); });
       array_utils::gather(vert_normal_indices.as_span(),
                           mesh_corner_verts_,
                           corner_to_normal_index_.as_mutable_span());

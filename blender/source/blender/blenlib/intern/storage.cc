@@ -58,6 +58,8 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
+namespace blender {
+
 /* NOTE: The implementation for Apple lives in storage_apple.mm. */
 #if !defined(__APPLE__)
 bool BLI_change_working_dir(const char *dir)
@@ -357,7 +359,7 @@ bool BLI_file_alias_target(const char *filepath,
 }
 #endif
 
-int BLI_exists(const char *path)
+int BLI_file_stat_mode(const char *path)
 {
 #if defined(WIN32)
   BLI_stat_t st;
@@ -397,6 +399,18 @@ int BLI_exists(const char *path)
   }
 #endif
   return (st.st_mode);
+}
+
+bool BLI_exists(const char *path)
+{
+#ifdef WIN32
+  wchar_t *path_16 = alloc_utf16_from_8(path, 0);
+  const bool exists = (GetFileAttributesW(path_16) != INVALID_FILE_ATTRIBUTES);
+  free(path_16);
+  return exists;
+#else
+  return BLI_file_stat_mode(path) != 0;
+#endif
 }
 
 #ifdef WIN32
@@ -442,13 +456,27 @@ int BLI_stat(const char *path, struct stat *buffer)
 
 bool BLI_is_dir(const char *path)
 {
-  return S_ISDIR(BLI_exists(path));
+#ifdef WIN32
+  wchar_t *tmp_16 = alloc_utf16_from_8(path, 1);
+  const DWORD attr = GetFileAttributesW(tmp_16);
+  free(tmp_16);
+  return (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY));
+#else
+  return S_ISDIR(BLI_file_stat_mode(path));
+#endif
 }
 
 bool BLI_is_file(const char *path)
 {
-  const int mode = BLI_exists(path);
+#ifdef WIN32
+  wchar_t *tmp_16 = alloc_utf16_from_8(path, 1);
+  const DWORD attr = GetFileAttributesW(tmp_16);
+  free(tmp_16);
+  return (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY));
+#else
+  const int mode = BLI_file_stat_mode(path);
   return (mode && !S_ISDIR(mode));
+#endif
 }
 
 void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
@@ -477,26 +505,26 @@ void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
     return nullptr;
   }
 
-  void *mem = MEM_mallocN(filelen + pad_bytes, __func__);
+  void *mem = MEM_new_uninitialized(filelen + pad_bytes, __func__);
   if (mem == nullptr) {
     return nullptr;
   }
 
   const long int filelen_read = fread(mem, 1, filelen, fp);
   if ((filelen_read < 0) || ferror(fp)) {
-    MEM_freeN(mem);
+    MEM_delete_void(mem);
     return nullptr;
   }
 
   if (read_size_exact) {
     if (filelen_read != filelen) {
-      MEM_freeN(mem);
+      MEM_delete_void(mem);
       return nullptr;
     }
   }
   else {
     if (filelen_read < filelen) {
-      mem = MEM_reallocN(mem, filelen_read + pad_bytes);
+      mem = MEM_realloc_uninitialized(mem, filelen_read + pad_bytes);
       if (mem == nullptr) {
         return nullptr;
       }
@@ -508,12 +536,12 @@ void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
   return mem;
 }
 
-void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size)
+char *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size)
 {
   FILE *fp = BLI_fopen(filepath, "r");
-  void *mem = nullptr;
+  char *mem = nullptr;
   if (fp) {
-    mem = BLI_file_read_data_as_mem_from_handle(fp, false, pad_bytes, r_size);
+    mem = static_cast<char *>(BLI_file_read_data_as_mem_from_handle(fp, false, pad_bytes, r_size));
     fclose(fp);
   }
   return mem;
@@ -530,12 +558,12 @@ void *BLI_file_read_binary_as_mem(const char *filepath, size_t pad_bytes, size_t
   return mem;
 }
 
-void *BLI_file_read_text_as_mem_with_newline_as_nil(const char *filepath,
+char *BLI_file_read_text_as_mem_with_newline_as_nil(const char *filepath,
                                                     bool trim_trailing_space,
                                                     size_t pad_bytes,
                                                     size_t *r_size)
 {
-  char *mem = static_cast<char *>(BLI_file_read_text_as_mem(filepath, pad_bytes, r_size));
+  char *mem = BLI_file_read_text_as_mem(filepath, pad_bytes, r_size);
   if (mem != nullptr) {
     char *mem_end = mem + *r_size;
     if (pad_bytes != 0) {
@@ -580,7 +608,7 @@ LinkNode *BLI_file_read_as_lines(const char *filepath)
     return nullptr;
   }
 
-  buf = MEM_calloc_arrayN<char>(size, "file_as_lines");
+  buf = MEM_new_array_zeroed<char>(size, "file_as_lines");
   if (buf) {
     size_t i, last = 0;
 
@@ -598,7 +626,7 @@ LinkNode *BLI_file_read_as_lines(const char *filepath)
       }
     }
 
-    MEM_freeN(buf);
+    MEM_delete(buf);
   }
 
   fclose(fp);
@@ -622,3 +650,5 @@ bool BLI_file_older(const char *file1, const char *file2)
   }
   return (st1.st_mtime < st2.st_mtime);
 }
+
+}  // namespace blender

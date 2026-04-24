@@ -17,15 +17,15 @@ NODE_STORAGE_FUNCS(NodeGeometryLinearGizmo)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Value").hide_value().multi_input();
-  b.add_input<decl::Vector>("Position").subtype(PROP_TRANSLATION);
-  b.add_input<decl::Vector>("Direction").default_value({0, 0, 1}).subtype(PROP_XYZ);
-  b.add_output<decl::Geometry>("Transform");
+  b.add_input<decl::Float>("Value"_ustr).hide_value().multi_input();
+  b.add_input<decl::Vector>("Position"_ustr).subtype(PROP_TRANSLATION);
+  b.add_input<decl::Vector>("Direction"_ustr).default_value({0, 0, 1}).subtype(PROP_XYZ);
+  b.add_output<decl::Geometry>("Transform"_ustr);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryLinearGizmo *storage = MEM_new_for_free<NodeGeometryLinearGizmo>(__func__);
+  NodeGeometryLinearGizmo *storage = MEM_new<NodeGeometryLinearGizmo>(__func__);
   node->storage = storage;
 }
 
@@ -57,7 +57,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeGizmoLinear", GEO_NODE_GIZMO_LINEAR);
+  geo_node_type_base(&ntype, "GeometryNodeGizmoLinear"_ustr, GEO_NODE_GIZMO_LINEAR);
   ntype.ui_name = "Linear Gizmo";
   ntype.ui_description = "Show a linear gizmo in the viewport for a value";
   ntype.enum_name_legacy = "GIZMO_LINEAR";

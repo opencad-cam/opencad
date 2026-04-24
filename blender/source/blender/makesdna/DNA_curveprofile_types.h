@@ -10,11 +10,16 @@
 
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 /** #CurveProfilePoint.flag */
 enum {
   PROF_SELECT = (1 << 0),
   PROF_H1_SELECT = (1 << 1),
   PROF_H2_SELECT = (1 << 2),
+  PROF_ACTIVE = (1 << 3),
+  PROF_H1_ACTIVE = (1 << 4),
+  PROF_H2_ACTIVE = (1 << 5),
 };
 
 /** #CurveProfile.flag */
@@ -76,3 +81,5 @@ struct CurveProfile {
   /** Widget's current view, and clipping rect (is default rect too). */
   rctf view_rect = {}, clip_rect = {};
 };
+
+}  // namespace blender

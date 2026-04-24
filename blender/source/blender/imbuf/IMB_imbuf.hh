@@ -13,8 +13,11 @@
 
 #include "BLI_enum_flags.hh"
 #include "BLI_math_matrix_types.hh"
+#include "BLI_span.hh"
 
 #include "IMB_imbuf_types.hh"
+
+namespace blender {
 
 struct ImBuf;
 struct rctf;
@@ -30,36 +33,73 @@ void IMB_init();
 void IMB_exit();
 
 /**
+ * Module GPU context management.
+ */
+void IMB_ensure_gpu_context();
+void IMB_activate_gpu_context();
+void IMB_deactivate_gpu_context();
+
+/**
  * Load image.
  */
 ImBuf *IMB_load_image_from_memory(const unsigned char *mem,
-                                  const size_t size,
-                                  const int flags,
+                                  size_t size,
+                                  int flags,
                                   const char *descr,
                                   const char *filepath = nullptr,
                                   char r_colorspace[IM_MAX_SPACE] = nullptr);
 
-ImBuf *IMB_load_image_from_file_descriptor(const int file,
-                                           const int flags,
+ImBuf *IMB_load_image_from_file_descriptor(int file,
+                                           int flags,
                                            const char *filepath = nullptr,
                                            char r_colorspace[IM_MAX_SPACE] = nullptr);
 
 ImBuf *IMB_load_image_from_filepath(const char *filepath,
-                                    const int flags,
+                                    int flags,
                                     char r_colorspace[IM_MAX_SPACE] = nullptr);
 
 /**
  * Save image.
  */
-bool IMB_save_image(ImBuf *ibuf, const char *filepath, const int flags);
+bool IMB_save_image(ImBuf *ibuf, const char *filepath, int flags);
 
 /**
  * Test image file.
  */
 bool IMB_test_image(const char *filepath);
-bool IMB_test_image_type_matches(const char *filepath, int filetype);
-int IMB_test_image_type_from_memory(const unsigned char *buf, size_t buf_size);
-int IMB_test_image_type(const char *filepath);
+bool IMB_test_image_type_matches(const char *filepath, eImbFileType filetype);
+eImbFileType IMB_test_image_type_from_memory(const unsigned char *buf, size_t buf_size);
+eImbFileType IMB_test_image_type(const char *filepath);
+
+/**
+ * Return true if the file type is supported (compiled in).
+ */
+bool IMB_ftype_is_supported(eImbFileType ftype);
+
+/**
+ * Return the string identifier for a file type, or nullptr if not found.
+ */
+const char *IMB_ftype_to_id(eImbFileType ftype);
+
+/**
+ * Return the file type enum value for a string identifier, or #IMB_FTYPE_NONE if not found.
+ */
+eImbFileType IMB_ftype_from_id(const char *id);
+
+/**
+ * Return the null-terminated list of extensions for a file type, or nullptr if not found.
+ */
+const char **IMB_ftype_file_extensions(eImbFileType ftype);
+
+/**
+ * Return the read capability flags for a file type.
+ */
+eImFileTypeCapability IMB_ftype_capability_read(eImbFileType ftype);
+
+/**
+ * Return the write capability flags for a file type.
+ */
+eImFileTypeCapability IMB_ftype_capability_write(eImbFileType ftype);
 
 /**
  * Load thumbnail image.
@@ -73,9 +113,9 @@ enum class IMBThumbLoadFlags {
 ENUM_OPERATORS(IMBThumbLoadFlags);
 
 ImBuf *IMB_thumb_load_image(const char *filepath,
-                            const size_t max_thumb_size,
+                            size_t max_thumb_size,
                             char colorspace[IM_MAX_SPACE],
-                            const IMBThumbLoadFlags load_flags = IMBThumbLoadFlags::Zero);
+                            IMBThumbLoadFlags load_flags = IMBThumbLoadFlags::Zero);
 
 /**
  * Allocate and free image buffer.
@@ -118,6 +158,22 @@ ImBuf *IMB_allocFromBuffer(const uint8_t *byte_buffer,
  */
 void IMB_assign_byte_buffer(ImBuf *ibuf, uint8_t *buffer_data, ImBufOwnership ownership);
 void IMB_assign_float_buffer(ImBuf *ibuf, float *buffer_data, ImBufOwnership ownership);
+
+/**
+ * Assign the GPU texture of the buffer to the given texture. The current GPU texture is released.
+ *
+ * \note Does not modify the topology (width, height, number of channels).
+ */
+void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture);
+
+/**
+ * Reads the GPU data texture of the image buffer if it exists and assigns the data to the float
+ * buffer. This is only done if the buffer has the IB_HOST_BUFFER_INVALID flag is set, which is
+ * then reset after the function executes.
+ *
+ * \warning Not thread-safe, so callee should worry about thread locks.
+ */
+void IMB_ensure_host_buffer(ImBuf *ibuf);
 
 /**
  * Assign the content and the color space of the corresponding buffer the data from the given
@@ -201,7 +257,6 @@ enum IMB_BlendMode {
   IMB_BLEND_COLOR = 23,
   IMB_BLEND_INTERPOLATE = 24,
 
-  IMB_BLEND_COPY = 1000,
   IMB_BLEND_COPY_RGB = 1001,
   IMB_BLEND_COPY_ALPHA = 1002,
 };
@@ -214,11 +269,46 @@ void IMB_blend_color_float(float dst[4],
                            const float src1[4],
                            const float src2[4],
                            IMB_BlendMode mode);
+void IMB_blend_color_float(MutableSpan<float4> dst,
+                           Span<float4> src1,
+                           Span<float4> src2,
+                           IMB_BlendMode mode);
 
 /**
- * In-place image crop.
+ * Copy a rectangle of pixel data from one image buffer to another. The source and destination
+ * buffers are described by the pointers and corresponding 2D sizes. They must not reference the
+ * same memory.
  */
-void IMB_rect_crop(ImBuf *ibuf, const rcti *crop);
+void IMB_copy_rect(float *dst,
+                   const int2 &dst_size,
+                   const float *src,
+                   const int2 &src_size,
+                   int channels,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size);
+void IMB_copy_rect(uchar *dst,
+                   const int2 &dst_size,
+                   const uchar *src,
+                   const int2 &src_size,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size);
+
+/**
+ * In-place image crop. `rect` is *inclusive*.
+ */
+void IMB_crop(ImBuf *ibuf, const int2 &rect_pos, const int2 &rect_size);
+
+/**
+ * Copy a rectangle of pixel data from one image buffer to another. Data outside of the destination
+ * rectangle is not written to.
+ */
+void IMB_copy_rect(ImBuf *dst,
+                   const ImBuf *src,
+                   const int2 &src_rect_pos,
+                   const int2 &dst_rect_pos,
+                   const int2 &rect_size);
 
 /**
  * In-place size setting (caller must fill in buffer contents).
@@ -233,14 +323,6 @@ void IMB_rectclip(ImBuf *dbuf,
                   int *srcy,
                   int *width,
                   int *height);
-void IMB_rectcpy(ImBuf *dbuf,
-                 const ImBuf *sbuf,
-                 int destx,
-                 int desty,
-                 int srcx,
-                 int srcy,
-                 int width,
-                 int height);
 void IMB_rectblend(ImBuf *dbuf,
                    const ImBuf *obuf,
                    const ImBuf *sbuf,
@@ -319,21 +401,29 @@ enum class IMBScaleFilter {
  * Scale/resize image to new dimensions.
  * Return true if \a ibuf is modified.
  */
-bool IMB_scale(ImBuf *ibuf,
-               unsigned int newx,
-               unsigned int newy,
-               IMBScaleFilter filter,
-               bool threaded = true);
+bool IMB_scale(ImBuf *ibuf, int2 new_size, IMBScaleFilter filter, bool threaded = true);
+inline bool IMB_scale(
+    ImBuf *ibuf, unsigned int newx, unsigned int newy, IMBScaleFilter filter, bool threaded = true)
+{
+  return IMB_scale(ibuf, int2(newx, newy), filter, threaded);
+}
 
 /**
  * Scale/resize image to new dimensions, into a newly created result image.
  * Metadata of input image (if any) is copied into the result image.
  */
 ImBuf *IMB_scale_into_new(const ImBuf *ibuf,
-                          unsigned int newx,
-                          unsigned int newy,
+                          int2 new_size,
                           IMBScaleFilter filter,
                           bool threaded = true);
+inline ImBuf *IMB_scale_into_new(const ImBuf *ibuf,
+                                 unsigned int newx,
+                                 unsigned int newy,
+                                 IMBScaleFilter filter,
+                                 bool threaded = true)
+{
+  return IMB_scale_into_new(ibuf, int2(newx, newy), filter, threaded);
+}
 
 /**
  * Test if color-space conversions of pixels in buffer need to take into account alpha.
@@ -502,9 +592,7 @@ void IMB_free_byte_pixels(ImBuf *ibuf);
  * Allocate storage for float type pixels.
  * If the image already contains float data storage, it is freed first.
  */
-bool IMB_alloc_float_pixels(ImBuf *ibuf,
-                            const unsigned int channels,
-                            bool initialize_pixels = true);
+bool IMB_alloc_float_pixels(ImBuf *ibuf, unsigned int channels, bool initialize_pixels = true);
 /**
  * Deallocate image float storage.
  */
@@ -556,20 +644,25 @@ void IMB_transform(const ImBuf *src,
                    ImBuf *dst,
                    eIMBTransformMode mode,
                    eIMBInterpolationFilterMode filter,
-                   const blender::float3x3 &transform_matrix,
+                   const float3x3 &transform_matrix,
                    const rctf *src_crop);
 
-blender::gpu::Texture *IMB_create_gpu_texture(const char *name,
-                                              ImBuf *ibuf,
-                                              bool use_high_bitdepth,
-                                              bool use_premult);
+/* Creates a GPU texture from the given image buffer and name. If use_high_bitdepth is true, float
+ * image buffers will be stored in full float textures, otherwise, they will be stored in half
+ * float textures. If use_premult is true, the image buffer data will be stored premultiplied. If
+ * limit_size is true, the texture will be scaled down to match the maximum size allowed by the
+ * U.glreslimit user preferences setting. */
+gpu::Texture *IMB_create_gpu_texture(const char *name,
+                                     ImBuf *ibuf,
+                                     bool use_high_bitdepth,
+                                     bool use_premult,
+                                     const bool limit_size);
 
-blender::gpu::TextureFormat IMB_gpu_get_texture_format(const ImBuf *ibuf,
-                                                       bool high_bitdepth,
-                                                       bool use_grayscale);
+gpu::TextureFormat IMB_gpu_get_texture_format(const ImBuf *ibuf,
+                                              bool high_bitdepth,
+                                              bool use_grayscale);
 
-bool IMB_gpu_get_compressed_format(const ImBuf *ibuf,
-                                   blender::gpu::TextureFormat *r_texture_format);
+bool IMB_gpu_get_compressed_format(const ImBuf *ibuf, gpu::TextureFormat *r_texture_format);
 
 /**
  * Ensures that values stored in the float rect can safely loaded into half float gpu textures.
@@ -582,19 +675,19 @@ void IMB_gpu_clamp_half_float(ImBuf *image_buffer);
  * The `ibuf` is only here to detect the storage type. The produced texture will have undefined
  * content. It will need to be populated by using #IMB_update_gpu_texture_sub().
  */
-blender::gpu::Texture *IMB_touch_gpu_texture(const char *name,
-                                             ImBuf *ibuf,
-                                             int w,
-                                             int h,
-                                             int layers,
-                                             bool use_high_bitdepth,
-                                             bool use_grayscale);
+gpu::Texture *IMB_touch_gpu_texture(const char *name,
+                                    ImBuf *ibuf,
+                                    int w,
+                                    int h,
+                                    int layers,
+                                    bool use_high_bitdepth,
+                                    bool use_grayscale);
 
 /**
- * Will update a #blender::gpu::Texture using the content of the #ImBuf. Only one layer will be
+ * Will update a #gpu::Texture using the content of the #ImBuf. Only one layer will be
  * updated. Will resize the ibuf if needed. Z is the layer to update. Unused if the texture is 2D.
  */
-void IMB_update_gpu_texture_sub(blender::gpu::Texture *tex,
+void IMB_update_gpu_texture_sub(gpu::Texture *tex,
                                 ImBuf *ibuf,
                                 int x,
                                 int y,
@@ -620,3 +713,5 @@ void IMB_ImBufFromStereo3d(const Stereo3dFormat *s3d,
                            ImBuf *ibuf_stereo3d,
                            ImBuf **r_ibuf_left,
                            ImBuf **r_ibuf_right);
+
+}  // namespace blender

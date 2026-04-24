@@ -9,6 +9,9 @@
 #pragma once
 
 #include "BLI_function_ref.hh"
+#include "BLI_string_ref.hh"
+
+namespace blender {
 
 struct AssetLibraryReference;
 struct bContext;
@@ -16,12 +19,13 @@ struct ID;
 struct ImBuf;
 struct wmNotifier;
 struct wmRegionListenerParams;
-namespace blender::asset_system {
+struct wmWindowManager;
+namespace asset_system {
 class AssetLibrary;
 class AssetRepresentation;
-}  // namespace blender::asset_system
+}  // namespace asset_system
 
-namespace blender::ed::asset::list {
+namespace ed::asset::list {
 
 void asset_reading_region_listen_fn(const wmRegionListenerParams *params);
 
@@ -68,6 +72,7 @@ void clear(const AssetLibraryReference *library_reference, const bContext *C);
  * reload is necessary.
  */
 void clear_all_library(const bContext *C);
+void on_remote_assets_downloaded(wmWindowManager &wm, StringRef library_url);
 /**
  * Returns if the given asset library in global asset list storage.
  */
@@ -108,4 +113,5 @@ bool listen(const wmNotifier *notifier);
  */
 int size(const AssetLibraryReference *library_reference);
 
-}  // namespace blender::ed::asset::list
+}  // namespace ed::asset::list
+}  // namespace blender

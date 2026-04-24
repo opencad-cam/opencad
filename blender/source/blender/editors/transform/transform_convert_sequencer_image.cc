@@ -68,7 +68,7 @@ static void store_transform_properties(const Scene *scene,
   tdseq->strip = strip;
   copy_v2_v2(tdseq->orig_origin_relative, transform->origin);
   tdseq->orig_origin_pixelspace = origin;
-  tdseq->quad_orig = seq::image_transform_final_quad_get(scene, strip);
+  tdseq->quad_orig = seq::image_transform_quad_get(scene, strip);
   tdseq->orig_matrix = math::invert(seq::image_transform_matrix_get(scene, strip));
 
   tdseq->orig_translation[0] = transform->xofs;
@@ -89,7 +89,7 @@ static TransData *SeqToTransData(
     const Scene *scene, Strip *strip, TransData *td, TransData2D *td2d, int vert_index)
 {
   const StripTransform *transform = strip->data->transform;
-  const float2 origin = seq::image_transform_origin_offset_pixelspace_get(scene, strip);
+  const float2 origin = seq::image_transform_origin_preview_offset_get(scene, strip);
   const float2 mirror = seq::image_transform_mirror_factor_get(strip);
   float vertex[2] = {origin[0], origin[1]};
 
@@ -159,8 +159,8 @@ static void createTransSeqImageData(bContext *C, TransInfo *t)
     return;
   }
 
-  ListBase *seqbase = seq::active_seqbase_get(ed);
-  ListBase *channels = seq::channels_displayed_get(ed);
+  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
+  ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
   VectorSet strips = seq::query_rendered_strips(scene, channels, seqbase, scene->r.cfra, 0);
   strips.remove_if([&](Strip *strip) { return (strip->flag & SEQ_SELECT) == 0; });
 
@@ -172,9 +172,9 @@ static void createTransSeqImageData(bContext *C, TransInfo *t)
   tc->custom.type.free_cb = freeSeqData;
 
   tc->data_len = strips.size() * 3; /* 3 vertices per sequence are needed. */
-  TransData *td = tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, "TransSeq TransData");
-  TransData2D *td2d = tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len,
-                                                                   "TransSeq TransData2D");
+  TransData *td = tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransSeq TransData");
+  TransData2D *td2d = tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len,
+                                                                      "TransSeq TransData2D");
 
   for (Strip *strip : strips) {
     /* One `Sequence` needs 3 `TransData` entries - center point placed in image origin, then 2
@@ -192,7 +192,7 @@ static bool autokeyframe_sequencer_image(bContext *C,
                                          const int tmode)
 {
   PropertyRNA *prop;
-  PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, &RNA_StripTransform, transform);
+  PointerRNA ptr = RNA_pointer_create_discrete(&scene->id, RNA_StripTransform, transform);
 
   const bool around_cursor = scene->toolsettings->sequencer_tool_settings->pivot_point ==
                              V3D_AROUND_CURSOR;
@@ -333,7 +333,7 @@ static float2 calculate_translation_offset(TransInfo *t, TransDataSeq *tdseq)
   const float2 viewport_pixel_aspect = {scene->r.xasp / scene->r.yasp, 1.0f};
   float2 mirror = seq::image_transform_mirror_factor_get(strip);
 
-  Array<float2> quad_new = seq::image_transform_final_quad_get(scene, strip);
+  Array<float2> quad_new = seq::image_transform_quad_get(scene, strip);
   return (quad_new[0] - tdseq->quad_orig[0]) * mirror / viewport_pixel_aspect;
 }
 
@@ -342,7 +342,7 @@ static float2 calculate_new_origin_position(TransInfo *t, TransDataSeq *tdseq, T
   Scene *scene = CTX_data_sequencer_scene(t->context);
   Strip *strip = tdseq->strip;
 
-  const float2 image_size = seq::transform_image_raw_size_get(scene, strip);
+  const float2 image_size = seq::image_transform_raw_size_get(scene, strip);
 
   const float2 viewport_pixel_aspect = {scene->r.xasp / scene->r.yasp, 1.0f};
   const float2 mirror = seq::image_transform_mirror_factor_get(strip);

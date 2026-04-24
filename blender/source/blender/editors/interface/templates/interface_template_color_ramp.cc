@@ -66,6 +66,23 @@ static void colorband_distribute(bContext *C, ColorBand *coba, bool evenly)
   }
 }
 
+static void colorramp_disabled_tip_func(bContext & /*C*/,
+                                        TooltipData &tip,
+                                        Button *but,
+                                        void * /*space*/)
+{
+  const bool has_tip = !but->tip.is_empty();
+  if (has_tip) {
+    tooltip_text_field_add(tip, but->tip + ".", {}, TIP_STYLE_HEADER, TIP_LC_NORMAL, false);
+  }
+  tooltip_text_field_add(tip,
+                         TIP_("Disabled: Color ramp only has one stop"),
+                         {},
+                         TIP_STYLE_NORMAL,
+                         TIP_LC_ALERT,
+                         has_tip);
+};
+
 static Block *colorband_tools_fn(bContext *C, ARegion *region, void *cb_v)
 {
   RNAUpdateCb &cb = *static_cast<RNAUpdateCb *>(cb_v);
@@ -104,7 +121,6 @@ static Block *colorband_tools_fn(bContext *C, ARegion *region, void *cb_v)
                                    UI_UNIT_Y,
                                    nullptr,
                                    "");
-    button_retval_set(but, 1);
     button_func_set(but, [coba, cb](bContext &C) {
       colorband_flip(&C, coba);
       ED_region_tag_redraw(CTX_wm_region(&C));
@@ -122,12 +138,16 @@ static Block *colorband_tools_fn(bContext *C, ARegion *region, void *cb_v)
                                    UI_UNIT_Y,
                                    nullptr,
                                    "");
-    button_retval_set(but, 1);
     button_func_set(but, [coba, cb](bContext &C) {
       colorband_distribute(&C, coba, false);
       ED_region_tag_redraw(CTX_wm_region(&C));
       rna_update_cb(C, cb);
     });
+
+    if (coba->tot < 2) {
+      button_flag_enable(but, BUT_DISABLED);
+      button_func_tooltip_custom_set(but, colorramp_disabled_tip_func, nullptr, nullptr);
+    }
   }
   {
     Button *but = uiDefIconTextBut(block,
@@ -140,12 +160,16 @@ static Block *colorband_tools_fn(bContext *C, ARegion *region, void *cb_v)
                                    UI_UNIT_Y,
                                    nullptr,
                                    "");
-    button_retval_set(but, 1);
     button_func_set(but, [coba, cb](bContext &C) {
       colorband_distribute(&C, coba, true);
       ED_region_tag_redraw(CTX_wm_region(&C));
       rna_update_cb(C, cb);
     });
+
+    if (coba->tot < 2) {
+      button_flag_enable(but, BUT_DISABLED);
+      button_func_tooltip_custom_set(but, colorramp_disabled_tip_func, nullptr, nullptr);
+    }
   }
 
   layout.separator();
@@ -165,7 +189,6 @@ static Block *colorband_tools_fn(bContext *C, ARegion *region, void *cb_v)
                                    UI_UNIT_Y,
                                    nullptr,
                                    "");
-    button_retval_set(but, 1);
     button_func_set(but, [coba, cb](bContext &C) {
       BKE_colorband_init(coba, true);
       ED_undo_push(&C, "Reset Color Ramp");
@@ -222,7 +245,7 @@ static void colorband_buttons_layout(Layout &layout,
   const float xs = butr->xmin;
   const float ys = butr->ymin;
 
-  PointerRNA ptr = RNA_pointer_create_discrete(cb.ptr.owner_id, &RNA_ColorRamp, coba);
+  PointerRNA ptr = RNA_pointer_create_discrete(cb.ptr.owner_id, RNA_ColorRamp, coba);
 
   Layout *split = &layout.split(0.4f, false);
 
@@ -258,6 +281,10 @@ static void colorband_buttons_layout(Layout &layout,
       ED_undo_push(&C, "Delete Color Ramp Stop");
     }
   });
+  if (coba->tot < 2) {
+    button_flag_enable(bt, BUT_DISABLED);
+    button_func_tooltip_custom_set(bt, colorramp_disabled_tip_func, nullptr, nullptr);
+  }
 
   RNAUpdateCb *tools_cb = MEM_new<RNAUpdateCb>(__func__, cb);
   bt = uiDefIconBlockBut(block,
@@ -306,7 +333,7 @@ static void colorband_buttons_layout(Layout &layout,
   if (coba->tot) {
     CBData *cbd = coba->data + coba->cur;
 
-    ptr = RNA_pointer_create_discrete(cb.ptr.owner_id, &RNA_ColorRampElement, cbd);
+    ptr = RNA_pointer_create_discrete(cb.ptr.owner_id, RNA_ColorRampElement, cbd);
 
     if (!expand) {
       split = &layout.split(0.3f, false);
@@ -357,18 +384,17 @@ static void colorband_buttons_layout(Layout &layout,
     }
 
     /* Some special (rather awkward) treatment to update UI state on certain property changes. */
-    for (int i = block->buttons.size() - 1; i >= 0; i--) {
-      Button *but = block->buttons[i].get();
-      if (but->rnapoin.data != ptr.data) {
+    for (Button &but : block->buttons() | std::views::reverse) {
+      if (but.rnapoin.data != ptr.data) {
         continue;
       }
-      if (!but->rnaprop) {
+      if (!but.rnaprop) {
         continue;
       }
 
-      const char *prop_identifier = RNA_property_identifier(but->rnaprop);
+      const char *prop_identifier = RNA_property_identifier(but.rnaprop);
       if (STREQ(prop_identifier, "position")) {
-        button_func_set(but, colorband_update_cb, but, coba);
+        button_func_set(&but, colorband_update_cb, &but, coba);
       }
 
       if (STREQ(prop_identifier, "color")) {
@@ -390,7 +416,7 @@ void template_color_ramp(Layout *layout,
   }
 
   const PointerRNA cptr = RNA_property_pointer_get(ptr, prop);
-  if (!cptr.data || !RNA_struct_is_a(cptr.type, &RNA_ColorRamp)) {
+  if (!cptr.data || !RNA_struct_is_a(cptr.type, RNA_ColorRamp)) {
     return;
   }
 

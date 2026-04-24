@@ -65,7 +65,8 @@ static void free_data(ModifierData *md)
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  GreasePencilWeightAngleModifierData *mmd = (GreasePencilWeightAngleModifierData *)md;
+  GreasePencilWeightAngleModifierData *mmd =
+      reinterpret_cast<GreasePencilWeightAngleModifierData *>(md);
 
   return (mmd->target_vgname[0] == '\0');
 }
@@ -95,7 +96,7 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
 }
 
 static bool target_vertex_group_available(const StringRefNull name,
-                                          const ListBase &vertex_group_names)
+                                          const ListBaseT<bDeformGroup> &vertex_group_names)
 {
   const int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
   if (def_nr < 0) {
@@ -151,37 +152,39 @@ static void write_weights_for_drawing(const ModifierData &md,
   const OffsetIndices points_by_curve = curves.points_by_curve();
   const Span<float3> positions = curves.positions();
 
-  strokes.foreach_index(GrainSize(512), [&](const int stroke) {
-    const IndexRange points = points_by_curve[stroke];
-    if (points.size() == 1) {
-      dst_weights.span[points.start()] = 1.0f;
-      return;
-    }
-    for (const int point : points.drop_front(1)) {
-      const float influence_weight = influence_weights[point];
-      if (influence_weight <= 0.0f) {
-        continue;
-      }
+  strokes.foreach_index(
+      [&](const int stroke) {
+        const IndexRange points = points_by_curve[stroke];
+        if (points.size() == 1) {
+          dst_weights.span[points.start()] = 1.0f;
+          return;
+        }
+        for (const int point : points.drop_front(1)) {
+          const float influence_weight = influence_weights[point];
+          if (influence_weight <= 0.0f) {
+            continue;
+          }
 
-      const float3 p1 = math::transform_point(obmat3x3, positions[point]);
-      const float3 p2 = math::transform_point(obmat3x3, positions[point - 1]);
-      const float3 vec = p2 - p1;
-      const float angle = angle_on_axis_v3v3_v3(vec_ref, vec, axis);
-      float weight = 1.0f - math::sin(angle);
+          const float3 p1 = math::transform_point(obmat3x3, positions[point]);
+          const float3 p2 = math::transform_point(obmat3x3, positions[point - 1]);
+          const float3 vec = p2 - p1;
+          const float angle = angle_on_axis_v3v3_v3(vec_ref, vec, axis);
+          float weight = 1.0f - math::sin(angle);
 
-      if (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_INVERT_OUTPUT) {
-        weight = 1.0f - weight;
-      }
+          if (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_INVERT_OUTPUT) {
+            weight = 1.0f - weight;
+          }
 
-      dst_weights.span[point] = (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_MULTIPLY_DATA) ?
-                                    dst_weights.span[point] * weight :
-                                    weight;
-      dst_weights.span[point] *= influence_weight;
-      dst_weights.span[point] = math::clamp(dst_weights.span[point], mmd.min_weight, 1.0f);
-    }
-    /* First point has the same weight as the second one. */
-    dst_weights.span[points[0]] = dst_weights.span[points[1]];
-  });
+          dst_weights.span[point] = (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_MULTIPLY_DATA) ?
+                                        dst_weights.span[point] * weight :
+                                        weight;
+          dst_weights.span[point] *= influence_weight;
+          dst_weights.span[point] = math::clamp(dst_weights.span[point], mmd.min_weight, 1.0f);
+        }
+        /* First point has the same weight as the second one. */
+        dst_weights.span[points[0]] = dst_weights.span[points[1]];
+      },
+      exec_mode::grain_size(512));
 
   dst_weights.finish();
 }
@@ -257,8 +260,6 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilWeightAngle, panel_draw);
 }
 
-}  // namespace blender
-
 ModifierTypeInfo modifierType_GreasePencilWeightAngle = {
     /*idname*/ "GreasePencilWeightAngleModifier",
     /*name*/ N_("Weight Angle"),
@@ -271,26 +272,28 @@ ModifierTypeInfo modifierType_GreasePencilWeightAngle = {
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_SupportsMapping,
     /*icon*/ ICON_MOD_VERTEX_WEIGHT,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
-    /*is_disabled*/ blender::is_disabled,
+    /*free_data*/ free_data,
+    /*is_disabled*/ is_disabled,
     /*update_depsgraph*/ nullptr,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

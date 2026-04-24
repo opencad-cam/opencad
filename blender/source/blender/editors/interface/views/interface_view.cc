@@ -23,6 +23,7 @@
 
 #include "BKE_screen.hh"
 
+#include "BLI_bounds.hh"
 #include "BLI_listbase.h"
 #include "BLI_map.hh"
 #include "BLI_rect.h"
@@ -34,8 +35,10 @@
 #include "UI_abstract_view.hh"
 #include "UI_grid_view.hh"
 #include "UI_tree_view.hh"
+#include "WM_api.hh"
 
 namespace blender::ui {
+#define TREE_VIEW_DRAG_SCROLL_SPEED 0.1
 
 /**
  * Wrapper to store views in a #ListBase, addressable via an identifier.
@@ -77,8 +80,8 @@ AbstractTreeView *block_add_view(Block &block,
 
 void block_free_views(Block *block)
 {
-  LISTBASE_FOREACH_MUTABLE (ViewLink *, link, &block->views) {
-    MEM_delete(link);
+  for (ViewLink &link : block->views.items_mutable()) {
+    MEM_delete(&link);
   }
 }
 
@@ -88,15 +91,15 @@ void ViewLink::views_bounds_calc(const Block &block)
 
   rcti minmax;
   BLI_rcti_init_minmax(&minmax);
-  LISTBASE_FOREACH (ViewLink *, link, &block.views) {
-    views_bounds.add(link->view.get(), minmax);
+  for (ViewLink &link : block.views) {
+    views_bounds.add(link.view.get(), minmax);
   }
 
-  for (const std::unique_ptr<Button> &but : block.buttons) {
-    if (but->type != ButtonType::ViewItem) {
+  for (Button &but : block.buttons()) {
+    if (but.type != ButtonType::ViewItem) {
       continue;
     }
-    auto *view_item_but = static_cast<ButtonViewItem *>(but.get());
+    auto *view_item_but = static_cast<ButtonViewItem *>(&but);
     if (!view_item_but->view_item) {
       continue;
     }
@@ -127,9 +130,9 @@ void block_view_persistent_state_restore(const ARegion &region,
                                          AbstractView &view)
 {
   StringRef idname = [&]() -> StringRef {
-    LISTBASE_FOREACH (ViewLink *, link, &block.views) {
-      if (link->view.get() == &view) {
-        return link->idname;
+    for (ViewLink &link : block.views) {
+      if (link.view.get() == &view) {
+        return link.idname;
       }
     }
     return "";
@@ -140,22 +143,22 @@ void block_view_persistent_state_restore(const ARegion &region,
     return;
   }
 
-  LISTBASE_FOREACH (uiViewStateLink *, stored_state, &region.view_states) {
-    if (stored_state->idname == idname) {
-      view.persistent_state_apply(stored_state->state);
+  for (uiViewStateLink &stored_state : region.view_states) {
+    if (stored_state.idname == idname) {
+      view.persistent_state_apply(stored_state.state);
     }
   }
 }
 
 static uiViewStateLink *ensure_view_state(ARegion &region, const ViewLink &link)
 {
-  LISTBASE_FOREACH (uiViewStateLink *, stored_state, &region.view_states) {
-    if (link.idname == stored_state->idname) {
-      return stored_state;
+  for (uiViewStateLink &stored_state : region.view_states) {
+    if (link.idname == stored_state.idname) {
+      return &stored_state;
     }
   }
 
-  uiViewStateLink *new_state = MEM_new_for_free<uiViewStateLink>(__func__);
+  uiViewStateLink *new_state = MEM_new<uiViewStateLink>(__func__);
   link.idname.copy(new_state->idname, sizeof(new_state->idname));
   BLI_addhead(&region.view_states, new_state);
   return new_state;
@@ -166,10 +169,10 @@ void block_views_end(ARegion *region, const Block *block)
   ViewLink::views_bounds_calc(*block);
 
   if (region && region->regiontype != RGN_TYPE_TEMPORARY) {
-    LISTBASE_FOREACH (const ViewLink *, link, &block->views) {
+    for (const ViewLink &link : block->views) {
       /* Ensure persistent view state storage for writing to files if needed. */
-      if (std::optional<uiViewState> temp_state = link->view->persistent_state()) {
-        uiViewStateLink *state_link = ensure_view_state(*region, *link);
+      if (std::optional<uiViewState> temp_state = link.view->persistent_state()) {
+        uiViewStateLink *state_link = ensure_view_state(*region, link);
         state_link->state = *temp_state;
       }
     }
@@ -180,8 +183,8 @@ void block_views_listen(const Block *block, const wmRegionListenerParams *listen
 {
   ARegion *region = listener_params->region;
 
-  LISTBASE_FOREACH (ViewLink *, view_link, &block->views) {
-    if (view_link->view->listen(*listener_params->notifier)) {
+  for (ViewLink &view_link : block->views) {
+    if (view_link.view->listen(*listener_params->notifier)) {
       ED_region_tag_redraw(region);
     }
   }
@@ -189,24 +192,27 @@ void block_views_listen(const Block *block, const wmRegionListenerParams *listen
 
 void block_views_draw_overlays(const ARegion *region, const Block *block)
 {
-  LISTBASE_FOREACH (ViewLink *, view_link, &block->views) {
-    view_link->view->draw_overlays(*region, *block);
+  for (ViewLink &view_link : block->views) {
+    view_link.view->draw_overlays(*region, *block);
   }
 }
 
-AbstractView *region_view_find_at(const ARegion *region, const int xy[2], const int pad)
+AbstractView *region_view_find_at(const ARegion *region,
+                                  const int xy[2],
+                                  const int pad,
+                                  Block **r_block)
 {
-  /* NOTE: Similar to #ui_but_find_mouse_over_ex(). */
+  /* NOTE: Similar to #but_find_mouse_over_ex(). */
 
   if (!region_contains_point_px(region, xy)) {
     return nullptr;
   }
-  LISTBASE_FOREACH (Block *, block, &region->runtime->uiblocks) {
+  for (Block &block : region->runtime->uiblocks) {
     float mx = xy[0], my = xy[1];
-    window_to_block_fl(region, block, &mx, &my);
+    window_to_block_fl(region, &block, &mx, &my);
 
-    LISTBASE_FOREACH (ViewLink *, view_link, &block->views) {
-      std::optional<rcti> bounds = view_link->view->get_bounds();
+    for (ViewLink &view_link : block.views) {
+      std::optional<rcti> bounds = view_link.view->get_bounds();
       if (!bounds) {
         continue;
       }
@@ -216,7 +222,10 @@ AbstractView *region_view_find_at(const ARegion *region, const int xy[2], const 
         BLI_rcti_pad(&padded_bounds, pad, pad);
       }
       if (BLI_rcti_isect_pt(&padded_bounds, mx, my)) {
-        return view_link->view.get();
+        if (r_block != nullptr) {
+          *r_block = &block;
+        }
+        return view_link.view.get();
       }
     }
   }
@@ -224,9 +233,59 @@ AbstractView *region_view_find_at(const ARegion *region, const int xy[2], const 
   return nullptr;
 }
 
+void region_view_scroll_at_borders(bContext *C, wmDropBox &dropbox, const wmEvent *event)
+{
+  Block *block = nullptr;
+  ARegion *region = CTX_wm_region(C);
+  wmWindow *window = CTX_wm_window(C);
+  wmWindowManager *wm = CTX_wm_manager(C);
+  if (!ELEM(event->type, MOUSEMOVE, TIMER)) {
+    return;
+  }
+  AbstractView *view = region_view_find_at(region, event->xy, UI_UNIT_Y, &block);
+  if (view == nullptr) {
+    WM_event_timer_remove(wm, window, dropbox.timer);
+    dropbox.timer = nullptr;
+    return;
+  }
+
+  float x = event->xy[0], y = event->xy[1];
+  window_to_block_fl(region, block, &x, &y);
+
+  std::optional<rcti> bounds = view->get_bounds();
+
+  const float margin = UI_UNIT_Y * 1 / 3;
+  const std::optional<ViewScrollDirection> scroll_dir =
+      [&]() -> std::optional<ViewScrollDirection> {
+    if (y > bounds->ymax - margin) {
+      return ViewScrollDirection::UP;
+    }
+    if (y < bounds->ymin + margin) {
+      return ViewScrollDirection::DOWN;
+    }
+    return std::nullopt;
+  }();
+
+  if (!scroll_dir.has_value()) {
+    WM_event_timer_remove(wm, window, dropbox.timer);
+    dropbox.timer = nullptr;
+    return;
+  }
+
+  if (dropbox.timer) {
+    if (event->type == TIMER) {
+      view->scroll(scroll_dir.value());
+      ED_region_tag_redraw(region);
+    }
+  }
+  else {
+    dropbox.timer = WM_event_timer_add(wm, window, TIMER, TREE_VIEW_DRAG_SCROLL_SPEED);
+  }
+}
+
 AbstractViewItem *region_views_find_item_at(const ARegion &region, const int xy[2])
 {
-  auto *item_but = (ButtonViewItem *)view_item_find_mouse_over(&region, xy);
+  auto *item_but = static_cast<ButtonViewItem *>(view_item_find_mouse_over(&region, xy));
   if (!item_but) {
     return nullptr;
   }
@@ -236,7 +295,7 @@ AbstractViewItem *region_views_find_item_at(const ARegion &region, const int xy[
 
 AbstractViewItem *region_views_find_active_item(const ARegion *region)
 {
-  auto *item_but = (ButtonViewItem *)view_item_find_active(region);
+  auto *item_but = static_cast<ButtonViewItem *>(view_item_find_active(region));
   if (!item_but) {
     return nullptr;
   }
@@ -251,9 +310,9 @@ Button *region_views_find_active_item_but(const ARegion *region)
 
 void region_views_clear_search_highlight(const ARegion *region)
 {
-  LISTBASE_FOREACH (Block *, block, &region->runtime->uiblocks) {
-    LISTBASE_FOREACH (ViewLink *, view_link, &block->views) {
-      view_link->view->clear_search_highlight();
+  for (Block &block : region->runtime->uiblocks) {
+    for (ViewLink &view_link : block.views) {
+      view_link.view->clear_search_highlight();
     }
   }
 }
@@ -275,7 +334,9 @@ std::unique_ptr<DropTargetInterface> region_views_find_drop_target_at(const AReg
     }
   }
 
-  if (AbstractView *view = region_view_find_at(region, xy, 0)) {
+  /* To continue scroll during drag when mouse is slightly outside the view, find the view with
+   * extra padding (UI_UNIT_Y). */
+  if (AbstractView *view = region_view_find_at(region, xy, UI_UNIT_Y)) {
     /* If we are above a tree, but not hovering any specific element, dropping something should
      * insert it after the last item. */
     if (AbstractTreeView *tree_view = dynamic_cast<AbstractTreeView *>(view)) {
@@ -288,7 +349,10 @@ std::unique_ptr<DropTargetInterface> region_views_find_drop_target_at(const AReg
         last_item = &item;
       });
       if (last_item) {
-        return last_item->create_item_drop_target();
+        std::optional<rctf> rct = last_item->get_win_rect(*region);
+        if (rct && xy[1] < rct->ymin) {
+          return last_item->create_item_drop_target();
+        }
       }
     }
   }
@@ -299,9 +363,9 @@ std::unique_ptr<DropTargetInterface> region_views_find_drop_target_at(const AReg
 static StringRef block_view_find_idname(const Block &block, const AbstractView &view)
 {
   /* First get the `idname` of the view we're looking for. */
-  LISTBASE_FOREACH (ViewLink *, view_link, &block.views) {
-    if (view_link->view.get() == &view) {
-      return view_link->idname;
+  for (ViewLink &view_link : block.views) {
+    if (view_link.view.get() == &view) {
+      return view_link.idname;
     }
   }
 
@@ -321,9 +385,9 @@ static T *block_view_find_matching_in_old_block_impl(const Block &new_block, con
     return nullptr;
   }
 
-  LISTBASE_FOREACH (ViewLink *, old_view_link, &old_block->views) {
-    if (old_view_link->idname == idname) {
-      return dynamic_cast<T *>(old_view_link->view.get());
+  for (ViewLink &old_view_link : old_block->views) {
+    if (old_view_link.idname == idname) {
+      return dynamic_cast<T *>(old_view_link.view.get());
     }
   }
 
@@ -350,11 +414,11 @@ ButtonViewItem *block_view_find_matching_view_item_but_in_old_block(
     return nullptr;
   }
 
-  for (const std::unique_ptr<Button> &old_but : old_block->buttons) {
-    if (old_but->type != ButtonType::ViewItem) {
+  for (Button &old_but : old_block->buttons()) {
+    if (old_but.type != ButtonType::ViewItem) {
       continue;
     }
-    ButtonViewItem *old_item_but = (ButtonViewItem *)old_but.get();
+    ButtonViewItem *old_item_but = static_cast<ButtonViewItem *>(&old_but);
     if (!old_item_but->view_item) {
       continue;
     }

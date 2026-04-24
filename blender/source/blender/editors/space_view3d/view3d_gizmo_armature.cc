@@ -31,6 +31,8 @@
 
 #include "view3d_intern.hh" /* own include */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Armature Spline Gizmo
  * \{ */
@@ -110,14 +112,15 @@ static bool WIDGETGROUP_armature_spline_poll(const bContext *C, wmGizmoGroupType
     return false;
   }
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *base = BKE_view_layer_active_base_get(view_layer);
   if (base && BASE_SELECTABLE(v3d, base)) {
     Object *ob = BKE_object_pose_armature_get(base->object);
     if (ob) {
-      const bArmature *arm = static_cast<const bArmature *>(ob->data);
+      const bArmature *arm = id_cast<const bArmature *>(ob->data);
       if (arm->drawtype == ARM_DRAW_TYPE_B_BONE) {
         bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
         if (pchan && pchan->bone->segments > 1) {
@@ -133,15 +136,16 @@ static bool WIDGETGROUP_armature_spline_poll(const bContext *C, wmGizmoGroupType
 
 static void WIDGETGROUP_armature_spline_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_object_pose_armature_get(BKE_view_layer_active_object_get(view_layer));
   bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
 
   const wmGizmoType *gzt_move = WM_gizmotype_find("GIZMO_GT_move_3d", true);
 
-  BoneSplineWidgetGroup *bspline_group = MEM_callocN<BoneSplineWidgetGroup>(__func__);
+  BoneSplineWidgetGroup *bspline_group = MEM_new_zeroed<BoneSplineWidgetGroup>(__func__);
   gzgroup->customdata = bspline_group;
 
   /* Handles */
@@ -154,8 +158,8 @@ static void WIDGETGROUP_armature_spline_setup(const bContext *C, wmGizmoGroup *g
                  ED_GIZMO_MOVE_DRAW_FLAG_FILL | ED_GIZMO_MOVE_DRAW_FLAG_ALIGN_VIEW);
     WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
 
-    blender::ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, gz->color);
-    blender::ui::theme::get_color_3fv(TH_GIZMO_HI, gz->color_hi);
+    ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, gz->color);
+    ui::theme::get_color_3fv(TH_GIZMO_HI, gz->color_hi);
 
     gz->scale_basis = 0.06f;
 
@@ -167,9 +171,10 @@ static void WIDGETGROUP_armature_spline_setup(const bContext *C, wmGizmoGroup *g
 
 static void WIDGETGROUP_armature_spline_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_object_pose_armature_get(BKE_view_layer_active_object_get(view_layer));
 
   if (!gzgroup->customdata) {
@@ -214,3 +219,5 @@ void VIEW3D_GGT_armature_spline(wmGizmoGroupType *gzgt)
 }
 
 /** \} */
+
+}  // namespace blender

@@ -4,18 +4,20 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_hair_info_cc {
+namespace blender {
+
+namespace nodes::node_shader_hair_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Float>("Is Strand");
+  b.add_output<decl::Float>("Is Strand"_ustr);
 #define INTERCEPT_SOCKET_INDEX 1
-  b.add_output<decl::Float>("Intercept");
+  b.add_output<decl::Float>("Intercept"_ustr);
 #define LENGTH_SOCKET_INDEX 2
-  b.add_output<decl::Float>("Length");
-  b.add_output<decl::Float>("Thickness");
-  b.add_output<decl::Vector>("Tangent Normal");
-  b.add_output<decl::Float>("Random");
+  b.add_output<decl::Float>("Length"_ustr);
+  b.add_output<decl::Float>("Thickness"_ustr);
+  b.add_output<decl::Vector>("Tangent Normal"_ustr);
+  b.add_output<decl::Float>("Random"_ustr);
 }
 
 static int node_shader_gpu_hair_info(GPUMaterial *mat,
@@ -43,16 +45,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_hair_info_cc
+}  // namespace nodes::node_shader_hair_info_cc
 
 /* node type definition */
 void register_node_type_sh_hair_info()
 {
-  namespace file_ns = blender::nodes::node_shader_hair_info_cc;
+  namespace file_ns = nodes::node_shader_hair_info_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeHairInfo", SH_NODE_HAIR_INFO);
+  sh_node_type_base(&ntype, "ShaderNodeHairInfo"_ustr, SH_NODE_HAIR_INFO);
   ntype.ui_name = "Curves Info";
   ntype.ui_description = "Retrieve hair curve information";
   ntype.enum_name_legacy = "HAIR_INFO";
@@ -61,5 +63,7 @@ void register_node_type_sh_hair_info()
   ntype.gpu_fn = file_ns::node_shader_gpu_hair_info;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -23,6 +23,8 @@
 
 #include "BKE_idtype.hh"
 
+namespace blender {
+
 // static CLG_LogRef LOG = {"lib.idtype"};
 
 uint BKE_idtype_cache_key_hash(const void *key_v)
@@ -43,6 +45,84 @@ bool BKE_idtype_cache_key_cmp(const void *key_a_v, const void *key_b_v)
 
 static std::array<IDTypeInfo *, INDEX_ID_MAX> id_types;
 
+#ifndef NDEBUG
+/** Check that no member remains uninitialized. */
+static bool id_type_is_valid(const IDTypeInfo &id_type)
+{
+  if (id_type.id_code == ID_LINK_PLACEHOLDER) {
+    return false;
+  }
+  if (id_type.id_filter == 0) {
+    return false;
+  }
+  if (id_type.main_listbase_index == INDEX_ID_MAX) {
+    return false;
+  }
+  if (id_type.struct_size == 0) {
+    return false;
+  }
+  if (id_type.name == nullptr) {
+    return false;
+  }
+  if (id_type.name_plural == nullptr) {
+    return false;
+  }
+  if (id_type.translation_context == nullptr) {
+    return false;
+  }
+  if (id_type.asset_type_info == id_type.InvalidPointer<AssetTypeInfo *>()) {
+    return false;
+  }
+  if (id_type.init_data == id_type.InvalidPointer<IDTypeInitDataFunction>()) {
+    return false;
+  }
+  if (id_type.copy_data == id_type.InvalidPointer<IDTypeCopyDataFunction>()) {
+    return false;
+  }
+  if (id_type.free_data == id_type.InvalidPointer<IDTypeFreeDataFunction>()) {
+    return false;
+  }
+  if (id_type.make_local == id_type.InvalidPointer<IDTypeMakeLocalFunction>()) {
+    return false;
+  }
+  if (id_type.foreach_id == id_type.InvalidPointer<IDTypeForeachIDFunction>()) {
+    return false;
+  }
+  if (id_type.foreach_cache == id_type.InvalidPointer<IDTypeForeachCacheFunction>()) {
+    return false;
+  }
+  if (id_type.foreach_path == id_type.InvalidPointer<IDTypeForeachPathFunction>()) {
+    return false;
+  }
+  if (id_type.foreach_working_space_color == id_type.InvalidPointer<IDTypeForeachColorFunction>())
+  {
+    return false;
+  }
+  if (id_type.owner_pointer_get == id_type.InvalidPointer<IDTypeEmbeddedOwnerPointerGetFunction>())
+  {
+    return false;
+  }
+  if (id_type.blend_write == id_type.InvalidPointer<IDTypeBlendWriteFunction>()) {
+    return false;
+  }
+  if (id_type.blend_read_data == id_type.InvalidPointer<IDTypeBlendReadDataFunction>()) {
+    return false;
+  }
+  if (id_type.blend_read_after_liblink ==
+      id_type.InvalidPointer<IDTypeBlendReadAfterLiblinkFunction>())
+  {
+    return false;
+  }
+  if (id_type.blend_read_undo_preserve == id_type.InvalidPointer<IDTypeBlendReadUndoPreserve>()) {
+    return false;
+  }
+  if (id_type.lib_override_apply_post == id_type.InvalidPointer<IDTypeLibOverrideApplyPost>()) {
+    return false;
+  }
+  return true;
+}
+#endif
+
 static void id_type_init()
 {
   int init_types_num = 0;
@@ -50,6 +130,7 @@ static void id_type_init()
 #define INIT_TYPE(_id_code) \
   { \
     BLI_assert(IDType_##_id_code.main_listbase_index == INDEX_##_id_code); \
+    BLI_assert(id_type_is_valid(IDType_##_id_code)); \
     id_types[INDEX_##_id_code] = &IDType_##_id_code; \
     init_types_num++; \
   } \
@@ -159,6 +240,17 @@ static const IDTypeInfo *idtype_get_info_from_name(const char *idtype_name)
   return nullptr;
 }
 
+static const IDTypeInfo *idtype_get_info_from_name_case_insensitive(const char *idtype_name)
+{
+  for (const IDTypeInfo *id_type : id_types) {
+    if (id_type && STRCASEEQ(idtype_name, id_type->name)) {
+      return id_type;
+    }
+  }
+
+  return nullptr;
+}
+
 /* Various helpers/wrappers around #IDTypeInfo structure. */
 
 const char *BKE_idtype_idcode_to_name(const short idcode)
@@ -185,6 +277,13 @@ const char *BKE_idtype_idcode_to_translation_context(const short idcode)
 short BKE_idtype_idcode_from_name(const char *idtype_name)
 {
   const IDTypeInfo *id_type = idtype_get_info_from_name(idtype_name);
+  BLI_assert(id_type);
+  return id_type != nullptr ? id_type->id_code : 0;
+}
+
+short BKE_idtype_idcode_from_name_case_insensitive(const char *idtype_name)
+{
+  const IDTypeInfo *id_type = idtype_get_info_from_name_case_insensitive(idtype_name);
   BLI_assert(id_type);
   return id_type != nullptr ? id_type->id_code : 0;
 }
@@ -231,7 +330,7 @@ int BKE_idtype_idcode_to_index(const short idcode)
   case ID_##_id: \
     return INDEX_ID_##_id
 
-  switch ((ID_Type)idcode) {
+  switch (ID_Type(idcode)) {
     CASE_IDINDEX(AC);
     CASE_IDINDEX(AR);
     CASE_IDINDEX(BR);
@@ -386,7 +485,7 @@ void BKE_idtype_id_foreach_cache(ID *id,
   }
 
   /* Handle 'private IDs'. */
-  bNodeTree *nodetree = blender::bke::node_tree_from_id(id);
+  bNodeTree *nodetree = bke::node_tree_from_id(id);
   if (nodetree != nullptr) {
     type_info = BKE_idtype_get_info_from_id(&nodetree->id);
     if (type_info == nullptr) {
@@ -400,7 +499,7 @@ void BKE_idtype_id_foreach_cache(ID *id,
   }
 
   if (GS(id->name) == ID_SCE) {
-    Scene *scene = (Scene *)id;
+    Scene *scene = id_cast<Scene *>(id);
     if (scene->master_collection != nullptr) {
       type_info = BKE_idtype_get_info_from_id(&scene->master_collection->id);
       if (type_info->foreach_cache != nullptr) {
@@ -409,3 +508,5 @@ void BKE_idtype_id_foreach_cache(ID *id,
     }
   }
 }
+
+}  // namespace blender

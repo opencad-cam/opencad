@@ -32,17 +32,18 @@ void TreeElementGreasePencilNode::expand(SpaceOutliner & /*space_outliner*/) con
   if (!node_.is_group()) {
     return;
   }
-  LISTBASE_FOREACH_BACKWARD (GreasePencilLayerTreeNode *, child, &node_.as_group().children) {
+  int index = 0;
+  for (GreasePencilLayerTreeNode &child : node_.as_group().children.items_reversed()) {
     add_element(&legacy_te_.subtree,
                 &owner_grease_pencil_.id,
-                child,
+                &child,
                 &legacy_te_,
                 TSE_GREASE_PENCIL_NODE,
-                0);
+                index++);
   }
 }
 
-blender::bke::greasepencil::TreeNode &TreeElementGreasePencilNode::node() const
+bke::greasepencil::TreeNode &TreeElementGreasePencilNode::node() const
 {
   return node_;
 }

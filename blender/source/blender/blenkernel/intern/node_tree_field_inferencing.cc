@@ -124,7 +124,7 @@ static const FieldInferencingInterface &get_node_field_inferencing_interface(con
 {
   /* Node groups already reference all required information, so just return that. */
   if (node.is_group()) {
-    bNodeTree *group = (bNodeTree *)node.id;
+    bNodeTree *group = id_cast<bNodeTree *>(node.id);
     if (group == nullptr) {
       static const FieldInferencingInterface empty_interface;
       return empty_interface;
@@ -373,7 +373,7 @@ static bool propagate_special_data_requirements(
       break;
     }
     case GEO_NODE_SIMULATION_OUTPUT: {
-      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeSimulationInput")) {
+      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeSimulationInput"_ustr)) {
         const auto &data = *static_cast<const NodeGeometrySimulationInput *>(input_node->storage);
         if (node.identifier == data.output_node_id) {
           const FieldStateSyncResult sync_result = simulation_nodes_field_state_sync(
@@ -397,7 +397,7 @@ static bool propagate_special_data_requirements(
       break;
     }
     case GEO_NODE_REPEAT_OUTPUT: {
-      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeRepeatInput")) {
+      for (const bNode *input_node : tree.nodes_by_type("GeometryNodeRepeatInput"_ustr)) {
         const auto &data = *static_cast<const NodeGeometryRepeatInput *>(input_node->storage);
         if (node.identifier == data.output_node_id) {
           const FieldStateSyncResult sync_result = repeat_field_state_sync(

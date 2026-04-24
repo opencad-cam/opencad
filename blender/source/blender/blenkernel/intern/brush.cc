@@ -51,6 +51,8 @@
 
 #include "BLO_read_write.hh"
 
+namespace blender {
+
 static void brush_init_data(ID *id)
 {
   Brush *brush = reinterpret_cast<Brush *>(id);
@@ -61,8 +63,6 @@ static void brush_init_data(ID *id)
 
   /* the default alpha falloff curve */
   BKE_brush_curve_preset(brush, CURVE_PRESET_SMOOTH);
-
-  brush->automasking_cavity_curve = BKE_paint_default_curve();
 
   brush->curve_rand_hue = BKE_paint_default_curve();
   brush->curve_rand_saturation = BKE_paint_default_curve();
@@ -101,8 +101,8 @@ static void brush_copy_data(Main * /*bmain*/,
   brush_dst->curve_jitter = BKE_curvemapping_copy(brush_src->curve_jitter);
 
   if (brush_src->gpencil_settings != nullptr) {
-    brush_dst->gpencil_settings = MEM_new_for_free<BrushGpencilSettings>(
-        __func__, blender::dna::shallow_copy(*(brush_src->gpencil_settings)));
+    brush_dst->gpencil_settings = MEM_new<BrushGpencilSettings>(
+        __func__, dna::shallow_copy(*(brush_src->gpencil_settings)));
     brush_dst->gpencil_settings->curve_sensitivity = BKE_curvemapping_copy(
         brush_src->gpencil_settings->curve_sensitivity);
     brush_dst->gpencil_settings->curve_strength = BKE_curvemapping_copy(
@@ -124,10 +124,19 @@ static void brush_copy_data(Main * /*bmain*/,
         brush_src->gpencil_settings->curve_rand_value);
   }
   if (brush_src->curves_sculpt_settings != nullptr) {
-    brush_dst->curves_sculpt_settings = MEM_new_for_free<BrushCurvesSculptSettings>(
+    brush_dst->curves_sculpt_settings = MEM_new<BrushCurvesSculptSettings>(
         __func__, *(brush_src->curves_sculpt_settings));
     brush_dst->curves_sculpt_settings->curve_parameter_falloff = BKE_curvemapping_copy(
         brush_src->curves_sculpt_settings->curve_parameter_falloff);
+  }
+  if (brush_src->mesh_automasking_settings != nullptr) {
+    brush_dst->mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(
+        __func__, dna::shallow_copy(*(brush_src->mesh_automasking_settings)));
+    brush_dst->mesh_automasking_settings->cavity_curve = BKE_curvemapping_copy(
+        brush_src->mesh_automasking_settings->cavity_curve);
+
+    /* The "operator" level cavity curve is never used for the brush. Ensure it is nullptr */
+    brush_dst->mesh_automasking_settings->cavity_curve_op = nullptr;
   }
 
   /* enable fake user by default */
@@ -160,16 +169,20 @@ static void brush_free_data(ID *id)
     BKE_curvemapping_free(brush->gpencil_settings->curve_rand_saturation);
     BKE_curvemapping_free(brush->gpencil_settings->curve_rand_value);
 
-    MEM_SAFE_FREE(brush->gpencil_settings);
+    MEM_SAFE_DELETE(brush->gpencil_settings);
   }
   if (brush->curves_sculpt_settings != nullptr) {
     BKE_curvemapping_free(brush->curves_sculpt_settings->curve_parameter_falloff);
-    MEM_freeN(brush->curves_sculpt_settings);
+    MEM_delete(brush->curves_sculpt_settings);
+  }
+  if (brush->mesh_automasking_settings != nullptr) {
+    BKE_curvemapping_free(brush->mesh_automasking_settings->cavity_curve);
+    MEM_delete(brush->mesh_automasking_settings);
   }
 
-  MEM_SAFE_FREE(brush->gradient);
+  MEM_SAFE_DELETE(brush->gradient);
 
-  BKE_previewimg_free(&(brush->preview));
+  BKE_previewimg_id_free(&brush->id);
 }
 
 static void brush_make_local(Main *bmain, ID *id, const int flags)
@@ -240,7 +253,7 @@ static void brush_blend_write(BlendWriter *writer, ID *id, const void *id_addres
 {
   Brush *brush = reinterpret_cast<Brush *>(id);
 
-  BLO_write_id_struct(writer, Brush, id_address, &brush->id);
+  writer->write_id_struct(id_address, brush);
   BKE_id_blend_write(writer, &brush->id);
 
   if (brush->curve_distance_falloff) {
@@ -306,6 +319,11 @@ static void brush_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     writer->write_struct(brush->curves_sculpt_settings);
     BKE_curvemapping_blend_write(writer, brush->curves_sculpt_settings->curve_parameter_falloff);
   }
+  if (brush->mesh_automasking_settings) {
+    writer->write_struct(brush->mesh_automasking_settings);
+    BKE_curvemapping_blend_write(writer, brush->mesh_automasking_settings->cavity_curve);
+  }
+
   if (brush->gradient) {
     writer->write_struct(brush->gradient);
   }
@@ -444,6 +462,17 @@ static void brush_blend_read_data(BlendDataReader *reader, ID *id)
     }
   }
 
+  BLO_read_struct(reader, MeshAutomaskingSettings, &brush->mesh_automasking_settings);
+  if (brush->mesh_automasking_settings) {
+    BLO_read_struct(reader, CurveMapping, &brush->mesh_automasking_settings->cavity_curve);
+    if (brush->mesh_automasking_settings->cavity_curve) {
+      BKE_curvemapping_blend_read(reader, brush->mesh_automasking_settings->cavity_curve);
+    }
+
+    /* The "operator" level curve is never used on the brush, ensure it is nullptr */
+    brush->mesh_automasking_settings->cavity_curve_op = nullptr;
+  }
+
   BLO_read_struct(reader, PreviewImage, &brush->preview);
   BKE_previewimg_blend_read(reader, brush->preview);
 
@@ -469,7 +498,6 @@ static void brush_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *id)
 
 static void brush_asset_metadata_ensure(void *asset_ptr, AssetMetaData *asset_data)
 {
-  using namespace blender;
   using namespace blender::bke;
 
   Brush *brush = reinterpret_cast<Brush *>(asset_ptr);
@@ -517,35 +545,34 @@ static AssetTypeInfo AssetType_BR = {
 };
 
 IDTypeInfo IDType_ID_BR = {
-    /*id_code*/ Brush::id_type,
-    /*id_filter*/ FILTER_ID_BR,
-    /*dependencies_id_types*/
-    (FILTER_ID_IM | FILTER_ID_PC | FILTER_ID_TE | FILTER_ID_MA),
-    /*main_listbase_index*/ INDEX_ID_BR,
-    /*struct_size*/ sizeof(Brush),
-    /*name*/ "Brush",
-    /*name_plural*/ N_("brushes"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_BRUSH,
-    /*flags*/ IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_NO_MEMFILE_UNDO,
-    /*asset_type_info*/ &AssetType_BR,
+    .id_code = Brush::id_type,
+    .id_filter = FILTER_ID_BR,
+    .dependencies_id_types = (FILTER_ID_IM | FILTER_ID_PC | FILTER_ID_TE | FILTER_ID_MA),
+    .main_listbase_index = INDEX_ID_BR,
+    .struct_size = sizeof(Brush),
+    .name = "Brush",
+    .name_plural = N_("brushes"),
+    .translation_context = BLT_I18NCONTEXT_ID_BRUSH,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_NO_MEMFILE_UNDO,
+    .asset_type_info = &AssetType_BR,
 
-    /*init_data*/ brush_init_data,
-    /*copy_data*/ brush_copy_data,
-    /*free_data*/ brush_free_data,
-    /*make_local*/ brush_make_local,
-    /*foreach_id*/ brush_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ brush_foreach_working_space_color,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = brush_init_data,
+    .copy_data = brush_copy_data,
+    .free_data = brush_free_data,
+    .make_local = brush_make_local,
+    .foreach_id = brush_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = brush_foreach_working_space_color,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ brush_blend_write,
-    /*blend_read_data*/ brush_blend_read_data,
-    /*blend_read_after_liblink*/ brush_blend_read_after_liblink,
+    .blend_write = brush_blend_write,
+    .blend_read_data = brush_blend_read_data,
+    .blend_read_after_liblink = brush_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 static RNG *brush_rng;
@@ -637,6 +664,9 @@ Brush *BKE_brush_add(Main *bmain, const char *name, const eObjectMode ob_mode)
   {
     BKE_brush_init_gpencil_settings(brush);
   }
+  else if (ob_mode == OB_MODE_SCULPT) {
+    BKE_brush_init_mesh_automasking_settings(brush);
+  }
 
   return brush;
 }
@@ -644,7 +674,7 @@ Brush *BKE_brush_add(Main *bmain, const char *name, const eObjectMode ob_mode)
 void BKE_brush_init_gpencil_settings(Brush *brush)
 {
   if (brush->gpencil_settings == nullptr) {
-    brush->gpencil_settings = MEM_new_for_free<BrushGpencilSettings>("BrushGpencilSettings");
+    brush->gpencil_settings = MEM_new<BrushGpencilSettings>("BrushGpencilSettings");
   }
 
   brush->gpencil_settings->draw_smoothlvl = 1;
@@ -741,10 +771,18 @@ Brush *BKE_brush_duplicate(Main *bmain,
   return new_brush;
 }
 
+void BKE_brush_init_mesh_automasking_settings(Brush *brush)
+{
+  if (brush->mesh_automasking_settings == nullptr) {
+    brush->mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(__func__);
+    brush->mesh_automasking_settings->cavity_curve = BKE_paint_default_curve();
+  }
+}
+
 void BKE_brush_init_curves_sculpt_settings(Brush *brush)
 {
   if (brush->curves_sculpt_settings == nullptr) {
-    brush->curves_sculpt_settings = MEM_new_for_free<BrushCurvesSculptSettings>(__func__);
+    brush->curves_sculpt_settings = MEM_new<BrushCurvesSculptSettings>(__func__);
   }
   BrushCurvesSculptSettings *settings = brush->curves_sculpt_settings;
   settings->flag = BRUSH_CURVES_SCULPT_FLAG_INTERPOLATE_RADIUS;
@@ -764,20 +802,10 @@ void BKE_brush_tag_unsaved_changes(Brush *brush)
   }
 }
 
-Brush *BKE_brush_first_search(Main *bmain, const eObjectMode ob_mode)
-{
-  LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
-    if (brush->ob_mode & ob_mode) {
-      return brush;
-    }
-  }
-  return nullptr;
-}
-
 void BKE_brush_debug_print_state(Brush *br)
 {
   /* create a fake brush and set it to the defaults */
-  Brush def = blender::dna::shallow_zero_initialize();
+  Brush def = dna::shallow_zero_initialize();
   brush_defaults(&def);
 
 #define BR_TEST(field, t) \
@@ -811,14 +839,11 @@ void BKE_brush_debug_print_state(Brush *br)
   BR_TEST(size, d);
 
   /* br->flag */
-  BR_TEST_FLAG(BRUSH_AIRBRUSH);
   BR_TEST_FLAG(BRUSH_ALPHA_PRESSURE);
   BR_TEST_FLAG(BRUSH_SIZE_PRESSURE);
   BR_TEST_FLAG(BRUSH_JITTER_PRESSURE);
   BR_TEST_FLAG(BRUSH_SPACING_PRESSURE);
-  BR_TEST_FLAG(BRUSH_ANCHORED);
   BR_TEST_FLAG(BRUSH_DIR_IN);
-  BR_TEST_FLAG(BRUSH_SPACE);
   BR_TEST_FLAG(BRUSH_SMOOTH_STROKE);
   BR_TEST_FLAG(BRUSH_PERSISTENT);
   BR_TEST_FLAG(BRUSH_ACCUMULATE);
@@ -829,7 +854,6 @@ void BKE_brush_debug_print_state(Brush *br)
   BR_TEST_FLAG(BRUSH_ADAPTIVE_SPACE);
   BR_TEST_FLAG(BRUSH_LOCK_SIZE);
   BR_TEST_FLAG(BRUSH_EDGE_TO_EDGE);
-  BR_TEST_FLAG(BRUSH_DRAG_DOT);
   BR_TEST_FLAG(BRUSH_INVERSE_SMOOTH_PRESSURE);
   BR_TEST_FLAG(BRUSH_PLANE_TRIM);
   BR_TEST_FLAG(BRUSH_FRONTFACE);
@@ -916,12 +940,12 @@ const MTex *BKE_brush_color_texture_get(const Brush *brush, const eObjectMode ob
 float BKE_brush_sample_tex_3d(const Paint *paint,
                               const Brush *br,
                               const MTex *mtex,
-                              const float point[3],
-                              float rgba[4],
+                              const float3 &point,
+                              float4 &rgba,
                               const int thread,
                               ImagePool *pool)
 {
-  const blender::bke::PaintRuntime *paint_runtime = paint->runtime;
+  const bke::PaintRuntime *paint_runtime = paint->runtime;
   float intensity = 1.0;
   bool hasrgb = false;
 
@@ -935,9 +959,8 @@ float BKE_brush_sample_tex_3d(const Paint *paint,
   }
   else if (mtex->brush_map_mode == MTEX_MAP_MODE_STENCIL) {
     float rotation = -mtex->rot;
-    const float point_2d[2] = {point[0], point[1]};
+    const float2 point_2d = point.xy();
     float x, y;
-    float co[3];
 
     x = point_2d[0] - br->stencil_pos[0];
     y = point_2d[1] - br->stencil_pos[1];
@@ -957,18 +980,14 @@ float BKE_brush_sample_tex_3d(const Paint *paint,
     x /= (br->stencil_dimension[0]);
     y /= (br->stencil_dimension[1]);
 
-    co[0] = x;
-    co[1] = y;
-    co[2] = 0.0f;
-
+    float3 co(x, y, 0.0f);
     hasrgb = RE_texture_evaluate(mtex, co, thread, pool, false, false, &intensity, rgba);
   }
   else {
     float rotation = -mtex->rot;
-    const float point_2d[2] = {point[0], point[1]};
+    const float2 point_2d = point.xy();
     float x = 0.0f, y = 0.0f; /* Quite warnings */
     float invradius = 1.0f;   /* Quite warnings */
-    float co[3];
 
     if (mtex->brush_map_mode == MTEX_MAP_MODE_VIEW) {
       /* keep coordinates relative to mouse */
@@ -1013,9 +1032,7 @@ float BKE_brush_sample_tex_3d(const Paint *paint,
       y = flen * sinf(angle);
     }
 
-    co[0] = x;
-    co[1] = y;
-    co[2] = 0.0f;
+    float3 co(x, y, 0.0f);
 
     hasrgb = RE_texture_evaluate(mtex, co, thread, pool, false, false, &intensity, rgba);
   }
@@ -1037,18 +1054,19 @@ float BKE_brush_sample_tex_3d(const Paint *paint,
 }
 
 float BKE_brush_sample_masktex(
-    const Paint *paint, Brush *br, const float point[2], const int thread, ImagePool *pool)
+    const Paint *paint, Brush *br, const float2 &point, const int thread, ImagePool *pool)
 {
-  const blender::bke::PaintRuntime *paint_runtime = paint->runtime;
+  const bke::PaintRuntime *paint_runtime = paint->runtime;
   MTex *mtex = &br->mask_mtex;
-  float rgba[4], intensity;
+  float intensity;
+  float4 dummy_rgba;
 
   if (!mtex->tex) {
     return 1.0f;
   }
   if (mtex->brush_map_mode == MTEX_MAP_MODE_STENCIL) {
     float rotation = -mtex->rot;
-    const float point_2d[2] = {point[0], point[1]};
+    const float2 point_2d = point;
     float x, y;
     float co[3];
 
@@ -1064,7 +1082,7 @@ float BKE_brush_sample_masktex(
     }
 
     if (fabsf(x) > br->mask_stencil_dimension[0] || fabsf(y) > br->mask_stencil_dimension[1]) {
-      zero_v4(rgba);
+      zero_v4(dummy_rgba);
       return 0.0f;
     }
     x /= (br->mask_stencil_dimension[0]);
@@ -1074,11 +1092,11 @@ float BKE_brush_sample_masktex(
     co[1] = y;
     co[2] = 0.0f;
 
-    RE_texture_evaluate(mtex, co, thread, pool, false, false, &intensity, rgba);
+    RE_texture_evaluate(mtex, co, thread, pool, false, false, &intensity, dummy_rgba);
   }
   else {
     float rotation = -mtex->rot;
-    const float point_2d[2] = {point[0], point[1]};
+    const float2 point_2d = point;
     float x = 0.0f, y = 0.0f; /* Quite warnings */
     float invradius = 1.0f;   /* Quite warnings */
     float co[3];
@@ -1130,7 +1148,7 @@ float BKE_brush_sample_masktex(
     co[1] = y;
     co[2] = 0.0f;
 
-    RE_texture_evaluate(mtex, co, thread, pool, false, false, &intensity, rgba);
+    RE_texture_evaluate(mtex, co, thread, pool, false, false, &intensity, dummy_rgba);
   }
 
   CLAMP(intensity, 0.0f, 1.0f);
@@ -1154,7 +1172,7 @@ float BKE_brush_sample_masktex(
 /** \name Unified Settings
  * \{ */
 
-const float *BKE_brush_color_get(const Paint *paint, const Brush *brush)
+float3 BKE_brush_color_get(const Paint *paint, const Brush *brush)
 {
   if (BKE_paint_use_unified_color(paint)) {
     return paint->unified_paint_settings.color;
@@ -1198,7 +1216,7 @@ std::optional<BrushColorJitterSettings> BKE_brush_color_jitter_get_settings(cons
   };
 }
 
-const float *BKE_brush_secondary_color_get(const Paint *paint, const Brush *brush)
+float3 BKE_brush_secondary_color_get(const Paint *paint, const Brush *brush)
 {
   if (BKE_paint_use_unified_color(paint)) {
     return paint->unified_paint_settings.secondary_color;
@@ -1206,7 +1224,7 @@ const float *BKE_brush_secondary_color_get(const Paint *paint, const Brush *brus
   return brush->secondary_color;
 }
 
-void BKE_brush_color_set(Paint *paint, Brush *brush, const float color[3])
+void BKE_brush_color_set(Paint *paint, Brush *brush, const float3 &color)
 {
   if (BKE_paint_use_unified_color(paint)) {
     UnifiedPaintSettings *ups = &paint->unified_paint_settings;
@@ -1248,7 +1266,7 @@ void BKE_brush_size_set(Paint *paint, Brush *brush, int size)
   /* make sure range is sane */
   CLAMP(size, 1, MAX_BRUSH_PIXEL_DIAMETER);
 
-  if (ups->flag & UNIFIED_PAINT_SIZE) {
+  if (BKE_paint_use_unified_size(paint)) {
     ups->size = size;
   }
   else {
@@ -1260,9 +1278,11 @@ void BKE_brush_size_set(Paint *paint, Brush *brush, int size)
 int BKE_brush_size_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
-  int size = (ups->flag & UNIFIED_PAINT_SIZE) ? ups->size : brush->size;
 
-  return size;
+  if (BKE_paint_use_unified_size(paint)) {
+    return ups->size;
+  }
+  return brush->size;
 }
 
 float BKE_brush_radius_get(const Paint *paint, const Brush *brush)
@@ -1292,7 +1312,7 @@ void BKE_brush_unprojected_size_set(Paint *paint, Brush *brush, float unprojecte
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (ups->flag & UNIFIED_PAINT_SIZE) {
+  if (BKE_paint_use_unified_size(paint)) {
     ups->unprojected_size = unprojected_size;
   }
   else {
@@ -1304,8 +1324,10 @@ void BKE_brush_unprojected_size_set(Paint *paint, Brush *brush, float unprojecte
 float BKE_brush_unprojected_size_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
-
-  return (ups->flag & UNIFIED_PAINT_SIZE) ? ups->unprojected_size : brush->unprojected_size;
+  if (BKE_paint_use_unified_size(paint)) {
+    return ups->unprojected_size;
+  }
+  return brush->unprojected_size;
 }
 
 float BKE_brush_unprojected_radius_get(const Paint *paint, const Brush *brush)
@@ -1341,7 +1363,7 @@ void BKE_brush_alpha_set(Paint *paint, Brush *brush, float alpha)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (ups->flag & UNIFIED_PAINT_ALPHA) {
+  if (BKE_paint_use_unified_strength(paint)) {
     ups->alpha = alpha;
   }
   else {
@@ -1354,7 +1376,10 @@ float BKE_brush_alpha_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (ups->flag & UNIFIED_PAINT_ALPHA) ? ups->alpha : brush->alpha;
+  if (BKE_paint_use_unified_strength(paint)) {
+    return ups->alpha;
+  }
+  return brush->alpha;
 }
 
 float BKE_brush_weight_get(const Paint *paint, const Brush *brush)
@@ -1399,12 +1424,9 @@ void BKE_brush_input_samples_set(Paint *paint, Brush *brush, int value)
 
 /** \} */
 
-void BKE_brush_jitter_pos(const Paint &paint,
-                          const Brush &brush,
-                          const float pos[2],
-                          float jitterpos[2])
+float2 BKE_brush_jitter_pos(const Paint &paint, const Brush &brush, const float2 &pos)
 {
-  float rand_pos[2];
+  float2 rand_pos;
   float spread;
   int diameter;
 
@@ -1422,13 +1444,13 @@ void BKE_brush_jitter_pos(const Paint &paint,
     spread = brush.jitter;
   }
   /* find random position within a circle of diameter 1 */
-  jitterpos[0] = pos[0] + 2 * rand_pos[0] * diameter * spread;
-  jitterpos[1] = pos[1] + 2 * rand_pos[1] * diameter * spread;
+  return float2(pos[0] + 2 * rand_pos[0] * diameter * spread,
+                pos[1] + 2 * rand_pos[1] * diameter * spread);
 }
 
 void BKE_brush_randomize_texture_coords(Paint *paint, bool mask)
 {
-  blender::bke::PaintRuntime &paint_runtime = *paint->runtime;
+  bke::PaintRuntime &paint_runtime = *paint->runtime;
   /* we multiply with brush radius as an optimization for the brush
    * texture sampling functions */
   if (mask) {
@@ -1441,15 +1463,25 @@ void BKE_brush_randomize_texture_coords(Paint *paint, bool mask)
   }
 }
 
+namespace bke::brush {
+void common_pressure_curves_init(Brush &brush)
+{
+  BKE_curvemapping_init(brush.curve_size);
+  BKE_curvemapping_init(brush.curve_strength);
+  BKE_curvemapping_init(brush.curve_jitter);
+  BKE_curvemapping_init(brush.curve_distance_falloff);
+}
+}  // namespace bke::brush
+
 void BKE_brush_calc_curve_factors(const eBrushCurvePreset preset,
                                   const CurveMapping *cumap,
-                                  const blender::Span<float> distances,
+                                  const Span<float> distances,
                                   const float brush_radius,
-                                  const blender::MutableSpan<float> factors)
+                                  const MutableSpan<float> factors)
 {
   BLI_assert(factors.size() == distances.size());
 
-  const float radius_rcp = blender::math::rcp(brush_radius);
+  const float radius_rcp = math::rcp(brush_radius);
   switch (preset) {
     case BRUSH_CURVE_CUSTOM: {
       for (const int i : distances.index_range()) {
@@ -1672,27 +1704,22 @@ static bool brush_gen_texture(const Brush *br,
 
 ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary, bool display_gradient)
 {
-  ImBuf *im = MEM_new_for_free<ImBuf>("radial control texture");
   int side = 512;
   int half = side / 2;
 
   BKE_curvemapping_init(br->curve_distance_falloff);
 
-  float *rect_float = MEM_calloc_arrayN<float>(size_t(side) * size_t(side), "radial control rect");
-  IMB_assign_float_buffer(im, rect_float, IB_DO_NOT_TAKE_OWNERSHIP);
+  ImBuf *im = IMB_allocImBuf(side, side, 32, IB_float_data);
 
-  im->x = im->y = side;
-
-  const bool have_texture = brush_gen_texture(br, side, secondary, im->float_buffer.data);
+  const bool have_texture = brush_gen_texture(br, side, secondary, im->float_data_for_write());
 
   if (display_gradient || have_texture) {
+    float *float_data = im->float_data_for_write();
     for (int i = 0; i < side; i++) {
       for (int j = 0; j < side; j++) {
         const float magn = sqrtf(pow2f(i - half) + pow2f(j - half));
         const float strength = BKE_brush_curve_strength_clamped(br, magn, half);
-        im->float_buffer.data[i * side + j] = (have_texture) ?
-                                                  im->float_buffer.data[i * side + j] * strength :
-                                                  strength;
+        float_data[i * side + j] = (have_texture) ? float_data[i * side + j] * strength : strength;
       }
     }
   }
@@ -1724,11 +1751,49 @@ bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode)
   return false;
 }
 
+namespace bke::brush {
+float normal_weight_get(const Brush &brush, const bool invert)
+{
+  BLI_assert(supports_normal_weight(brush));
+  if (!invert) {
+    return brush.normal_weight;
+  }
+
+  return brush.normal_weight == 0.0f;
+}
+}  // namespace bke::brush
+
 /* -------------------------------------------------------------------- */
 /** \name Brush Capabilities
  * \{ */
 
-namespace blender::bke::brush {
+namespace bke::brush {
+static bool is_paint_tool(const Brush &brush)
+{
+  return ELEM(brush.sculpt_brush_type,
+              SCULPT_BRUSH_TYPE_PAINT,
+              SCULPT_BRUSH_TYPE_SMEAR,
+              SCULPT_BRUSH_TYPE_BLUR);
+}
+/**
+ * A helper method for classifying a certain subset of brush types.
+ *
+ * Certain sculpt deformations are 'grab-like' in that they behave as if they have an anchored
+ * start point.
+ */
+static bool is_grab_tool(const Brush &brush)
+{
+  return (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLOTH &&
+          brush.cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB) ||
+         ELEM(brush.sculpt_brush_type,
+              SCULPT_BRUSH_TYPE_GRAB,
+              SCULPT_BRUSH_TYPE_SNAKE_HOOK,
+              SCULPT_BRUSH_TYPE_ELASTIC_DEFORM,
+              SCULPT_BRUSH_TYPE_POSE,
+              SCULPT_BRUSH_TYPE_BOUNDARY,
+              SCULPT_BRUSH_TYPE_THUMB,
+              SCULPT_BRUSH_TYPE_ROTATE);
+}
 bool supports_dyntopo(const Brush &brush)
 {
   return !ELEM(brush.sculpt_brush_type,
@@ -1745,13 +1810,12 @@ bool supports_dyntopo(const Brush &brush)
                SCULPT_BRUSH_TYPE_BOUNDARY,
                SCULPT_BRUSH_TYPE_POSE,
                SCULPT_BRUSH_TYPE_DRAW_FACE_SETS,
-               SCULPT_BRUSH_TYPE_PAINT,
-               SCULPT_BRUSH_TYPE_SMEAR,
 
                /* These brushes could handle dynamic topology,
                 * but user feedback indicates it's better not to */
                SCULPT_BRUSH_TYPE_SMOOTH,
-               SCULPT_BRUSH_TYPE_MASK);
+               SCULPT_BRUSH_TYPE_MASK) &&
+         !is_paint_tool(brush);
 }
 bool supports_accumulate(const Brush &brush)
 {
@@ -1766,7 +1830,8 @@ bool supports_accumulate(const Brush &brush)
               SCULPT_BRUSH_TYPE_CLAY_STRIPS,
               SCULPT_BRUSH_TYPE_CLAY_THUMB,
               SCULPT_BRUSH_TYPE_ROTATE,
-              SCULPT_BRUSH_TYPE_PLANE);
+              SCULPT_BRUSH_TYPE_PLANE,
+              SCULPT_BRUSH_TYPE_SCENE_PROJECT);
 }
 bool supports_topology_rake(const Brush &brush)
 {
@@ -1782,11 +1847,18 @@ bool supports_topology_rake(const Brush &brush)
 bool supports_auto_smooth(const Brush &brush)
 {
   /* TODO: Should this support face sets...? */
-  return !ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_MASK,
-               SCULPT_BRUSH_TYPE_SMOOTH,
-               SCULPT_BRUSH_TYPE_PAINT,
-               SCULPT_BRUSH_TYPE_SMEAR);
+  return !ELEM(brush.sculpt_brush_type, SCULPT_BRUSH_TYPE_MASK, SCULPT_BRUSH_TYPE_SMOOTH) &&
+         !is_paint_tool(brush);
+}
+bool supports_normal_radius(const Brush &brush)
+{
+  /* TODO: This setting is closely tied to #supports_sculpt_plane, they should be merged in some
+   * way. Update after initial commit to avoid confusing PRs. */
+  return !ELEM(brush.sculpt_brush_type, SCULPT_BRUSH_TYPE_POSE);
+}
+bool supports_hardness(const Brush &brush)
+{
+  return brush.sculpt_brush_type != SCULPT_BRUSH_TYPE_POSE;
 }
 bool supports_height(const Brush &brush)
 {
@@ -1802,12 +1874,8 @@ bool supports_plane_depth(const Brush &brush)
 }
 bool supports_jitter(const Brush &brush)
 {
-  return !(brush.flag & BRUSH_ANCHORED) && !(brush.flag & BRUSH_DRAG_DOT) &&
-         !ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_GRAB,
-               SCULPT_BRUSH_TYPE_ROTATE,
-               SCULPT_BRUSH_TYPE_SNAKE_HOOK,
-               SCULPT_BRUSH_TYPE_THUMB);
+  return !(ELEM(brush.stroke_method, BRUSH_STROKE_ANCHORED, BRUSH_STROKE_DRAG_DOT)) &&
+         !is_grab_tool(brush);
 }
 bool supports_normal_weight(const Brush &brush)
 {
@@ -1841,20 +1909,17 @@ bool supports_plane_offset(const Brush &brush)
 }
 bool supports_random_texture_angle(const Brush &brush)
 {
-  return !ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_GRAB,
-               SCULPT_BRUSH_TYPE_ROTATE,
-               SCULPT_BRUSH_TYPE_SNAKE_HOOK,
-               SCULPT_BRUSH_TYPE_THUMB);
+  return !is_grab_tool(brush);
 }
 bool supports_sculpt_plane(const Brush &brush)
 {
   /* TODO: Should the face set brush be here...? */
   return !ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_INFLATE,
                SCULPT_BRUSH_TYPE_MASK,
+               SCULPT_BRUSH_TYPE_SMOOTH,
+               SCULPT_BRUSH_TYPE_INFLATE,
                SCULPT_BRUSH_TYPE_PINCH,
-               SCULPT_BRUSH_TYPE_SMOOTH);
+               SCULPT_BRUSH_TYPE_POSE);
 }
 bool supports_color(const Brush &brush)
 {
@@ -1877,42 +1942,17 @@ bool supports_secondary_cursor_color(const Brush &brush)
 }
 bool supports_smooth_stroke(const Brush &brush)
 {
-  return !(brush.flag & BRUSH_ANCHORED) && !(brush.flag & BRUSH_DRAG_DOT) &&
-         !(brush.flag & BRUSH_LINE) && !(brush.flag & BRUSH_CURVE) &&
-         !ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_GRAB,
-               SCULPT_BRUSH_TYPE_ROTATE,
-               SCULPT_BRUSH_TYPE_SNAKE_HOOK,
-               SCULPT_BRUSH_TYPE_THUMB);
+  return !(ELEM(brush.stroke_method,
+                BRUSH_STROKE_ANCHORED,
+                BRUSH_STROKE_DRAG_DOT,
+                BRUSH_STROKE_LINE,
+                BRUSH_STROKE_CURVE)) &&
+         !is_grab_tool(brush);
 }
 bool supports_space_attenuation(const Brush &brush)
 {
-  return brush.flag & (BRUSH_SPACE | BRUSH_LINE | BRUSH_CURVE) &&
-         !ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_GRAB,
-               SCULPT_BRUSH_TYPE_ROTATE,
-               SCULPT_BRUSH_TYPE_SMOOTH,
-               SCULPT_BRUSH_TYPE_SNAKE_HOOK);
-}
-
-/**
- * A helper method for classifying a certain subset of brush types.
- *
- * Certain sculpt deformations are 'grab-like' in that they behave as if they have an anchored
- * start point.
- */
-static bool is_grab_tool(const Brush &brush)
-{
-  return (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLOTH &&
-          brush.cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB) ||
-         ELEM(brush.sculpt_brush_type,
-              SCULPT_BRUSH_TYPE_GRAB,
-              SCULPT_BRUSH_TYPE_SNAKE_HOOK,
-              SCULPT_BRUSH_TYPE_ELASTIC_DEFORM,
-              SCULPT_BRUSH_TYPE_POSE,
-              SCULPT_BRUSH_TYPE_BOUNDARY,
-              SCULPT_BRUSH_TYPE_THUMB,
-              SCULPT_BRUSH_TYPE_ROTATE);
+  return ELEM(brush.stroke_method, BRUSH_STROKE_SPACE, BRUSH_STROKE_LINE, BRUSH_STROKE_CURVE) &&
+         !is_grab_tool(brush);
 }
 bool supports_strength_pressure(const Brush &brush)
 {
@@ -1945,20 +1985,20 @@ bool supports_inverted_direction(const Brush &brush)
               SCULPT_BRUSH_TYPE_PLANE,
               SCULPT_BRUSH_TYPE_CLAY,
               SCULPT_BRUSH_TYPE_PINCH,
-              SCULPT_BRUSH_TYPE_MASK);
+              SCULPT_BRUSH_TYPE_MASK,
+              SCULPT_BRUSH_TYPE_SCENE_PROJECT);
 }
 bool supports_gravity(const Brush &brush)
 {
   return !ELEM(brush.sculpt_brush_type,
-               SCULPT_BRUSH_TYPE_PAINT,
-               SCULPT_BRUSH_TYPE_SMEAR,
                SCULPT_BRUSH_TYPE_MASK,
                SCULPT_BRUSH_TYPE_DRAW_FACE_SETS,
                SCULPT_BRUSH_TYPE_BOUNDARY,
                SCULPT_BRUSH_TYPE_SMOOTH,
                SCULPT_BRUSH_TYPE_SIMPLIFY,
                SCULPT_BRUSH_TYPE_DISPLACEMENT_SMEAR,
-               SCULPT_BRUSH_TYPE_DISPLACEMENT_ERASER);
+               SCULPT_BRUSH_TYPE_DISPLACEMENT_ERASER) &&
+         !is_paint_tool(brush);
 }
 bool supports_tilt(const Brush &brush)
 {
@@ -1968,6 +2008,8 @@ bool supports_tilt(const Brush &brush)
               SCULPT_BRUSH_TYPE_PLANE,
               SCULPT_BRUSH_TYPE_CLAY_STRIPS);
 }
-}  // namespace blender::bke::brush
+}  // namespace bke::brush
 
 /** \} */
+
+}  // namespace blender

@@ -25,6 +25,8 @@
 
 #include "CLG_log.h"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"image.read"};
 
 const char *imb_ext_image[] = {
@@ -48,6 +50,8 @@ const char *imb_ext_image[] = {
      * supported by various render engines texture caching systems.
      * These are typically TIFF or EXR images. See the tool `maketx` from OpenImageIO. */
     ".tx",
+    /* #IMB_FTYPE_AVIF */
+    ".avif",
 #ifdef WITH_IMAGE_OPENJPEG
     /* #IMB_FTYPE_JP2 */
     ".jp2",
@@ -63,10 +67,8 @@ const char *imb_ext_image[] = {
     /* #IMB_FTYPE_CINEON */
     ".cin",
 #endif
-#ifdef WITH_IMAGE_OPENEXR
     /* #IMB_FTYPE_EXR */
     ".exr",
-#endif
     /* #IMB_FTYPE_PSD */
     ".psd",
     ".pdd",
@@ -135,7 +137,7 @@ static int64_t imb_test_image_read_header_from_filepath(const char *filepath,
   return size;
 }
 
-int IMB_test_image_type_from_memory(const uchar *buf, const size_t buf_size)
+eImbFileType IMB_test_image_type_from_memory(const uchar *buf, const size_t buf_size)
 {
   for (const ImFileType *type = IMB_FILE_TYPES; type < IMB_FILE_TYPES_LAST; type++) {
     if (type->is_a != nullptr) {
@@ -148,7 +150,7 @@ int IMB_test_image_type_from_memory(const uchar *buf, const size_t buf_size)
   return IMB_FTYPE_NONE;
 }
 
-int IMB_test_image_type(const char *filepath)
+eImbFileType IMB_test_image_type(const char *filepath)
 {
   uchar buf[HEADER_SIZE];
   const int64_t buf_size = imb_test_image_read_header_from_filepath(filepath, buf);
@@ -158,7 +160,7 @@ int IMB_test_image_type(const char *filepath)
   return IMB_test_image_type_from_memory(buf, size_t(buf_size));
 }
 
-bool IMB_test_image_type_matches(const char *filepath, int filetype)
+bool IMB_test_image_type_matches(const char *filepath, eImbFileType filetype)
 {
   uchar buf[HEADER_SIZE];
   const int64_t buf_size = imb_test_image_read_header_from_filepath(filepath, buf);
@@ -184,3 +186,5 @@ bool IMB_test_image(const char *filepath)
 {
   return (IMB_test_image_type(filepath) != IMB_FTYPE_NONE);
 }
+
+}  // namespace blender

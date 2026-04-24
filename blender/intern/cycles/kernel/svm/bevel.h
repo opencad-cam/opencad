@@ -12,6 +12,7 @@
 
 #include "kernel/integrator/path_state.h"
 
+#include "kernel/svm/node_types.h"
 #include "kernel/svm/util.h"
 
 CCL_NAMESPACE_BEGIN
@@ -219,14 +220,15 @@ ccl_device float3 svm_bevel(
       else if (sd->type == PRIMITIVE_MOTION_TRIANGLE) {
         float3 verts[3];
         motion_triangle_vertices(kg, sd->object, isect.hits[hit].prim, sd->time, verts);
-        hit_P = motion_triangle_point_from_uv(kg, sd, isect.hits[hit].u, isect.hits[hit].v, verts);
+        hit_P = triangle_point_from_uv_and_verts(
+            kg, sd, isect.hits[hit].u, isect.hits[hit].v, verts);
       }
 #  endif /* __OBJECT_MOTION__ */
 
       /* Get geometric normal. */
       float3 hit_Ng = isect.Ng[hit];
       const int object = isect.hits[hit].object;
-      const int object_flag = kernel_data_fetch(object_flag, object);
+      const uint object_flag = kernel_data_fetch(object_flag, object);
       if (object_negative_scale_applied(object_flag)) {
         hit_Ng = -hit_Ng;
       }
@@ -241,11 +243,11 @@ ccl_device float3 svm_bevel(
         const float v = isect.hits[hit].v;
 
         if (sd->type == PRIMITIVE_TRIANGLE) {
-          N = triangle_smooth_normal(kg, N, prim, u, v);
+          N = triangle_smooth_normal(kg, N, object, object_flag, prim, u, v);
         }
 #  ifdef __OBJECT_MOTION__
         else if (sd->type == PRIMITIVE_MOTION_TRIANGLE) {
-          N = motion_triangle_smooth_normal(kg, N, sd->object, prim, u, v, sd->time);
+          N = motion_triangle_smooth_normal(kg, N, object, prim, u, v, sd->time);
         }
 #  endif /* __OBJECT_MOTION__ */
       }
@@ -298,35 +300,29 @@ ccl_device_noinline
     svm_node_bevel(KernelGlobals kg,
                    ConstIntegratorGenericState state,
                    ccl_private ShaderData *sd,
-                   ccl_private float *stack,
-                   const uint4 node)
+                   ccl_private float *ccl_restrict stack,
+                   const ccl_global SVMNodeBevel &ccl_restrict node)
 {
-  uint num_samples;
-  uint radius_offset;
-  uint normal_offset;
-  uint out_offset;
-  svm_unpack_node_uchar4(node.y, &num_samples, &radius_offset, &normal_offset, &out_offset);
-
   float3 bevel_N = sd->N;
 
   IF_KERNEL_NODES_FEATURE(RAYTRACE)
   {
-    float radius = stack_load_float(stack, radius_offset);
+    float radius = stack_load(stack, node.radius);
 
 #  ifdef __KERNEL_OPTIX__
-    bevel_N = optixDirectCall<float3>(1, kg, state, sd, radius, num_samples);
+    bevel_N = optixDirectCall<float3>(1, kg, state, sd, radius, node.num_samples);
 #  else
-    bevel_N = svm_bevel(kg, state, sd, radius, num_samples);
+    bevel_N = svm_bevel(kg, state, sd, radius, node.num_samples);
 #  endif
 
-    if (stack_valid(normal_offset)) {
+    if (stack_valid(node.normal_offset)) {
       /* Preserve input normal. */
-      const float3 ref_N = stack_load_float3(stack, normal_offset);
+      const float3 ref_N = stack_load_float3(stack, node.normal_offset);
       bevel_N = normalize(ref_N + (bevel_N - sd->N));
     }
   }
 
-  stack_store_float3(stack, out_offset, bevel_N);
+  stack_store_float3(stack, node.out_offset, bevel_N);
 }
 
 #endif /* __SHADER_RAYTRACE__ */

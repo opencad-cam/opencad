@@ -11,14 +11,17 @@
 #include "BLI_sys_types.h"
 #include "DNA_layer_types.h"
 
+namespace blender {
+
 /* Forward declarations. */
 struct CryptomatteSession;
+struct Main;
 struct Material;
 struct Object;
 struct RenderResult;
 struct Scene;
 
-struct CryptomatteSession *BKE_cryptomatte_init(void);
+struct CryptomatteSession *BKE_cryptomatte_init();
 struct CryptomatteSession *BKE_cryptomatte_init_from_render_result(
     const struct RenderResult *render_result);
 /* Initializes a cryptomatte session from the view layers of the given scene. If build_meta_data is
@@ -56,3 +59,5 @@ void BKE_cryptomatte_matte_id_to_entries(struct NodeCryptomatte *node_storage,
 
 void BKE_cryptomatte_store_metadata(const struct CryptomatteSession *session,
                                     struct RenderResult *render_result);
+
+}  // namespace blender

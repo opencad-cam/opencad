@@ -9,11 +9,14 @@
 #pragma once
 
 #include "BLI_string_ref.hh"
+struct DRWInstanceDataList;
+class GHOST_IContext;
+
+namespace blender {
 
 struct ARegion;
-struct DRWData;
-struct DRWInstanceDataList;
 struct Depsgraph;
+struct DRWData;
 struct GPUMaterial;
 struct GPUOffScreen;
 struct GPUVertFormat;
@@ -31,7 +34,7 @@ struct ViewLayer;
 struct bContext;
 struct rcti;
 
-namespace blender::bke {
+namespace bke {
 enum class AttrType : int16_t;
 }
 
@@ -62,12 +65,14 @@ void DRW_draw_view(const bContext *C);
 void DRW_draw_region_engine_info(int xoffset, int *yoffset, int line_height);
 
 /**
- * \param viewport: can be NULL, in this case we create one.
+ * \param context: can be nullptr, optionally passed to the DRWContext for draw handlers/callbacks.
+ * \param viewport: can be nullptr, in this case we create one.
  */
 void DRW_draw_render_loop_offscreen(Depsgraph *depsgraph,
                                     RenderEngineType *engine_type,
                                     ARegion *region,
                                     View3D *v3d,
+                                    bContext *context,
                                     bool is_image_render,
                                     bool draw_background,
                                     bool do_color_management,
@@ -160,7 +165,7 @@ void DRW_gpu_context_disable();
 
 #ifdef WITH_XR_OPENXR
 /* XXX: see comment on #DRW_system_gpu_context_get() */
-void *DRW_system_gpu_context_get();
+GHOST_IContext *DRW_system_gpu_context_get();
 void *DRW_xr_blender_gpu_context_get();
 void DRW_xr_drawing_begin();
 void DRW_xr_drawing_end();
@@ -169,12 +174,12 @@ void DRW_xr_drawing_end();
 /** For garbage collection. */
 void DRW_cache_free_old_batches(Main *bmain);
 
-namespace blender::draw {
+namespace draw {
 
 /** Free garbage collected subdivision data. */
 void DRW_cache_free_old_subdiv();
 
-}  // namespace blender::draw
+}  // namespace draw
 
 /** Never use this. Only for closing blender. */
 void DRW_gpu_context_enable_ex(bool restore);
@@ -184,8 +189,8 @@ void DRW_gpu_context_disable_ex(bool restore);
  * Enable system context first, then enable blender context,
  * then disable blender context, then disable system context. */
 
-void DRW_system_gpu_render_context_enable(void *re_system_gpu_context);
-void DRW_system_gpu_render_context_disable(void *re_system_gpu_context);
+void DRW_system_gpu_render_context_enable(GHOST_IContext *re_system_gpu_context);
+void DRW_system_gpu_render_context_disable(GHOST_IContext *re_system_gpu_context);
 void DRW_blender_gpu_render_context_enable(void *re_gpu_context);
 void DRW_blender_gpu_render_context_disable(void *re_gpu_context);
 
@@ -195,7 +200,7 @@ void DRW_viewport_data_free(DRWData *drw_data);
 bool DRW_gpu_context_release();
 void DRW_gpu_context_activate(bool drw_state);
 
-namespace blender::draw {
+namespace draw {
 
 void DRW_cdlayer_attr_aliases_add(GPUVertFormat *format,
                                   const char *base_name,
@@ -205,3 +210,5 @@ void DRW_cdlayer_attr_aliases_add(GPUVertFormat *format,
                                   bool is_active_layer);
 
 }
+
+}  // namespace blender

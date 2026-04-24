@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "BLI_ustring.hh"
+
 #include "BKE_lib_remap.hh"
 
 #include "DNA_space_types.h"
@@ -23,6 +25,12 @@ void spreadsheet_table_id_blend_read(BlendDataReader *reader, SpreadsheetTableID
 void spreadsheet_table_id_remap_id(SpreadsheetTableID &table_id,
                                    const bke::id::IDRemapper &mappings);
 void spreadsheet_table_id_foreach_id(SpreadsheetTableID &table_id, LibraryForeachIDData *data);
+
+void spreadsheet_bundle_path_clear(SpreadsheetBundleTreeViewPath &bundle_path);
+void spreadsheet_bundle_path_init_from(
+    Span<UString> keys,
+    std::optional<SpreadsheetClosureInputOutput> closure_input_output,
+    SpreadsheetBundleTreeViewPath &r_bundle_path);
 
 /**
  * Checks if two table ids refer to the same table. This is not the same as a full equality check,

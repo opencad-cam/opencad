@@ -31,9 +31,11 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"undo.greasepencil"};
 
-namespace blender::ed::greasepencil::undo {
+namespace ed::greasepencil::undo {
 
 /* -------------------------------------------------------------------- */
 /** \name Implements ED Undo System
@@ -287,7 +289,7 @@ class StepObject {
 
   void encode(Object *ob, StepEncodeStatus &encode_status)
   {
-    const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
+    const GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
     this->obedit_ref.ptr = ob;
 
     this->encode_drawings(grease_pencil, encode_status);
@@ -296,7 +298,7 @@ class StepObject {
 
   void decode(StepDecodeStatus &decode_status) const
   {
-    GreasePencil &grease_pencil = *static_cast<GreasePencil *>(this->obedit_ref.ptr->data);
+    GreasePencil &grease_pencil = *id_cast<GreasePencil *>(this->obedit_ref.ptr->data);
 
     this->decode_drawings(grease_pencil, decode_status);
     this->decode_layers(grease_pencil, decode_status);
@@ -327,7 +329,7 @@ static bool step_encode(bContext *C, Main *bmain, UndoStep *us_p)
 
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer);
+  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(*bmain, scene, view_layer);
 
   us->scene_ref.ptr = scene;
   new (&us->objects) Array<StepObject>(objects.size());
@@ -372,7 +374,7 @@ static void step_decode(
   }
 
   ED_undo_object_set_active_or_warn(
-      scene, view_layer, us->objects.first().obedit_ref.ptr, us_p->name, &LOG);
+      *bmain, scene, view_layer, us->objects.first().obedit_ref.ptr, us_p->name, &LOG);
 
   bmain->is_memfile_undo_flush_needed = true;
 
@@ -399,7 +401,7 @@ static void foreach_ID_ref(UndoStep *us_p,
 
 /** \} */
 
-}  // namespace blender::ed::greasepencil::undo
+}  // namespace ed::greasepencil::undo
 
 void ED_undosys_type_grease_pencil(UndoType *ut)
 {
@@ -417,3 +419,5 @@ void ED_undosys_type_grease_pencil(UndoType *ut)
 
   ut->step_size = sizeof(greasepencil::undo::GreasePencilUndoStep);
 }
+
+}  // namespace blender

@@ -9,9 +9,11 @@
 #include "DNA_key_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
+#include "DNA_object_types.h"
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
+#include "BLI_listbase_iterator.hh"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
@@ -227,12 +229,12 @@ static void subdiv_mesh_prepare_accumulator(SubdivMeshContext *ctx, int num_vert
   /* #subdiv_accumulate_vert_displacement requires zero initialization of positions so the
    * displacements can be accumulated into the array from a per-vertex-per-corner/edge callback. */
   ctx->subdiv_positions.fill(float3(0));
-  ctx->accumulated_counters = MEM_calloc_arrayN<int>(num_vertices, __func__);
+  ctx->accumulated_counters = MEM_new_array_zeroed<int>(num_vertices, __func__);
 }
 
 static void subdiv_mesh_context_free(SubdivMeshContext *ctx)
 {
-  MEM_SAFE_FREE(ctx->accumulated_counters);
+  MEM_SAFE_DELETE(ctx->accumulated_counters);
 }
 
 /** \} */
@@ -323,19 +325,6 @@ static float3 mix_normals(const Span<float3> src,
   return math::normalize(math::interpolate(src[src_indices[0]], src[src_indices[1]], factor));
 }
 
-static bool mix_bools(const Span<bool> src, const Span<int> indices, const Span<float> weights)
-{
-  for (const int i : indices.index_range()) {
-    if (weights[i] == 0.0f) {
-      continue;
-    }
-    if (src[indices[i]]) {
-      return true;
-    }
-  }
-  return false;
-}
-
 static void mix_attrs(const Span<GSpan> src,
                       const std::array<int, 2> &src_indices,
                       const float factor,
@@ -343,16 +332,18 @@ static void mix_attrs(const Span<GSpan> src,
                       const Span<GMutableSpan> dst)
 {
   for (const int attr : src.index_range()) {
-    attribute_math::convert_to_static_type(src[attr].type(), [&](auto dummy) {
-      using T = decltype(dummy);
-      const Span<T> src_attr = src[attr].typed<T>();
-      MutableSpan<T> dst_attr = dst[attr].typed<T>();
-      if constexpr (std::is_same_v<T, bool>) {
-        dst_attr[dst_index] = mix_bools(src_attr, src_indices, {1.0f - factor, factor});
-      }
-      else {
-        dst_attr[dst_index] = attribute_math::mix2(
-            factor, src_attr[src_indices[0]], src_attr[src_indices[1]]);
+    attribute_math::to_static_type(src[attr].type(), [&]<typename T>() {
+      if constexpr (!std::is_same_v<T, std::string>) {
+        const Span<T> src_attr = src[attr].typed<T>();
+        MutableSpan<T> dst_attr = dst[attr].typed<T>();
+        if constexpr (std::is_same_v<T, bool>) {
+          dst_attr[dst_index] = bke::attribute_math::mix_indices(
+              src_attr, src_indices, {1.0f - factor, factor});
+        }
+        else {
+          dst_attr[dst_index] = attribute_math::mix2(
+              factor, src_attr[src_indices[0]], src_attr[src_indices[1]]);
+        }
       }
     });
   }
@@ -365,34 +356,24 @@ static void mix_attrs(const Span<GSpan> src,
                       const Span<GMutableSpan> dst)
 {
   for (const int attr : src.index_range()) {
-    attribute_math::convert_to_static_type(src[attr].type(), [&](auto dummy) {
-      using T = decltype(dummy);
-      const Span<T> src_attr = src[attr].typed<T>();
-      MutableSpan<T> dst_attr = dst[attr].typed<T>();
-      if constexpr (std::is_same_v<T, bool>) {
-        dst_attr[dst_index] = mix_bools(src_attr, src_indices, {&weights.x, 4});
-      }
-      else {
-        dst_attr[dst_index] = attribute_math::mix4(weights,
-                                                   src_attr[src_indices[0]],
-                                                   src_attr[src_indices[1]],
-                                                   src_attr[src_indices[2]],
-                                                   src_attr[src_indices[3]]);
+    attribute_math::to_static_type(src[attr].type(), [&]<typename T>() {
+      if constexpr (!std::is_same_v<T, std::string>) {
+        const Span<T> src_attr = src[attr].typed<T>();
+        MutableSpan<T> dst_attr = dst[attr].typed<T>();
+        if constexpr (std::is_same_v<T, bool>) {
+          dst_attr[dst_index] = bke::attribute_math::mix_indices(
+              src_attr, src_indices, Span(&weights.x, 4));
+        }
+        else {
+          dst_attr[dst_index] = attribute_math::mix4(weights,
+                                                     src_attr[src_indices[0]],
+                                                     src_attr[src_indices[1]],
+                                                     src_attr[src_indices[2]],
+                                                     src_attr[src_indices[3]]);
+        }
       }
     });
   }
-}
-
-template<typename T>
-static T mix_attr(const Span<T> src, const Span<int> src_indices, const Span<float> weights)
-{
-  T dst;
-  attribute_math::DefaultPropagationMixer<T> mixer({&dst, 1});
-  for (const int i : src_indices.index_range()) {
-    mixer.mix_in(0, src[src_indices[i]], weights[i]);
-  }
-  mixer.finalize();
-  return dst;
 }
 
 static void mix_attrs(const Span<GSpan> src,
@@ -402,11 +383,12 @@ static void mix_attrs(const Span<GSpan> src,
                       const Span<GMutableSpan> dst)
 {
   for (const int attr : src.index_range()) {
-    attribute_math::convert_to_static_type(src[attr].type(), [&](auto dummy) {
-      using T = decltype(dummy);
-      const Span<T> src_attr = src[attr].typed<T>();
-      MutableSpan<T> dst_attr = dst[attr].typed<T>();
-      dst_attr[dst_index] = mix_attr(src_attr, src_indices, weights);
+    attribute_math::to_static_type(src[attr].type(), [&]<typename T>() {
+      if constexpr (!std::is_same_v<T, std::string>) {
+        const Span<T> src_attr = src[attr].typed<T>();
+        MutableSpan<T> dst_attr = dst[attr].typed<T>();
+        dst_attr[dst_index] = bke::attribute_math::mix_indices(src_attr, src_indices, weights);
+      }
     });
   }
 }
@@ -666,7 +648,7 @@ static void loop_interpolation_from_face(const SubdivMeshContext *ctx,
           ctx->coarse_CD_NORMAL, indices, weights.as_span());
     }
     if (!ctx->coarse_CD_ORIGSPACE_MLOOP.is_empty()) {
-      loop_interpolation->CD_ORIGSPACE_MLOOP_storage[2] = mix_attr(
+      loop_interpolation->CD_ORIGSPACE_MLOOP_storage[2] = bke::attribute_math::mix_indices(
           ctx->coarse_CD_ORIGSPACE_MLOOP, indices, weights.as_span());
     }
   }
@@ -827,6 +809,44 @@ static void subdiv_accumulate_vert_displacement(SubdivMeshContext *ctx,
 /** \name Callbacks
  * \{ */
 
+static void create_attrs_and_retrieve_interp_spans(const AttributeAccessor src_attrs,
+                                                   const bke::AttrDomain domain,
+                                                   const Set<StringRef> &skip_names,
+                                                   MutableAttributeAccessor dst_attrs,
+                                                   Vector<GVArraySpan> &coarse_varray_spans,
+                                                   Vector<GSpan> &coarse_spans,
+                                                   Vector<GSpanAttributeWriter> &dst_writers,
+                                                   Vector<GMutableSpan> &dst_spans)
+
+{
+  src_attrs.foreach_attribute([&](const AttributeIter &iter) {
+    if (iter.domain != domain) {
+      return;
+    }
+    if (iter.data_type == bke::AttrType::String) {
+      return;
+    }
+    if (skip_names.contains(iter.name)) {
+      return;
+    }
+    GVArray src = *iter.get();
+    {
+      const CommonVArrayInfo info = src.common_info();
+      if (info.type == CommonVArrayInfo::Type::Single) {
+        const GPointer value(src.type(), info.data);
+        if (dst_attrs.add(iter.name, domain, iter.data_type, bke::AttributeInitValue(value))) {
+          return;
+        }
+      }
+    }
+    coarse_varray_spans.append(std::move(src));
+    coarse_spans.append(coarse_varray_spans.last());
+    dst_writers.append(
+        dst_attrs.lookup_or_add_for_write_only_span(iter.name, domain, iter.data_type));
+    dst_spans.append(dst_writers.last().span);
+  });
+}
+
 static bool subdiv_mesh_topology_info(const ForeachContext *foreach_context,
                                       const int num_vertices,
                                       const int num_edges,
@@ -851,53 +871,56 @@ static bool subdiv_mesh_topology_info(const ForeachContext *foreach_context,
   }
 
   /* Create corner data for interpolation without topology attributes. */
+  const AttributeAccessor coarse_attrs = coarse_mesh.attributes();
   MutableAttributeAccessor attributes = subdiv_mesh.attributes_for_write();
-  coarse_mesh.attributes().foreach_attribute([&](const AttributeIter &iter) {
-    if (iter.data_type == AttrType::String) {
-      return;
-    }
-    if (iter.domain == AttrDomain::Point) {
-      if (ELEM(iter.name, "position")) {
-        return;
-      }
-      subdiv_context->coarse_vert_attrs.append(*iter.get());
-      subdiv_context->coarse_vert_attr_spans.append(subdiv_context->coarse_vert_attrs.last());
-      subdiv_context->subdiv_vert_attrs.append(
-          attributes.lookup_or_add_for_write_only_span(iter.name, iter.domain, iter.data_type));
-      subdiv_context->subdiv_vert_attr_spans.append(subdiv_context->subdiv_vert_attrs.last().span);
-    }
-    else if (iter.domain == AttrDomain::Edge) {
-      if (ELEM(iter.name, ".edge_verts")) {
-        return;
-      }
-      subdiv_context->coarse_edge_attrs.append(*iter.get());
-      subdiv_context->coarse_edge_attr_spans.append(subdiv_context->coarse_edge_attrs.last());
-      subdiv_context->subdiv_edge_attrs.append(
-          attributes.lookup_or_add_for_write_only_span(iter.name, iter.domain, iter.data_type));
-      subdiv_context->subdiv_edge_attr_spans.append(subdiv_context->subdiv_edge_attrs.last().span);
-    }
-    else if (iter.domain == AttrDomain::Face) {
-      subdiv_context->coarse_face_attrs.append(*iter.get());
-      subdiv_context->coarse_face_attr_spans.append(subdiv_context->coarse_face_attrs.last());
-      subdiv_context->subdiv_face_attrs.append(
-          attributes.lookup_or_add_for_write_only_span(iter.name, iter.domain, iter.data_type));
-      subdiv_context->subdiv_face_attr_spans.append(subdiv_context->subdiv_face_attrs.last().span);
-    }
-    else if (iter.domain == AttrDomain::Corner) {
-      if (ELEM(iter.name, ".corner_vert", ".corner_edge")) {
-        return;
-      }
-      if (iter.data_type == AttrType::Float2) {
-        return;
-      }
-      subdiv_context->coarse_corner_attrs.append(*iter.get());
-      subdiv_context->coarse_corner_attr_spans.append(subdiv_context->coarse_corner_attrs.last());
-      subdiv_context->subdiv_corner_attrs.append(
-          attributes.lookup_or_add_for_write_only_span(iter.name, iter.domain, iter.data_type));
-      subdiv_context->subdiv_corner_attr_spans.append(
-          subdiv_context->subdiv_corner_attrs.last().span);
-    }
-  });
+
+  Set<StringRef> vert_skip_names{{"position"}};
+  for (const bDeformGroup &group : coarse_mesh.vertex_group_names) {
+    vert_skip_names.add(group.name);
+  }
+  create_attrs_and_retrieve_interp_spans(coarse_attrs,
+                                         AttrDomain::Point,
+                                         vert_skip_names,
+                                         attributes,
+                                         subdiv_context->coarse_vert_attrs,
+                                         subdiv_context->coarse_vert_attr_spans,
+                                         subdiv_context->subdiv_vert_attrs,
+                                         subdiv_context->subdiv_vert_attr_spans);
+
+  create_attrs_and_retrieve_interp_spans(coarse_attrs,
+                                         AttrDomain::Edge,
+                                         {".edge_verts"},
+                                         attributes,
+                                         subdiv_context->coarse_edge_attrs,
+                                         subdiv_context->coarse_edge_attr_spans,
+                                         subdiv_context->subdiv_edge_attrs,
+                                         subdiv_context->subdiv_edge_attr_spans);
+
+  create_attrs_and_retrieve_interp_spans(coarse_attrs,
+                                         AttrDomain::Face,
+                                         {},
+                                         attributes,
+                                         subdiv_context->coarse_face_attrs,
+                                         subdiv_context->coarse_face_attr_spans,
+                                         subdiv_context->subdiv_face_attrs,
+                                         subdiv_context->subdiv_face_attr_spans);
+
+  /* Rely on #CD_NORMAL to propagate normals to subdivision surfaces.
+   * These are converted into "custom_normals" afterwards, otherwise these normals
+   * would interpolated without being normalized, see: #152277. */
+  Set<StringRef> corner_skip_names{".corner_vert", ".corner_edge", "custom_normal"};
+  /* UV map names are interpolated separately. */
+  for (const StringRef name : coarse_mesh.uv_map_names()) {
+    corner_skip_names.add_new(name);
+  }
+  create_attrs_and_retrieve_interp_spans(coarse_attrs,
+                                         AttrDomain::Corner,
+                                         corner_skip_names,
+                                         attributes,
+                                         subdiv_context->coarse_corner_attrs,
+                                         subdiv_context->coarse_corner_attr_spans,
+                                         subdiv_context->subdiv_corner_attrs,
+                                         subdiv_context->subdiv_corner_attr_spans);
 
   subdiv_mesh_ctx_cache_custom_data_layers(subdiv_context);
   subdiv_mesh_prepare_accumulator(subdiv_context, num_vertices);
@@ -1515,7 +1538,7 @@ Mesh *subdiv_to_mesh(Subdiv *subdiv, const ToMeshSettings *settings, const Mesh 
   subdiv_context.coarse_edges = coarse_mesh->edges();
   subdiv_context.coarse_faces = coarse_mesh->faces();
   subdiv_context.coarse_corner_verts = coarse_mesh->corner_verts();
-  if (coarse_mesh->loose_edges().count > 0) {
+  if (!coarse_mesh->loose_edges().is_empty()) {
     subdiv_context.vert_to_edge_map = mesh::build_vert_to_edge_map(
         subdiv_context.coarse_edges,
         coarse_mesh->verts_num,
@@ -1548,10 +1571,10 @@ Mesh *subdiv_to_mesh(Subdiv *subdiv, const ToMeshSettings *settings, const Mesh 
         subdiv_context.subdiv_display_edges);
   }
 
-  if (coarse_mesh->verts_no_face().count == 0) {
+  if (coarse_mesh->verts_no_face().is_empty()) {
     result->tag_loose_verts_none();
   }
-  if (coarse_mesh->loose_edges().count == 0) {
+  if (coarse_mesh->loose_edges().is_empty()) {
     result->tag_loose_edges_none();
   }
   result->tag_overlapping_none();

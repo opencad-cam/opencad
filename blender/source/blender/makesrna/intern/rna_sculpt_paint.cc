@@ -27,6 +27,8 @@
 
 #include "bmesh.hh"
 
+namespace blender {
+
 const EnumPropertyItem rna_enum_particle_edit_hair_brush_items[] = {
     {PE_BRUSH_COMB, "COMB", 0, "Comb", "Comb hairs"},
     {PE_BRUSH_SMOOTH, "SMOOTH", 0, "Smooth", "Smooth hairs"},
@@ -98,6 +100,8 @@ const EnumPropertyItem rna_enum_symmetrize_direction_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+}  // namespace blender
+
 #ifdef RNA_RUNTIME
 #  include "MEM_guardedalloc.h"
 
@@ -121,6 +125,8 @@ const EnumPropertyItem rna_enum_symmetrize_direction_items[] = {
 #  include "ED_paint.hh"
 #  include "ED_particle.hh"
 
+namespace blender {
+
 const EnumPropertyItem rna_enum_particle_edit_disconnected_hair_brush_items[] = {
     {PE_BRUSH_COMB, "COMB", 0, "Comb", "Comb hairs"},
     {PE_BRUSH_SMOOTH, "SMOOTH", 0, "Smooth", "Smooth hairs"},
@@ -139,12 +145,12 @@ static const EnumPropertyItem particle_edit_cache_brush_items[] = {
 
 static PointerRNA rna_ParticleEdit_brush_get(PointerRNA *ptr)
 {
-  ParticleEditSettings *pset = (ParticleEditSettings *)ptr->data;
+  ParticleEditSettings *pset = static_cast<ParticleEditSettings *>(ptr->data);
   ParticleBrushData *brush = nullptr;
 
   brush = &pset->brush[pset->brushtype];
 
-  return RNA_pointer_create_with_parent(*ptr, &RNA_ParticleBrush, brush);
+  return RNA_pointer_create_with_parent(*ptr, RNA_ParticleBrush, brush);
 }
 
 static PointerRNA rna_ParticleBrush_curve_get(PointerRNA * /*ptr*/)
@@ -155,9 +161,10 @@ static PointerRNA rna_ParticleBrush_curve_get(PointerRNA * /*ptr*/)
 static void rna_ParticleEdit_redo(bContext *C, PointerRNA * /*ptr*/)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   PTCacheEdit *edit = PE_get_current(depsgraph, scene, ob);
 
@@ -178,9 +185,10 @@ static void rna_ParticleEdit_redo(bContext *C, PointerRNA * /*ptr*/)
 
 static void rna_ParticleEdit_update(bContext *C, PointerRNA * /*ptr*/)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob) {
@@ -193,7 +201,7 @@ static void rna_ParticleEdit_update(bContext *C, PointerRNA * /*ptr*/)
 
 static void rna_ParticleEdit_tool_set(PointerRNA *ptr, int value)
 {
-  ParticleEditSettings *pset = (ParticleEditSettings *)ptr->data;
+  ParticleEditSettings *pset = static_cast<ParticleEditSettings *>(ptr->data);
 
   /* redraw hair completely if weight brush is/was used */
   if ((pset->brushtype == PE_BRUSH_WEIGHT || value == PE_BRUSH_WEIGHT) && pset->object) {
@@ -211,28 +219,31 @@ static const EnumPropertyItem *rna_ParticleEdit_tool_itemf(bContext *C,
                                                            PropertyRNA * /*prop*/,
                                                            bool * /*r_free*/)
 {
-  const Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  Object *ob = BKE_view_layer_active_object_get(view_layer);
+  if (C) {
+    const Main *bmain = CTX_data_main(C);
+    const Scene *scene = CTX_data_scene(C);
+    ViewLayer *view_layer = CTX_data_view_layer(C);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
+    Object *ob = BKE_view_layer_active_object_get(view_layer);
 #  if 0
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Scene *scene = CTX_data_scene(C);
   PTCacheEdit *edit = PE_get_current(depsgraph, scene, ob);
   ParticleSystem *psys = edit ? edit->psys : nullptr;
 #  else
-  /* use this rather than PE_get_current() - because the editing cache is
-   * dependent on the cache being updated which can happen after this UI
-   * draws causing a glitch #28883. */
-  ParticleSystem *psys = psys_get_current(ob);
+    /* use this rather than PE_get_current() - because the editing cache is
+     * dependent on the cache being updated which can happen after this UI
+     * draws causing a glitch #28883. */
+    ParticleSystem *psys = psys_get_current(ob);
 #  endif
 
-  if (psys) {
-    if (psys->flag & PSYS_GLOBAL_HAIR) {
-      return rna_enum_particle_edit_disconnected_hair_brush_items;
-    }
-    else {
-      return rna_enum_particle_edit_hair_brush_items;
+    if (psys) {
+      if (psys->flag & PSYS_GLOBAL_HAIR) {
+        return rna_enum_particle_edit_disconnected_hair_brush_items;
+      }
+      else {
+        return rna_enum_particle_edit_hair_brush_items;
+      }
     }
   }
 
@@ -241,13 +252,13 @@ static const EnumPropertyItem *rna_ParticleEdit_tool_itemf(bContext *C,
 
 static bool rna_ParticleEdit_editable_get(PointerRNA *ptr)
 {
-  ParticleEditSettings *pset = (ParticleEditSettings *)ptr->data;
+  ParticleEditSettings *pset = static_cast<ParticleEditSettings *>(ptr->data);
 
   return (pset->object && pset->scene && PE_get_current(nullptr, pset->scene, pset->object));
 }
 static bool rna_ParticleEdit_hair_get(PointerRNA *ptr)
 {
-  ParticleEditSettings *pset = (ParticleEditSettings *)ptr->data;
+  ParticleEditSettings *pset = static_cast<ParticleEditSettings *>(ptr->data);
 
   if (pset->scene) {
     PTCacheEdit *edit = PE_get_current(nullptr, pset->scene, pset->object);
@@ -281,37 +292,12 @@ static bool rna_Paint_brush_poll(PointerRNA *ptr, PointerRNA value)
   return (brush == nullptr) || (paint->runtime->ob_mode & brush->ob_mode) != 0;
 }
 
-static PointerRNA rna_Paint_eraser_brush_get(PointerRNA *ptr)
-{
-  Paint *paint = static_cast<Paint *>(ptr->data);
-  Brush *brush = BKE_paint_eraser_brush(paint);
-  if (!brush) {
-    return PointerRNA_NULL;
-  }
-  return RNA_id_pointer_create(&brush->id);
-}
-
-static void rna_Paint_eraser_brush_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
-{
-  Paint *paint = static_cast<Paint *>(ptr->data);
-  Brush *brush = static_cast<Brush *>(value.data);
-  BKE_paint_eraser_brush_set(paint, brush);
-  BKE_paint_invalidate_overlay_all();
-}
-
-static bool rna_Paint_eraser_brush_poll(PointerRNA *ptr, PointerRNA value)
-{
-  const Paint *paint = static_cast<Paint *>(ptr->data);
-  const Brush *brush = static_cast<Brush *>(value.data);
-
-  return (brush == nullptr) || (paint->runtime->ob_mode & brush->ob_mode) != 0;
-}
-
 static void rna_Sculpt_update(bContext *C, PointerRNA * /*ptr*/)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob) {
@@ -322,9 +308,10 @@ static void rna_Sculpt_update(bContext *C, PointerRNA * /*ptr*/)
 
 static void rna_Paint_update(bContext *C, PointerRNA * /*ptr*/)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob) {
@@ -340,7 +327,7 @@ static std::optional<std::string> rna_Sculpt_path(const PointerRNA * /*ptr*/)
 
 static std::optional<std::string> rna_VertexPaint_path(const PointerRNA *ptr)
 {
-  const Scene *scene = (Scene *)ptr->owner_id;
+  const Scene *scene = id_cast<Scene *>(ptr->owner_id);
   const ToolSettings *ts = scene->toolsettings;
   if (ptr->data == ts->vpaint) {
     return "tool_settings.vertex_paint";
@@ -401,9 +388,10 @@ static void rna_ImaPaint_viewport_update(Main * /*bmain*/, Scene * /*scene*/, Po
 
 static void rna_ImaPaint_mode_update(bContext *C, PointerRNA * /*ptr*/)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob && ob->type == OB_MESH) {
@@ -419,9 +407,10 @@ static void rna_ImaPaint_mode_update(bContext *C, PointerRNA * /*ptr*/)
 
 static void rna_ImaPaint_stencil_update(bContext *C, PointerRNA * /*ptr*/)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob && ob->type == OB_MESH) {
@@ -430,18 +419,12 @@ static void rna_ImaPaint_stencil_update(bContext *C, PointerRNA * /*ptr*/)
   }
 }
 
-static bool rna_ImaPaint_imagetype_poll(PointerRNA * /*ptr*/, PointerRNA value)
-{
-  Image *image = (Image *)value.owner_id;
-  return image->type != IMA_TYPE_R_RESULT && image->type != IMA_TYPE_COMPOSITE;
-}
-
 static void rna_ImaPaint_canvas_update(bContext *C, PointerRNA * /*ptr*/)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   Image *ima = scene->toolsettings->imapaint.canvas;
 
@@ -467,12 +450,6 @@ static void rna_UvSculpt_curve_preset_set(PointerRNA *ptr, int value)
 
 /** \name Paint mode settings
  * \{ */
-
-static bool rna_PaintModeSettings_canvas_image_poll(PointerRNA * /*ptr*/, PointerRNA value)
-{
-  Image *image = (Image *)value.owner_id;
-  return !ELEM(image->type, IMA_TYPE_COMPOSITE, IMA_TYPE_R_RESULT);
-}
 
 static void rna_PaintModeSettings_canvas_source_update(bContext *C, PointerRNA * /*ptr*/)
 {
@@ -504,37 +481,92 @@ static std::optional<std::string> rna_GPencilSculptGuide_path(const PointerRNA *
   return "tool_settings.gpencil_sculpt.guide";
 }
 
-static void rna_Sculpt_automasking_invert_cavity_set(PointerRNA *ptr, bool val)
+static const MeshAutomaskingSettings *rna_MeshAutomaskingSettings_address_get(const Paint *paint)
 {
-  Sculpt *sd = (Sculpt *)ptr->data;
-
-  if (val) {
-    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_NORMAL;
-    sd->automasking_flags |= BRUSH_AUTOMASKING_CAVITY_INVERTED;
+  if (!paint) {
+    return nullptr;
   }
-  else {
-    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_INVERTED;
+
+  return paint->mesh_automasking_settings;
+}
+
+static std::optional<std::string> rna_MeshAutomaskingSettings_path(const PointerRNA *ptr)
+{
+  switch (GS(ptr->owner_id->name)) {
+    case ID_SCE: {
+      const Scene *scene = reinterpret_cast<Scene *>(ptr->owner_id);
+      const ToolSettings *tool_settings = scene ? scene->toolsettings : nullptr;
+      if (tool_settings == nullptr) {
+        return std::nullopt;
+      }
+      if (rna_MeshAutomaskingSettings_address_get(
+              reinterpret_cast<Paint *>(tool_settings->sculpt)) == ptr->data)
+      {
+        return "tool_settings.sculpt.mesh_automasking_settings";
+      }
+      return std::nullopt;
+    }
+    case ID_BR:
+      return "mesh_automasking_settings";
+    default:
+      BLI_assert_unreachable();
+      return std::nullopt;
   }
 }
 
-static void rna_Sculpt_automasking_cavity_set(PointerRNA *ptr, bool val)
+static void rna_MeshAutomaskingSettings_invert_cavity_set(PointerRNA *ptr, bool val)
 {
-  Sculpt *sd = (Sculpt *)ptr->data;
+  MeshAutomaskingSettings *automasking_settings = static_cast<MeshAutomaskingSettings *>(
+      ptr->data);
 
   if (val) {
-    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_INVERTED;
-    sd->automasking_flags |= BRUSH_AUTOMASKING_CAVITY_NORMAL;
+    automasking_settings->flags &= ~BRUSH_AUTOMASKING_CAVITY_NORMAL;
+    automasking_settings->flags |= BRUSH_AUTOMASKING_CAVITY_INVERTED;
   }
   else {
-    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_NORMAL;
+    automasking_settings->flags &= ~BRUSH_AUTOMASKING_CAVITY_INVERTED;
+  }
+}
+
+static void rna_MeshAutomaskingSettings_cavity_set(PointerRNA *ptr, bool val)
+{
+  MeshAutomaskingSettings *automasking_settings = static_cast<MeshAutomaskingSettings *>(
+      ptr->data);
+
+  if (val) {
+    automasking_settings->flags &= ~BRUSH_AUTOMASKING_CAVITY_INVERTED;
+    automasking_settings->flags |= BRUSH_AUTOMASKING_CAVITY_NORMAL;
+  }
+  else {
+    automasking_settings->flags &= ~BRUSH_AUTOMASKING_CAVITY_NORMAL;
+  }
+}
+
+static void rna_MeshAutomaskingSettings_update(bContext *C, PointerRNA *ptr)
+{
+  const Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  Brush *brush = BKE_paint_brush(BKE_paint_get_active(*bmain, scene, view_layer));
+
+  switch (GS(ptr->owner_id->name)) {
+    case ID_BR:
+      WM_main_add_notifier(NC_BRUSH | NA_EDITED, brush);
+      break;
+    case ID_SCE:
+      WM_main_add_notifier(NC_SCENE | ND_TOOLSETTINGS, scene);
+      break;
+    default:
+      BLI_assert_unreachable();
   }
 }
 
 static void rna_UnifiedPaintSettings_update(bContext *C, PointerRNA * /*ptr*/)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Brush *br = BKE_paint_brush(BKE_paint_get_active(scene, view_layer));
+  Brush *br = BKE_paint_brush(BKE_paint_get_active(*bmain, scene, view_layer));
   /* TODO: Verify if tagging the brush for these settings being changed is correct. */
   WM_main_add_notifier(NC_BRUSH | NA_EDITED, br);
   WM_main_add_notifier(NC_SCENE | ND_TOOLSETTINGS, scene);
@@ -630,7 +662,12 @@ static std::optional<std::string> rna_UnifiedPaintSettings_path(const PointerRNA
   }
   return std::nullopt;
 }
+
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_paint_curve(BlenderRNA *brna)
 {
@@ -675,27 +712,6 @@ static void rna_def_paint(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop,
                            "Brush Asset Reference",
-                           "A weak reference to the matching brush asset, used e.g. to restore "
-                           "the last used brush on file load");
-
-  prop = RNA_def_property(srna, "eraser_brush", PROP_POINTER, PROP_NONE);
-  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
-  RNA_def_property_clear_flag(prop, PROP_ID_REFCOUNT);
-  RNA_def_property_struct_type(prop, "Brush");
-  RNA_def_property_pointer_funcs(prop,
-                                 "rna_Paint_eraser_brush_get",
-                                 "rna_Paint_eraser_brush_set",
-                                 nullptr,
-                                 "rna_Paint_eraser_brush_poll");
-  RNA_def_property_ui_text(prop,
-                           "Default Eraser Brush",
-                           "Default eraser brush for quickly alternating with the main brush");
-  RNA_def_property_update(prop, NC_BRUSH | NA_SELECTED, nullptr);
-
-  prop = RNA_def_property(srna, "eraser_brush_asset_reference", PROP_POINTER, PROP_NONE);
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_ui_text(prop,
-                           "Eraser Brush Asset Reference",
                            "A weak reference to the matching brush asset, used e.g. to restore "
                            "the last used brush on file load");
 
@@ -802,6 +818,11 @@ static void rna_def_paint(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_NEVER_NULL);
   RNA_def_property_struct_type(prop, "UnifiedPaintSettings");
   RNA_def_property_ui_text(prop, "Unified Paint Settings", nullptr);
+
+  prop = RNA_def_property(srna, "mesh_automasking_settings", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_NEVER_NULL);
+  RNA_def_property_struct_type(prop, "MeshAutomaskingSettings");
+  RNA_def_property_ui_text(prop, "Mesh Automasking Settings", nullptr);
 }
 
 static void rna_def_unified_paint_settings(BlenderRNA *brna)
@@ -1008,6 +1029,111 @@ static void rna_def_unified_paint_settings(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_UnifiedPaintSettings_update");
 }
 
+static void rna_def_mesh_automasking_settings(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "MeshAutomaskingSettings", nullptr);
+  RNA_def_struct_path_func(srna, "rna_MeshAutomaskingSettings_path");
+  RNA_def_struct_ui_text(
+      srna, "Automasking Settings", "Automasking settings for mesh painting & sculpting.");
+  RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
+
+  const EnumPropertyItem *entry = rna_enum_shared_automasking_flag_items;
+  do {
+    prop = RNA_def_property(srna, entry->identifier, PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+    RNA_def_property_boolean_sdna(prop, nullptr, "flags", entry->value);
+    RNA_def_property_ui_text(prop, entry->name, entry->description);
+
+    if (entry->value == BRUSH_AUTOMASKING_CAVITY_NORMAL) {
+      RNA_def_property_boolean_funcs(prop, nullptr, "rna_MeshAutomaskingSettings_cavity_set");
+    }
+    else if (entry->value == BRUSH_AUTOMASKING_CAVITY_INVERTED) {
+      RNA_def_property_boolean_funcs(
+          prop, nullptr, "rna_MeshAutomaskingSettings_invert_cavity_set");
+    }
+
+    RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+  } while ((++entry)->identifier);
+
+  prop = RNA_def_property(srna, "boundary_edges_propagation_steps", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_int_sdna(prop, nullptr, "boundary_edges_propagation_steps");
+  RNA_def_property_range(prop, 1, AUTOMASKING_BOUNDARY_EDGES_MAX_PROPAGATION_STEPS);
+  RNA_def_property_ui_range(prop, 1, AUTOMASKING_BOUNDARY_EDGES_MAX_PROPAGATION_STEPS, 1, -1);
+  RNA_def_property_ui_text(prop,
+                           "Propagation Steps",
+                           "Distance where boundary edge automasking is going to protect vertices "
+                           "from the fully masked edge");
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "cavity_factor", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_float_sdna(prop, nullptr, "cavity_factor");
+  RNA_def_property_ui_text(prop, "Cavity Factor", "The contrast of the cavity mask");
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_range(prop, 0.0f, 5.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 3);
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "cavity_blur_steps", PROP_INT, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_int_sdna(prop, nullptr, "cavity_blur_steps");
+  RNA_def_property_ui_text(prop, "Blur Steps", "The number of times the cavity mask is blurred");
+  RNA_def_property_int_default(prop, 0);
+  RNA_def_property_range(prop, 0, 25);
+  RNA_def_property_ui_range(prop, 0, 10, 1, 1);
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "cavity_curve", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_pointer_sdna(prop, nullptr, "cavity_curve");
+  RNA_def_property_struct_type(prop, "CurveMapping");
+  RNA_def_property_ui_text(prop, "Cavity Curve", "Curve used for the sensitivity");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "cavity_curve_op", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_pointer_sdna(prop, nullptr, "cavity_curve_op");
+  RNA_def_property_struct_type(prop, "CurveMapping");
+  RNA_def_property_ui_text(prop, "Cavity Curve", "Curve used for the sensitivity");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "start_normal_limit", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_float_sdna(prop, nullptr, "start_normal_limit");
+  RNA_def_property_range(prop, 0.0001f, M_PI);
+  RNA_def_property_ui_text(prop, "Area Normal Limit", "The range of angles that will be affected");
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "start_normal_falloff", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_float_sdna(prop, nullptr, "start_normal_falloff");
+  RNA_def_property_range(prop, 0.0001f, 1.0f);
+  RNA_def_property_ui_text(
+      prop, "Area Normal Falloff", "Extend the angular range with a falloff gradient");
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "view_normal_limit", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_float_sdna(prop, nullptr, "view_normal_limit");
+  RNA_def_property_range(prop, 0.0001f, M_PI);
+  RNA_def_property_ui_text(prop, "View Normal Limit", "The range of angles that will be affected");
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+
+  prop = RNA_def_property(srna, "view_normal_falloff", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_float_sdna(prop, nullptr, "view_normal_falloff");
+  RNA_def_property_range(prop, 0.0001f, 1.0f);
+  RNA_def_property_ui_text(
+      prop, "View Normal Falloff", "Extend the angular range with a falloff gradient");
+  RNA_def_property_update(prop, 0, "rna_MeshAutomaskingSettings_update");
+}
+
 static void rna_def_sculpt(BlenderRNA *brna)
 {
   static const EnumPropertyItem detail_refine_items[] = {
@@ -1124,113 +1250,6 @@ static void rna_def_sculpt(BlenderRNA *brna)
                            "Resolution",
                            "Maximum edge length for dynamic topology sculpting (as divisor "
                            "of Blender unit - higher value means smaller edge length)");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  const EnumPropertyItem *entry = rna_enum_brush_automasking_flag_items;
-  do {
-    prop = RNA_def_property(srna, entry->identifier, PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_sdna(prop, nullptr, "automasking_flags", entry->value);
-    RNA_def_property_ui_text(prop, entry->name, entry->description);
-
-    if (entry->value == BRUSH_AUTOMASKING_CAVITY_NORMAL) {
-      RNA_def_property_boolean_funcs(prop, nullptr, "rna_Sculpt_automasking_cavity_set");
-    }
-    else if (entry->value == BRUSH_AUTOMASKING_CAVITY_INVERTED) {
-      RNA_def_property_boolean_funcs(prop, nullptr, "rna_Sculpt_automasking_invert_cavity_set");
-    }
-
-    RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-  } while ((++entry)->identifier);
-
-  prop = RNA_def_property(
-      srna, "automasking_boundary_edges_propagation_steps", PROP_INT, PROP_UNSIGNED);
-  RNA_def_property_int_sdna(prop, nullptr, "automasking_boundary_edges_propagation_steps");
-  RNA_def_property_range(prop, 1, AUTOMASKING_BOUNDARY_EDGES_MAX_PROPAGATION_STEPS);
-  RNA_def_property_ui_range(prop, 1, AUTOMASKING_BOUNDARY_EDGES_MAX_PROPAGATION_STEPS, 1, -1);
-  RNA_def_property_ui_text(prop,
-                           "Propagation Steps",
-                           "Distance where boundary edge automasking is going to protect vertices "
-                           "from the fully masked edge");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_cavity_factor", PROP_FLOAT, PROP_FACTOR);
-  RNA_def_property_float_sdna(prop, nullptr, "automasking_cavity_factor");
-  RNA_def_property_ui_text(prop, "Cavity Factor", "The contrast of the cavity mask");
-  RNA_def_property_float_default(prop, 1.0f);
-  RNA_def_property_range(prop, 0.0f, 5.0f);
-  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 3);
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_cavity_blur_steps", PROP_INT, PROP_NONE);
-  RNA_def_property_int_sdna(prop, nullptr, "automasking_cavity_blur_steps");
-  RNA_def_property_ui_text(prop, "Blur Steps", "The number of times the cavity mask is blurred");
-  RNA_def_property_int_default(prop, 0);
-  RNA_def_property_range(prop, 0, 25);
-  RNA_def_property_ui_range(prop, 0, 10, 1, 1);
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_cavity_curve", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "automasking_cavity_curve");
-  RNA_def_property_struct_type(prop, "CurveMapping");
-  RNA_def_property_ui_text(prop, "Cavity Curve", "Curve used for the sensitivity");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_cavity_curve_op", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "automasking_cavity_curve_op");
-  RNA_def_property_struct_type(prop, "CurveMapping");
-  RNA_def_property_ui_text(prop, "Cavity Curve", "Curve used for the sensitivity");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "use_automasking_start_normal", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(
-      prop, nullptr, "automasking_flags", BRUSH_AUTOMASKING_BRUSH_NORMAL);
-  RNA_def_property_ui_text(
-      prop,
-      "Area Normal",
-      "Affect only vertices with a similar normal to where the stroke starts");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "use_automasking_view_normal", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "automasking_flags", BRUSH_AUTOMASKING_VIEW_NORMAL);
-  RNA_def_property_ui_text(
-      prop, "View Normal", "Affect only vertices with a normal that faces the viewer");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "use_automasking_view_occlusion", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(
-      prop, nullptr, "automasking_flags", BRUSH_AUTOMASKING_VIEW_OCCLUSION);
-  RNA_def_property_ui_text(
-      prop,
-      "Occlusion",
-      "Only affect vertices that are not occluded by other faces (slower performance)");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_start_normal_limit", PROP_FLOAT, PROP_ANGLE);
-  RNA_def_property_float_sdna(prop, nullptr, "automasking_start_normal_limit");
-  RNA_def_property_range(prop, 0.0001f, M_PI);
-  RNA_def_property_ui_text(prop, "Area Normal Limit", "The range of angles that will be affected");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_start_normal_falloff", PROP_FLOAT, PROP_FACTOR);
-  RNA_def_property_float_sdna(prop, nullptr, "automasking_start_normal_falloff");
-  RNA_def_property_range(prop, 0.0001f, 1.0f);
-  RNA_def_property_ui_text(
-      prop, "Area Normal Falloff", "Extend the angular range with a falloff gradient");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_view_normal_limit", PROP_FLOAT, PROP_ANGLE);
-  RNA_def_property_float_sdna(prop, nullptr, "automasking_view_normal_limit");
-  RNA_def_property_range(prop, 0.0001f, M_PI);
-  RNA_def_property_ui_text(prop, "View Normal Limit", "The range of angles that will be affected");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-
-  prop = RNA_def_property(srna, "automasking_view_normal_falloff", PROP_FLOAT, PROP_FACTOR);
-  RNA_def_property_float_sdna(prop, nullptr, "automasking_view_normal_falloff");
-  RNA_def_property_range(prop, 0.0001f, 1.0f);
-  RNA_def_property_ui_text(
-      prop, "View Normal Falloff", "Extend the angular range with a falloff gradient");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
 
   prop = RNA_def_property(srna, "symmetrize_direction", PROP_ENUM, PROP_NONE);
@@ -1394,7 +1413,7 @@ static void rna_def_paint_mode(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "canvas_image", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_funcs(
-      prop, nullptr, nullptr, nullptr, "rna_PaintModeSettings_canvas_image_poll");
+      prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Texture", "Image used as painting target");
 }
@@ -1474,20 +1493,23 @@ static void rna_def_image_paint(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Stencil Image", "Image used as stencil");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_stencil_update");
-  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, "rna_ImaPaint_imagetype_poll");
+  RNA_def_property_pointer_funcs(
+      prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
 
   prop = RNA_def_property(srna, "canvas", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Canvas", "Image used as canvas");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_canvas_update");
-  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, "rna_ImaPaint_imagetype_poll");
+  RNA_def_property_pointer_funcs(
+      prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
 
   prop = RNA_def_property(srna, "clone_image", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, nullptr, "clone");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Clone Image", "Image used as clone source");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr);
-  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, "rna_ImaPaint_imagetype_poll");
+  RNA_def_property_pointer_funcs(
+      prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
 
   prop = RNA_def_property(srna, "stencil_color", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_range(prop, 0.0, 1.0);
@@ -1997,6 +2019,7 @@ void RNA_def_sculpt_paint(BlenderRNA *brna)
   rna_def_paint_curve(brna);
   rna_def_paint(brna);
   rna_def_unified_paint_settings(brna);
+  rna_def_mesh_automasking_settings(brna);
   rna_def_sculpt(brna);
   rna_def_uv_sculpt(brna);
   rna_def_gp_paint(brna);
@@ -2012,5 +2035,7 @@ void RNA_def_sculpt_paint(BlenderRNA *brna)
   rna_def_curves_sculpt(brna);
   RNA_define_animate_sdna(true);
 }
+
+}  // namespace blender
 
 #endif

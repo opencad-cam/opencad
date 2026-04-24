@@ -12,13 +12,15 @@
 
 #include "bmesh.hh"
 
+namespace blender {
+
 extern PyTypeObject BPy_BMLoopUV_Type;
 extern PyTypeObject BPy_BMDeformVert_Type;
 
 #define BPy_BMLoopUV_Check(v) (Py_TYPE(v) == &BPy_BMLoopUV_Type)
 
 struct BPy_BMGenericMeshData {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   void *data;
 };
 
@@ -41,3 +43,5 @@ struct BMesh;
 
 /* call to init all types */
 void BPy_BM_init_types_meshdata();
+
+}  // namespace blender

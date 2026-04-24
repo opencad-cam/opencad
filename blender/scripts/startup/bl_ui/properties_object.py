@@ -203,7 +203,10 @@ class OBJECT_PT_collections(ObjectButtonsPanel, Panel):
             col.context_pointer_set("collection", collection)
 
             row = col.box().row()
-            row.prop(collection, "name", text="")
+            icon = 'OUTLINER_COLLECTION'
+            if collection.color_tag != 'NONE':
+                icon = 'COLLECTION_' + collection.color_tag
+            row.prop(collection, "name", text="", icon=icon)
             row.operator("object.collection_remove", text="", icon='X', emboss=False)
             row.menu("COLLECTION_MT_context_menu", icon='DOWNARROW_HLT', text="")
 

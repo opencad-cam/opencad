@@ -4,14 +4,16 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_volume_info_cc {
+namespace blender {
+
+namespace nodes::node_shader_volume_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Color");
-  b.add_output<decl::Float>("Density");
-  b.add_output<decl::Float>("Flame");
-  b.add_output<decl::Float>("Temperature");
+  b.add_output<decl::Color>("Color"_ustr);
+  b.add_output<decl::Float>("Density"_ustr);
+  b.add_output<decl::Float>("Flame"_ustr);
+  b.add_output<decl::Float>("Temperature"_ustr);
 }
 
 static int node_shader_gpu_volume_info(GPUMaterial *mat,
@@ -40,15 +42,15 @@ static int node_shader_gpu_volume_info(GPUMaterial *mat,
   return true;
 }
 
-}  // namespace blender::nodes::node_shader_volume_info_cc
+}  // namespace nodes::node_shader_volume_info_cc
 
 void register_node_type_sh_volume_info()
 {
-  namespace file_ns = blender::nodes::node_shader_volume_info_cc;
+  namespace file_ns = nodes::node_shader_volume_info_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeVolumeInfo", SH_NODE_VOLUME_INFO);
+  sh_node_type_base(&ntype, "ShaderNodeVolumeInfo"_ustr, SH_NODE_VOLUME_INFO);
   ntype.ui_name = "Volume Info";
   ntype.ui_description = "Read volume data attributes from volume grids";
   ntype.enum_name_legacy = "VOLUME_INFO";
@@ -56,5 +58,7 @@ void register_node_type_sh_volume_info()
   ntype.declare = file_ns::node_declare;
   ntype.gpu_fn = file_ns::node_shader_gpu_volume_info;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

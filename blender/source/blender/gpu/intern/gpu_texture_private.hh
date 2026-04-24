@@ -81,12 +81,6 @@ enum GPUSamplerFormat {
 
 ENUM_OPERATORS(GPUSamplerFormat)
 
-#ifndef NDEBUG
-#  define DEBUG_NAME_LEN 64
-#else
-#  define DEBUG_NAME_LEN 8
-#endif
-
 /* Maximum number of image units. */
 #define GPU_MAX_IMAGE 8
 
@@ -132,8 +126,8 @@ class Texture {
   /** For error checking */
   int mip_min_ = 0, mip_max_ = 0;
 
-  /** For debugging */
-  char name_[DEBUG_NAME_LEN];
+  /** For debugging. */
+  std::string name_;
 
   /** Frame-buffer references to update on deletion. */
   GPUAttachmentType fb_attachment_[GPU_TEX_MAX_FBO_ATTACHED];
@@ -160,11 +154,11 @@ class Texture {
                  bool use_stencil);
 
   virtual void generate_mipmap() = 0;
-  virtual void copy_to(Texture *tex) = 0;
-  virtual void clear(eGPUDataFormat format, const void *data) = 0;
+  virtual void copy_to(Texture *tex, IndexRange mip_levels) = 0;
+  virtual void clear(const double4 data) = 0;
   virtual void swizzle_set(const char swizzle_mask[4]) = 0;
   virtual void mip_range_set(int min, int max) = 0;
-  virtual void *read(int mip, eGPUDataFormat format) = 0;
+  virtual void read(int mip, eGPUDataFormat format, void *dst) = 0;
 
   void attach_to(FrameBuffer *fb, GPUAttachmentType type);
   void detach_from(FrameBuffer *fb);
@@ -199,6 +193,8 @@ class Texture {
   {
     return gpu_image_usage_flags_;
   }
+
+  size_t read_size_get(int mip, eGPUDataFormat format) const;
 
   void mip_size_get(int mip, int r_size[3]) const
   {
@@ -330,7 +326,7 @@ class Texture {
  protected:
   virtual bool init_internal() = 0;
   virtual bool init_internal(VertBuf *vbo) = 0;
-  virtual bool init_internal(blender::gpu::Texture *src,
+  virtual bool init_internal(gpu::Texture *src,
                              int mip_offset,
                              int layer_offset,
                              bool use_stencil) = 0;
@@ -364,8 +360,6 @@ static inline const PixelBuffer *unwrap(const GPUPixelBuffer *pixbuf)
 {
   return reinterpret_cast<const PixelBuffer *>(pixbuf);
 }
-
-#undef DEBUG_NAME_LEN
 
 inline size_t to_bytesize(TextureFormat format)
 {

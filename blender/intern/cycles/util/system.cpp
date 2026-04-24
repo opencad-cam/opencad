@@ -6,17 +6,22 @@
 #include "util/string.h"
 
 #ifdef _WIN32
+#  include <cstdio>
 #  if (!defined(FREE_WINDOWS))
 #    include <intrin.h>
 #  endif
 #  include "util/windows.h"
 #elif defined(__APPLE__)
+#  include <cstdint>
 #  include <sys/ioctl.h>
+#  include <sys/resource.h>
 #  include <sys/sysctl.h>
 #  include <sys/types.h>
 #  include <unistd.h>
 #else
+#  include <cstdint>
 #  include <sys/ioctl.h>
+#  include <sys/resource.h>
 #  include <unistd.h>
 #endif
 
@@ -138,6 +143,7 @@ int system_cpu_bits()
 struct CPUCapabilities {
   bool sse42;
   bool avx2;
+  bool f16c;
 };
 
 static CPUCapabilities &system_cpu_capabilities()
@@ -184,6 +190,8 @@ static CPUCapabilities &system_cpu_capabilities()
         const bool avx = (xcr_feature_mask & 0x6) == 0x6;
         const bool f16c = (result[2] & ((int)1 << 29)) != 0;
 
+        caps.f16c = avx && f16c;
+
         __cpuid(result, 0x00000007);
         bool bmi1 = (result[1] & ((int)1 << 3)) != 0;
         bool bmi2 = (result[1] & ((int)1 << 8)) != 0;
@@ -208,9 +216,15 @@ bool system_cpu_support_sse42()
 
 bool system_cpu_support_avx2()
 {
+  /* F16C is considered part of AVX2 for our purpose, as all physical CPUs with
+   * AVX2 support also support it so there is no point having a separate kernel.
+   *
+   * Some cases where it might be missing is Rosetta or virtual machines, so we
+   * check for it just to be safe. */
   CPUCapabilities &caps = system_cpu_capabilities();
-  return caps.avx2;
+  return caps.avx2 && caps.f16c;
 }
+
 #else
 
 bool system_cpu_support_sse42()
@@ -252,6 +266,16 @@ uint64_t system_self_process_id()
   return GetCurrentProcessId();
 #else
   return getpid();
+#endif
+}
+
+size_t system_max_open_files()
+{
+#if defined(_WIN32)
+  return _getmaxstdio();
+#else
+  struct rlimit limit = {};
+  return (getrlimit(RLIMIT_NOFILE, &limit) == 0) ? limit.rlim_cur : SIZE_MAX;
 #endif
 }
 

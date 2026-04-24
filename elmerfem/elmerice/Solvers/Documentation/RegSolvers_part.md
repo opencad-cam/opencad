@@ -1,1 +1,0 @@
-# Regularisation {#reg_solvers}

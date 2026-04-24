@@ -39,6 +39,8 @@
 
 #include "physics_intern.hh"
 
+namespace blender {
+
 /* ********************************************** */
 /* Helper API's for RigidBody Constraint Editing */
 
@@ -62,7 +64,7 @@ static bool operator_rigidbody_con_active_poll(bContext *C)
   }
 
   if (ED_operator_object_active_editable(C)) {
-    Object *ob = blender::ed::object::context_active_object(C);
+    Object *ob = ed::object::context_active_object(C);
     return (ob && ob->rigidbody_constraint);
   }
   return false;
@@ -125,7 +127,7 @@ static wmOperatorStatus rigidbody_con_add_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   RigidBodyWorld *rbw = BKE_rigidbody_get_world(scene);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   int type = RNA_enum_get(op->ptr, "type");
   bool changed;
@@ -178,7 +180,7 @@ static wmOperatorStatus rigidbody_con_remove_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   /* apply to active object */
@@ -209,3 +211,5 @@ void RIGIDBODY_OT_constraint_remove(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender

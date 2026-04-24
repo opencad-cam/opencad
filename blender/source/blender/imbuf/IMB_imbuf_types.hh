@@ -15,19 +15,21 @@
 
 #include "IMB_imbuf_enums.h"
 
+#include <string>
+
+namespace blender {
+
 struct ColormanageCache;
 struct ExrHandle;
-namespace blender::gpu {
+namespace gpu {
 class Texture;
 }
 struct IDProperty;
 
-namespace blender::ocio {
+namespace ocio {
 class ColorSpace;
 }
-using ColorSpace = blender::ocio::ColorSpace;
-
-#define IMB_FILEPATH_SIZE 1024
+using ColorSpace = ocio::ColorSpace;
 
 /**
  * \ingroup imbuf
@@ -73,10 +75,16 @@ using ColorSpace = blender::ocio::ColorSpace;
 #define TIF_COMPRESS_LZW (1 << 5)
 #define TIF_COMPRESS_PACKBITS (1 << 4)
 
+#define AVIF_10BIT (1 << 8)
+#define AVIF_12BIT (1 << 9)
+
 struct ImbFormatOptions {
   short flag = 0;
-  /** Quality serves dual purpose as quality number for JPEG or compression amount for PNG. */
-  char quality = 0;
+  /** Quality for JPEG, WebP, AVIF. */
+  char quality = 90;
+  /* Compression amount for PNG.
+   * Default to low compression ratio that is not time consuming. */
+  char compress = 15;
 };
 
 /* -------------------------------------------------------------------- */
@@ -113,7 +121,11 @@ enum eImBufFlags {
    * The image contains display window information. See ImbBuf.display_size and other members for
    * more information. */
   IB_has_display_window = 1 << 17,
+
+  /** Perform no color space conversions when reading, leave the image in the file colorspace. */
+  IB_no_colorspace_convert = 1 << 18,
 };
+ENUM_OPERATORS(eImBufFlags);
 
 /** \} */
 
@@ -133,7 +145,7 @@ enum ImBufOwnership {
   IB_DO_NOT_TAKE_OWNERSHIP = 0,
 
   /**
-   * The ImBuf takes ownership of the buffer data, and will use MEM_freeN() to free this memory
+   * The ImBuf takes ownership of the buffer data, and will use MEM_delete() to free this memory
    * when the ImBuf needs to free the data.
    */
   IB_TAKE_OWNERSHIP = 1,
@@ -154,10 +166,8 @@ struct DDSData {
 
 /* Different storage specialization.
  *
- * NOTE: Avoid direct assignments and allocations, use the buffer utilities from the IMB_imbuf.hh
- * instead.
- *
- * Accessing the data pointer directly is fine and is an expected way of accessing it. */
+ * NOTE: Avoid direct access. Use the buffer utilities from the IMB_imbuf.hh  instead
+ */
 
 struct ImBufByteBuffer {
   uint8_t *data = nullptr;
@@ -183,7 +193,7 @@ struct ImBufGPU {
    * TODO(@sergey): This should become a list of textures, to support having high-res ImBuf on GPU
    * without hitting hardware limitations.
    */
-  blender::gpu::Texture *texture = nullptr;
+  gpu::Texture *texture = nullptr;
 };
 
 /** \} */
@@ -264,11 +274,11 @@ struct ImBuf {
 
   /* file information */
   /** file type we are going to save as */
-  enum eImbFileType ftype = IMB_FTYPE_NONE;
+  eImbFileType ftype = IMB_FTYPE_NONE;
   /** file format specific flags */
   ImbFormatOptions foptions;
   /** The absolute file path associated with this image. */
-  char filepath[IMB_FILEPATH_SIZE] = "";
+  std::string filepath;
   /** For movie files, the frame number loaded from the file. */
   int fileframe = 0;
 
@@ -293,6 +303,12 @@ struct ImBuf {
 
   /** Information for compressed textures. */
   DDSData dds_data;
+
+  const uint8_t *byte_data() const;
+  uint8_t *byte_data_for_write();
+
+  const float *float_data() const;
+  float *float_data_for_write();
 };
 
 /**
@@ -307,6 +323,9 @@ enum {
   IB_DISPLAY_BUFFER_INVALID = (1 << 4),
   /** image buffer is persistent in the memory and should never be removed from the cache */
   IB_PERSISTENT = (1 << 5),
+  /** The image buffer is backed by a GPU texture storage but the host buffers either do not exist
+   * or are out-dated and needs to read from the GPU texture. */
+  IB_HOST_BUFFER_INVALID = (1 << 6),
 };
 
 /** \} */
@@ -364,3 +383,25 @@ enum {
 };
 
 /** \} */
+
+inline const uint8_t *ImBuf::byte_data() const
+{
+  return this->byte_buffer.data;
+}
+
+inline uint8_t *ImBuf::byte_data_for_write()
+{
+  return this->byte_buffer.data;
+}
+
+inline const float *ImBuf::float_data() const
+{
+  return this->float_buffer.data;
+}
+
+inline float *ImBuf::float_data_for_write()
+{
+  return this->float_buffer.data;
+}
+
+}  // namespace blender

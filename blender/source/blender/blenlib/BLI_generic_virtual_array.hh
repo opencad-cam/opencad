@@ -73,14 +73,14 @@ class GVMutableArrayImpl : public GVArrayImpl {
 /** \name #GVArray and #GVMutableArray
  * \{ */
 
-namespace detail {
+namespace blenlib_detail {
 struct GVArrayAnyExtraInfo {
   const GVArrayImpl *(*get_varray)(const void *buffer) =
       [](const void * /*buffer*/) -> const GVArrayImpl * { return nullptr; };
 
   template<typename StorageT> static constexpr GVArrayAnyExtraInfo get();
 };
-}  // namespace detail
+}  // namespace blenlib_detail
 
 class GVMutableArray;
 
@@ -90,28 +90,13 @@ class GVMutableArray;
  */
 class GVArrayCommon {
  protected:
-  /**
-   * See #VArrayCommon for more information. The inline buffer is a bit larger here, because
-   * generic virtual array implementations often require a bit more space than typed ones.
-   */
-  using Storage = Any<detail::GVArrayAnyExtraInfo, 40, 8>;
-
-  const GVArrayImpl *impl_ = nullptr;
-  Storage storage_;
+  AnyDerived<const GVArrayImpl, 40> impl_;
 
   GVArrayCommon() = default;
-  GVArrayCommon(const GVArrayCommon &other);
-  GVArrayCommon(GVArrayCommon &&other) noexcept;
   GVArrayCommon(const GVArrayImpl *impl);
   GVArrayCommon(std::shared_ptr<const GVArrayImpl> impl);
-  ~GVArrayCommon();
 
   template<typename ImplT, typename... Args> void emplace(Args &&...args);
-
-  void copy_from(const GVArrayCommon &other);
-  void move_from(GVArrayCommon &&other) noexcept;
-
-  const GVArrayImpl *impl_from_storage() const;
 
  public:
   const CPPType &type() const;
@@ -177,8 +162,6 @@ class GVArray : public GVArrayCommon {
  public:
   GVArray() = default;
 
-  GVArray(const GVArray &other);
-  GVArray(GVArray &&other) noexcept;
   GVArray(const GVArrayImpl *impl);
   GVArray(std::shared_ptr<const GVArrayImpl> impl);
 
@@ -198,15 +181,17 @@ class GVArray : public GVArrayCommon {
   static GVArray from_span(GSpan span);
   static GVArray from_garray(GArray<> array);
   static GVArray from_empty(const CPPType &type);
+  template<typename GetToUninitFn>
+  static GVArray from_func(const CPPType &type, int64_t size, GetToUninitFn &&get_to_uninit);
+  static GVArray from_std_func(const CPPType &type,
+                               int64_t size,
+                               std::function<void(int64_t index, void *r_value)> get_to_uninit);
 
   GVArray slice(IndexRange slice) const;
 
-  GVArray &operator=(const GVArray &other);
-  GVArray &operator=(GVArray &&other) noexcept;
-
   const GVArrayImpl *get_implementation() const
   {
-    return impl_;
+    return impl_.get();
   }
 };
 
@@ -214,8 +199,6 @@ class GVArray : public GVArrayCommon {
 class GVMutableArray : public GVArrayCommon {
  public:
   GVMutableArray() = default;
-  GVMutableArray(const GVMutableArray &other);
-  GVMutableArray(GVMutableArray &&other) noexcept;
   GVMutableArray(GVMutableArrayImpl *impl);
   GVMutableArray(std::shared_ptr<GVMutableArrayImpl> impl);
 
@@ -228,9 +211,6 @@ class GVMutableArray : public GVArrayCommon {
 
   operator GVArray() const &;
   operator GVArray() && noexcept;
-
-  GVMutableArray &operator=(const GVMutableArray &other);
-  GVMutableArray &operator=(GVMutableArray &&other) noexcept;
 
   GMutableSpan get_internal_span() const;
 
@@ -339,7 +319,7 @@ template<typename T> class GVArrayImpl_For_VArray : public GVArrayImpl {
 
   bool try_assign_VArray(void *varray) const override
   {
-    *(VArray<T> *)varray = varray_;
+    *static_cast<VArray<T> *>(varray) = varray_;
     return true;
   }
 
@@ -422,7 +402,7 @@ template<typename T> class GVMutableArrayImpl_For_VMutableArray : public GVMutab
 
   void set_by_copy(const int64_t index, const void *value) override
   {
-    const T &value_ = *(const T *)value;
+    const T &value_ = *static_cast<const T *>(value);
     varray_.set(index, value_);
   }
 
@@ -461,13 +441,13 @@ template<typename T> class GVMutableArrayImpl_For_VMutableArray : public GVMutab
 
   bool try_assign_VArray(void *varray) const override
   {
-    *(VArray<T> *)varray = varray_;
+    *static_cast<VArray<T> *>(varray) = varray_;
     return true;
   }
 
   bool try_assign_VMutableArray(void *varray) const override
   {
-    *(VMutableArray<T> *)varray = varray_;
+    *static_cast<VMutableArray<T> *>(varray) = varray_;
     return true;
   }
 };
@@ -624,6 +604,36 @@ inline constexpr bool is_trivial_extended_v<GVArrayImpl_For_SingleValueRef_final
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name #GVArrayImpl_For_Func.
+ * \{ */
+
+template<typename GetToUninitFn> class GVArrayImpl_For_Func final : public GVArrayImpl {
+ private:
+  GetToUninitFn get_to_uninit_;
+
+ public:
+  GVArrayImpl_For_Func(const CPPType &type, const int64_t size, GetToUninitFn get_to_uninit)
+      : GVArrayImpl(type, size), get_to_uninit_(std::move(get_to_uninit))
+  {
+  }
+
+  void get(const int64_t index, void *r_value) const override
+  {
+    if (!type_->is_trivially_destructible) {
+      type_->destruct(r_value);
+    }
+    return get_to_uninit_(index, r_value);
+  }
+
+  void get_to_uninitialized(const int64_t index, void *r_value) const override
+  {
+    return get_to_uninit_(index, r_value);
+  }
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Inline methods for #GVArrayImpl.
  * \{ */
 
@@ -679,7 +689,12 @@ inline bool GVMutableArray::try_assign_VMutableArray(VMutableArray<T> &varray) c
 
 inline GVMutableArrayImpl *GVMutableArray::get_impl() const
 {
-  return const_cast<GVMutableArrayImpl *>(static_cast<const GVMutableArrayImpl *>(impl_));
+  return const_cast<GVMutableArrayImpl *>(static_cast<const GVMutableArrayImpl *>(impl_.get()));
+}
+
+inline GVMutableArrayImpl *GVMutableArray::get_implementation() const
+{
+  return this->get_impl();
 }
 
 /** \} */
@@ -690,15 +705,7 @@ inline GVMutableArrayImpl *GVMutableArray::get_impl() const
 
 template<typename ImplT, typename... Args> inline void GVArrayCommon::emplace(Args &&...args)
 {
-  static_assert(std::is_base_of_v<GVArrayImpl, ImplT>);
-  if constexpr (std::is_copy_constructible_v<ImplT> && Storage::template is_inline_v<ImplT>) {
-    impl_ = &storage_.template emplace<ImplT>(std::forward<Args>(args)...);
-  }
-  else {
-    std::shared_ptr<const GVArrayImpl> ptr = std::make_shared<ImplT>(std::forward<Args>(args)...);
-    impl_ = &*ptr;
-    storage_ = std::move(ptr);
-  }
+  impl_.emplace<ImplT>(std::forward<Args>(args)...);
 }
 
 /* Copies the value at the given index into the provided storage. The `r_value` pointer is
@@ -741,7 +748,7 @@ inline const CPPType &GVArrayCommon::type() const
 
 inline GVArrayCommon::operator bool() const
 {
-  return impl_ != nullptr;
+  return impl_;
 }
 
 inline CommonVArrayInfo GVArrayCommon::common_info() const
@@ -751,7 +758,7 @@ inline CommonVArrayInfo GVArrayCommon::common_info() const
 
 inline int64_t GVArrayCommon::size() const
 {
-  if (impl_ == nullptr) {
+  if (!impl_) {
     return 0;
   }
   return impl_->size();
@@ -806,7 +813,7 @@ inline GVArray::GVArray(varray_tag::single_ref /*tag*/,
   this->emplace<GVArrayImpl_For_SingleValueRef_final>(type, size, value);
 }
 
-namespace detail {
+namespace blenlib_detail {
 template<typename StorageT> constexpr GVArrayAnyExtraInfo GVArrayAnyExtraInfo::get()
 {
   static_assert(std::is_base_of_v<GVArrayImpl, StorageT> ||
@@ -814,21 +821,21 @@ template<typename StorageT> constexpr GVArrayAnyExtraInfo GVArrayAnyExtraInfo::g
 
   if constexpr (std::is_base_of_v<GVArrayImpl, StorageT>) {
     return {[](const void *buffer) {
-      return static_cast<const GVArrayImpl *>((const StorageT *)buffer);
+      return static_cast<const GVArrayImpl *>(static_cast<const StorageT *>(buffer));
     }};
   }
   else if constexpr (std::is_same_v<StorageT, const GVArrayImpl *>) {
-    return {[](const void *buffer) { return *(const StorageT *)buffer; }};
+    return {[](const void *buffer) { return *static_cast<const StorageT *>(buffer); }};
   }
   else if constexpr (std::is_same_v<StorageT, std::shared_ptr<const GVArrayImpl>>) {
-    return {[](const void *buffer) { return ((const StorageT *)buffer)->get(); }};
+    return {[](const void *buffer) { return (static_cast<const StorageT *>(buffer))->get(); }};
   }
   else {
     BLI_assert_unreachable();
     return {};
   }
 }
-}  // namespace detail
+}  // namespace blenlib_detail
 
 template<typename ImplT, typename... Args> inline GVArray GVArray::from(Args &&...args)
 {
@@ -864,6 +871,45 @@ template<typename T> inline GVArray::GVArray(VArray<T> &&varray)
   *this = GVArray::from<GVArrayImpl_For_VArray<T>>(std::move(varray));
 }
 
+inline GVArray::GVArray(const GVArrayImpl *impl) : GVArrayCommon(impl) {}
+
+inline GVArray::GVArray(std::shared_ptr<const GVArrayImpl> impl) : GVArrayCommon(std::move(impl))
+{
+}
+
+inline GVArray GVArray::from_single(const CPPType &type, const int64_t size, const void *value)
+{
+  return GVArray(varray_tag::single{}, type, size, value);
+}
+
+inline GVArray GVArray::from_single_ref(const CPPType &type, const int64_t size, const void *value)
+{
+  return GVArray(varray_tag::single_ref{}, type, size, value);
+}
+
+inline GVArray GVArray::from_single_default(const CPPType &type, const int64_t size)
+{
+  return GVArray::from_single_ref(type, size, type.default_value());
+}
+
+inline GVArray GVArray::from_span(GSpan span)
+{
+  return GVArray(varray_tag::span{}, span);
+}
+
+inline GVArray GVArray::from_empty(const CPPType &type)
+{
+  return GVArray::from_span(GSpan(type));
+}
+
+inline GVArray GVArray::from_std_func(
+    const CPPType &type,
+    int64_t size,
+    std::function<void(int64_t index, void *r_value)> get_to_uninit)
+{
+  return GVArray::from_func(type, size, std::move(get_to_uninit));
+}
+
 template<typename T> inline VArray<T> GVArray::typed() const
 {
   if (!*this) {
@@ -884,6 +930,13 @@ template<typename T> inline VArray<T> GVArray::typed() const
     return varray;
   }
   return VArray<T>::template from<VArrayImpl_For_GVArray<T>>(*this);
+}
+
+template<typename GetToUninitFn>
+inline GVArray GVArray::from_func(const CPPType &type, int64_t size, GetToUninitFn &&get_to_uninit)
+{
+  return GVArray::from<GVArrayImpl_For_Func<GetToUninitFn>>(
+      type, size, std::forward<GetToUninitFn>(get_to_uninit));
 }
 
 /** \} */

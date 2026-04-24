@@ -4,21 +4,22 @@
 
 # Libs that adhere to strict flags
 add_subdirectory(curve_fit_nd)
-add_subdirectory(fmtlib)
+add_subdirectory(fast_float)
+add_subdirectory(json)
 if(WITH_IO_FBX)
   add_subdirectory(ufbx)
 endif()
 
-# Otherwise we get warnings here that we cant fix in external projects
+# Otherwise we get warnings here that we can't fix in external projects
 remove_strict_flags()
 
 # Not a strict flag, but noisy for code we don't maintain
-if(CMAKE_COMPILER_IS_GNUCC)
-  remove_cc_flag(
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  remove_c_and_cxx_flag(
     "-Wmisleading-indentation"
   )
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  remove_cc_flag(
+  remove_c_and_cxx_flag(
     "-Weverything"
     "-Wextra"
     "-Wnull-pointer-subtraction"
@@ -72,10 +73,6 @@ endif()
 
 if(WITH_GHOST_X11 AND WITH_GHOST_XDND)
   add_subdirectory(xdnd)
-endif()
-
-if(WITH_LIBMV)
-  add_subdirectory(ceres)
 endif()
 
 if(WITH_LIBMV OR WITH_GTESTS)

@@ -74,6 +74,7 @@ set(SRC
   nodes/node_shader_particle_info.cc
   nodes/node_shader_point_info.cc
   nodes/node_shader_radial_tiling.cc
+  nodes/node_shader_raycast.cc
   nodes/node_shader_rgb.cc
   nodes/node_shader_rgb_to_bw.cc
   nodes/node_shader_script.cc
@@ -159,23 +160,14 @@ if(WITH_MATERIALX)
 
   if(WITH_USD)
     add_definitions(-DWITH_USD)
-    list(APPEND INC_SYS
-      ${USD_INCLUDE_DIRS}
-      ${BOOST_INCLUDE_DIR}
+    list(APPEND LIB
+      PRIVATE bf::dependencies::optional::usd
     )
   endif()
 endif()
 
 if(WITH_FREESTYLE)
   add_definitions(-DWITH_FREESTYLE)
-endif()
-
-if(WITH_TBB)
-  if(WIN32)
-    # TBB includes Windows.h which will define min/max macros
-    # that will collide with the STL versions.
-    add_definitions(-DNOMINMAX)
-  endif()
 endif()
 
 blender_add_lib(bf_nodes_shader "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

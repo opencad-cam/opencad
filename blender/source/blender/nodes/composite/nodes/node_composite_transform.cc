@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_angle_types.hh"
@@ -23,46 +19,51 @@
 
 namespace blender::nodes::node_composite_transform_cc {
 
-static void cmp_node_transform_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
       .hide_value()
       .compositor_realization_mode(CompositorInputRealizationMode::None)
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("X").default_value(0.0f).min(-10000.0f).max(10000.0f);
-  b.add_input<decl::Float>("Y").default_value(0.0f).min(-10000.0f).max(10000.0f);
-  b.add_input<decl::Float>("Angle").default_value(0.0f).min(-10000.0f).max(10000.0f).subtype(
-      PROP_ANGLE);
-  b.add_input<decl::Float>("Scale").default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
+  b.add_input<decl::Float>("X"_ustr).default_value(0.0f).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>("Y"_ustr).default_value(0.0f).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>("Angle"_ustr)
+      .default_value(0.0f)
+      .min(-10000.0f)
+      .max(10000.0f)
+      .subtype(PROP_ANGLE);
+  b.add_input<decl::Float>("Scale"_ustr).default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
 
-  PanelDeclarationBuilder &sampling_panel = b.add_panel("Sampling").default_closed(true);
-  sampling_panel.add_input<decl::Menu>("Interpolation")
+  PanelDeclarationBuilder &sampling_panel = b.add_panel("Sampling"_ustr).default_closed(true);
+  sampling_panel.add_input<decl::Menu>("Interpolation"_ustr)
       .default_value(CMP_NODE_INTERPOLATION_BILINEAR)
       .static_items(rna_enum_node_compositor_interpolation_items)
       .optional_label()
       .description("Interpolation method");
-  sampling_panel.add_input<decl::Menu>("Extension X")
+  sampling_panel.add_input<decl::Menu>("Extension X"_ustr)
       .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
       .static_items(rna_enum_node_compositor_extension_items)
       .optional_label()
       .description("The extension mode applied to the X axis");
-  sampling_panel.add_input<decl::Menu>("Extension Y")
+  sampling_panel.add_input<decl::Menu>("Extension Y"_ustr)
       .default_value(CMP_NODE_EXTENSION_MODE_CLIP)
       .static_items(rna_enum_node_compositor_extension_items)
       .optional_label()
       .description("The extension mode applied to the Y axis");
 }
 
-static void cmp_node_init_transform(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
   /* Unused, kept for forward compatibility. */
-  NodeTransformData *data = MEM_new_for_free<NodeTransformData>(__func__);
+  NodeTransformData *data = MEM_new<NodeTransformData>(__func__);
   node->storage = data;
 }
 
@@ -140,30 +141,28 @@ class TransformOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new TransformOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_transform_cc
-
-static void register_node_type_cmp_transform()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_transform_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeTransform", CMP_NODE_TRANSFORM);
+  cmp_node_type_base(&ntype, "CompositorNodeTransform"_ustr, CMP_NODE_TRANSFORM);
   ntype.ui_name = "Transform";
   ntype.ui_description = "Scale, translate and rotate an image";
   ntype.enum_name_legacy = "TRANSFORM";
   ntype.nclass = NODE_CLASS_DISTORT;
-  ntype.declare = file_ns::cmp_node_transform_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
-  ntype.initfunc = file_ns::cmp_node_init_transform;
-  blender::bke::node_type_storage(
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(
       ntype, "NodeTransformData", node_free_standard_storage, node_copy_standard_storage);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_transform)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_transform_cc

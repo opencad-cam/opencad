@@ -20,12 +20,15 @@
 
 #include "GPU_material.hh"
 
+#include "draw_handle.hh"
 #include "draw_resource.hh"
 #include "draw_view.hh"
 
 #include <atomic>
 
-namespace blender::draw {
+namespace blender {
+
+namespace draw {
 
 /* Forward declarations. */
 
@@ -168,10 +171,10 @@ class Manager {
    * Populate additional per resource data on demand.
    * IMPORTANT: Should be called only **once** per object.
    */
-  void extract_object_attributes(ResourceHandle handle,
+  void extract_object_attributes(ResourceHandleRange handle,
                                  const ObjectRef &ref,
                                  const GPUMaterial *material);
-  void extract_object_attributes(ResourceHandle handle,
+  void extract_object_attributes(ResourceHandleRange handle,
                                  const ObjectRef &ref,
                                  Span<GPUMaterial *> materials);
 
@@ -343,7 +346,7 @@ inline ResourceHandleRange Manager::resource_handle(const ObjectRef &ref, float 
 
       ObjectInfos &info = infos_buf.current().get_or_resize(resource_len_);
       info = proto_info;
-      info.random = dupli->random_id * (1.0f / (float)0xFFFFFFFF);
+      info.random = dupli->random_id * (1.0f / float(0xFFFFFFFF));
 
       resource_len_++;
     }
@@ -428,75 +431,79 @@ inline void Manager::update_handle_bounds(ResourceHandle handle,
                                           const ObjectRef &ref,
                                           float inflate_bounds)
 {
-  bounds_buf.current()[handle.resource_index()].sync(*ref.object, inflate_bounds);
+  bounds_buf.current()[handle.index()].sync(*ref.object, inflate_bounds);
 }
 
-inline void Manager::extract_object_attributes(ResourceHandle handle,
+inline void Manager::extract_object_attributes(ResourceHandleRange handle,
                                                const ObjectRef &ref,
                                                const GPUMaterial *material)
 {
-  ObjectInfos &infos = infos_buf.current().get_or_resize(handle.resource_index());
-  infos.object_attrs_offset = attribute_len_;
-
   const GPUUniformAttrList *attr_list = GPU_material_uniform_attributes(material);
-  if (attr_list == nullptr) {
+  if (attr_list == nullptr || attr_list->count == 0) {
     return;
   }
 
-  LISTBASE_FOREACH (const GPUUniformAttr *, attr, &attr_list->list) {
-    if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *attr)) {
-      infos.object_attrs_len++;
-      attribute_len_++;
+  int instance_index = 0;
+  for (ResourceID resource_id : handle.id_range()) {
+    ObjectInfos &infos = infos_buf.current().get_or_resize(resource_id.index());
+    infos.object_attrs_offset = attribute_len_;
+    for (const GPUUniformAttr &attr : attr_list->list) {
+      if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *&attr, instance_index)) {
+        infos.object_attrs_len++;
+        attribute_len_++;
+      }
     }
+    instance_index++;
   }
 }
 
-inline void Manager::extract_object_attributes(ResourceHandle handle,
+inline void Manager::extract_object_attributes(ResourceHandleRange handle,
                                                const ObjectRef &ref,
                                                Span<GPUMaterial *> materials)
 {
-  ObjectInfos &infos = infos_buf.current().get_or_resize(handle.resource_index());
-  infos.object_attrs_offset = attribute_len_;
-
-  /* Simple cache solution to avoid duplicates. */
-  Vector<uint32_t, 4> hash_cache;
+  Map<uint32_t, const GPUUniformAttr *, 4> attributes;
 
   for (const GPUMaterial *mat : materials) {
     const GPUUniformAttrList *attr_list = GPU_material_uniform_attributes(mat);
     if (attr_list == nullptr) {
       continue;
     }
+    for (const GPUUniformAttr &attr : attr_list->list) {
+      attributes.add(attr.hash_code, &attr);
+    }
+  }
 
-    LISTBASE_FOREACH (const GPUUniformAttr *, attr, &attr_list->list) {
-      /** WATCH: Linear Search. Avoid duplicate attributes across materials. */
-      if ((mat != materials.first()) && (hash_cache.first_index_of_try(attr->hash_code) != -1)) {
-        /* Attribute has already been added to the attribute buffer by another material. */
-        continue;
-      }
-      hash_cache.append(attr->hash_code);
-      if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *attr)) {
+  int instance_index = 0;
+  for (ResourceID resource_id : handle.id_range()) {
+    ObjectInfos &infos = infos_buf.current().get_or_resize(resource_id.index());
+    infos.object_attrs_offset = attribute_len_;
+    for (const GPUUniformAttr *attr : attributes.values()) {
+      if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *attr, instance_index)) {
         infos.object_attrs_len++;
         attribute_len_++;
       }
     }
+    instance_index++;
   }
 }
 
 inline void Manager::register_layer_attributes(GPUMaterial *material)
 {
-  const ListBase *attr_list = GPU_material_layer_attributes(material);
+  const ListBaseT<GPULayerAttr> *attr_list = GPU_material_layer_attributes(material);
 
   if (attr_list != nullptr) {
-    LISTBASE_FOREACH (const GPULayerAttr *, attr, attr_list) {
+    for (const GPULayerAttr &attr : *attr_list) {
       /** Since layer attributes are global to the whole render pass,
        *  this only collects a table of their names. */
-      layer_attributes.add(attr->hash_code, *attr);
+      layer_attributes.add(attr.hash_code, *&attr);
     }
   }
 }
 
-}  // namespace blender::draw
+}  // namespace draw
 
 /* TODO(@fclem): This is for testing. The manager should be passed to the engine through the
  * callbacks. */
-blender::draw::Manager *DRW_manager_get();
+draw::Manager *DRW_manager_get();
+
+}  // namespace blender

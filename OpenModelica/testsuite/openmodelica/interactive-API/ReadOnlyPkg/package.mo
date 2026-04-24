@@ -1,2 +1,0 @@
-package ReadOnlyPkg
-end ReadOnlyPkg;

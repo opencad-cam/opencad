@@ -8,6 +8,7 @@
  * \ingroup sequencer
  */
 
+#include "BKE_sound_types.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
 #include "BLI_vector.hh"
@@ -15,6 +16,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_session_uid_types.h"
+
+namespace blender {
 
 struct BlendDataReader;
 struct BlendWriter;
@@ -28,7 +31,17 @@ struct SeqTimelineChannel;
 struct Strip;
 struct SequencerToolSettings;
 
-namespace blender::seq {
+namespace seq {
+
+class CompositorCache;
+struct FinalImageCache;
+struct IntraFrameCache;
+struct MediaPresence;
+struct PrefetchJob;
+struct PreviewCache;
+struct SourceImageCache;
+struct StripLookup;
+struct ThumbnailCache;
 
 constexpr int MAX_CHANNELS = 128;
 
@@ -67,10 +80,17 @@ enum class StripRuntimeFlag {
 ENUM_OPERATORS(StripRuntimeFlag);
 
 struct StripRuntime {
+  ~StripRuntime();
+
   SessionUID session_uid = {};
   StripRuntimeFlag flag = StripRuntimeFlag::None;
-  void *scene_sound = nullptr; /* AUD_SequenceEntry */
+  AUD_SequenceEntry scene_sound;
+  AUD_Sound sound_time_stretch;
+  float sound_time_stretch_fps = 0.0f;
+
   Vector<MovieReader *, 1> movie_readers;
+  /* To detect the removal of a sound modifier. */
+  int sound_modifiers_count = 0;
 
   [[nodiscard]] MovieReader *movie_reader_get(int64_t index = 0) const
   {
@@ -79,6 +99,30 @@ struct StripRuntime {
     }
     return movie_readers[index];
   }
+
+  void clear_sound_time_stretch();
+  void remove_scene_sound(Scene *scene);
+};
+
+struct EditingRuntime {
+  ~EditingRuntime();
+
+  StripLookup *strip_lookup = nullptr;
+  MediaPresence *media_presence = nullptr;
+  ThumbnailCache *thumbnail_cache = nullptr;
+  IntraFrameCache *intra_frame_cache = nullptr;
+  SourceImageCache *source_image_cache = nullptr;
+  FinalImageCache *final_image_cache = nullptr;
+  PreviewCache *preview_cache = nullptr;
+  PrefetchJob *prefetch_job = nullptr;
+  CompositorCache *compositor_cache = nullptr;
+
+  /** Used for rendering a different frame using sequencer_draw_get_transform_preview from the box
+   * blade tool. */
+  int transform_preview_frame = 0;
+  bool show_transform_preview = false;
+
+  CompositorCache &ensure_compositor_cache();
 };
 
 SequencerToolSettings *tool_settings_init();
@@ -101,8 +145,8 @@ void editing_free(Scene *scene, bool do_id_user);
  * \param ed: sequence editor data
  * \return pointer to active seqbase. returns NULL if ed is NULL
  */
-ListBase *active_seqbase_get(const Editing *ed);
-Strip *strip_alloc(ListBase *lb, int timeline_frame, int channel, StripType type);
+ListBaseT<Strip> *active_seqbase_get(const Editing *ed);
+Strip *strip_alloc(ListBaseT<Strip> *lb, int timeline_frame, int channel, StripType type);
 void strip_free(Scene *scene, Strip *strip);
 /**
  * Get #MetaStack that corresponds to current level that is being viewed
@@ -126,14 +170,14 @@ Strip *meta_stack_pop(Editing *ed);
 Strip *strip_duplicate_recursive(Main *bmain,
                                  const Scene *scene_src,
                                  Scene *scene_dst,
-                                 ListBase *seqbase_dst,
+                                 ListBaseT<Strip> *seqbase_dst,
                                  Strip *strip,
                                  StripDuplicate dupe_flag);
 void seqbase_duplicate_recursive(Main *bmain,
                                  const Scene *scene_src,
                                  Scene *scene_dst,
-                                 ListBase *seqbase_dst,
-                                 const ListBase *seqbase_src,
+                                 ListBaseT<Strip> *seqbase_dst,
+                                 const ListBaseT<Strip> *seqbase_src,
                                  StripDuplicate dupe_flag,
                                  int copy_flag);
 bool is_valid_strip_channel(const Strip *strip);
@@ -141,8 +185,8 @@ bool is_valid_strip_channel(const Strip *strip);
 /**
  * Read and Write functions for `.blend` file data.
  */
-void blend_write(BlendWriter *writer, ListBase *seqbase);
-void blend_read(BlendDataReader *reader, ListBase *seqbase);
+void blend_write(BlendWriter *writer, ListBaseT<Strip> *seqbase);
+void blend_read(BlendDataReader *reader, ListBaseT<Strip> *seqbase);
 
 void doversion_250_sound_proxy_update(Main *bmain, Editing *ed);
 
@@ -153,7 +197,7 @@ void doversion_250_sound_proxy_update(Main *bmain, Editing *ed);
  * This does NOT include actual rendering of the strips, but rather makes them up-to-date for
  * animation playback and makes them ready for the sequencer's rendering pipeline to render them.
  */
-void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBase *seqbase);
+void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBaseT<Strip> *seqbase);
 
 /**
  * Find a strip with a given name.
@@ -185,7 +229,7 @@ Span<Strip *> lookup_strips_by_scene(Editing *ed, const Scene *key);
 Map<const Scene *, VectorSet<Strip *>> &lookup_strips_by_scene_map_get(Editing *ed);
 
 /**
- * Find all strips using provided compositor node tree as a modifier
+ * Find all strips using provided compositor node tree
  *
  * \param ed: Editing that owns lookup hash
  * \param key: Node tree pointer
@@ -219,4 +263,5 @@ void strip_lookup_free(Editing *ed);
  */
 void strip_lookup_invalidate(const Editing *ed);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

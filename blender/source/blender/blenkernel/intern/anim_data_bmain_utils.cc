@@ -20,9 +20,9 @@
 #include "DNA_texture_types.h"
 #include "DNA_world_types.h"
 
-/* Whole Database Ops -------------------------------------------- */
+namespace blender {
 
-using namespace blender;
+/* Whole Database Ops -------------------------------------------- */
 
 void BKE_animdata_main_cb(Main *bmain, const FunctionRef<void(ID *, AnimData *)> func)
 {
@@ -140,20 +140,39 @@ void BKE_animdata_fix_paths_rename_all(ID *ref_id,
                                        const char *newName)
 {
   Main *bmain = G.main; /* XXX UGLY! */
-  BKE_animdata_fix_paths_rename_all_ex(bmain, ref_id, prefix, oldName, newName, 0, 0, true);
+  BKE_animdata_fix_paths_rename_all_ex(bmain,
+                                       ref_id,
+                                       prefix,
+                                       oldName,
+                                       newName,
+                                       0,
+                                       0,
+                                       /*verify_paths=*/true,
+                                       /*infix_is_name=*/true);
 }
 
 void BKE_animdata_fix_paths_rename_all_ex(Main *bmain,
                                           ID *ref_id,
                                           const char *prefix,
-                                          const char *oldName,
-                                          const char *newName,
+                                          const char *old_suffix,
+                                          const char *new_suffix,
                                           const int oldSubscript,
                                           const int newSubscript,
-                                          const bool verify_paths)
+                                          const bool verify_paths,
+                                          const bool suffix_is_name)
 {
   BKE_animdata_main_cb(bmain, [&](ID *id, AnimData *adt) {
-    BKE_animdata_fix_paths_rename(
-        id, adt, ref_id, prefix, oldName, newName, oldSubscript, newSubscript, verify_paths);
+    BKE_animdata_fix_paths_rename(id,
+                                  adt,
+                                  ref_id,
+                                  prefix,
+                                  old_suffix,
+                                  new_suffix,
+                                  oldSubscript,
+                                  newSubscript,
+                                  verify_paths,
+                                  suffix_is_name);
   });
 }
+
+}  // namespace blender

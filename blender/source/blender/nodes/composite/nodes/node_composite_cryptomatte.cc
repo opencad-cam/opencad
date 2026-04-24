@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include <cstring>
 #include <string>
 
@@ -34,12 +30,11 @@
 #include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_cryptomatte.hh"
-#include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_lib_id.hh"
-#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
+#include "BKE_node_runtime.hh"
 
 #include "UI_resources.hh"
 
@@ -55,56 +50,56 @@
 
 #include <optional>
 
-/* -------------------------------------------------------------------- */
-/** \name Cryptomatte
- * \{ */
+namespace blender {
 
-static blender::bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node_render(
+static bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node_render(
     const bNode &node, const bool build_meta_data)
 {
-  blender::bke::cryptomatte::CryptomatteSessionPtr session;
+  bke::cryptomatte::CryptomatteSessionPtr session;
 
-  Scene *scene = (Scene *)node.id;
+  Scene *scene = id_cast<Scene *>(node.id);
   if (!scene) {
     return session;
   }
   BLI_assert(GS(scene->id.name) == ID_SCE);
 
-  session = blender::bke::cryptomatte::CryptomatteSessionPtr(
+  session = bke::cryptomatte::CryptomatteSessionPtr(
       BKE_cryptomatte_init_from_scene(scene, build_meta_data));
   return session;
 }
 
-static blender::bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node_image(
-    const bNode &node)
+static bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node_image(const bNode &node)
 {
-  blender::bke::cryptomatte::CryptomatteSessionPtr session;
-  Image *image = (Image *)node.id;
+  bke::cryptomatte::CryptomatteSessionPtr session;
+  Image *image = id_cast<Image *>(node.id);
   if (!image) {
     return session;
   }
   BLI_assert(GS(image->id.name) == ID_IM);
 
-  /* Construct an image user to retrieve the first image in the sequence, since the frame number
-   * might correspond to a non-existing image. We explicitly do not support the case where the
-   * image sequence has a changing structure. */
-  ImageUser image_user = {};
-  image_user.framenr = BKE_image_sequence_guess_offset(image);
+  NodeCryptomatte *node_cryptomatte = static_cast<NodeCryptomatte *>(node.storage);
+  ImageUser image_user = node_cryptomatte->iuser;
+  BKE_image_user_frame_calc(image, &image_user, image_user.framenr);
+
+  /* Fallback to the first frame in the image sequence if the current frame is out of range. */
+  if (!(image_user.flag & IMA_USER_FRAME_IN_RANGE)) {
+    image_user.framenr = BKE_image_sequence_guess_offset(image);
+  }
 
   ImBuf *ibuf = BKE_image_acquire_ibuf(image, &image_user, nullptr);
   RenderResult *render_result = image->rr;
   if (render_result) {
-    session = blender::bke::cryptomatte::CryptomatteSessionPtr(
+    session = bke::cryptomatte::CryptomatteSessionPtr(
         BKE_cryptomatte_init_from_render_result(render_result));
   }
   BKE_image_release_ibuf(image, ibuf, nullptr);
   return session;
 }
 
-static blender::bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node(
+static bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node(
     const bNode &node, const bool build_meta_data)
 {
-  blender::bke::cryptomatte::CryptomatteSessionPtr session;
+  bke::cryptomatte::CryptomatteSessionPtr session;
   if (node.type_legacy != CMP_NODE_CRYPTOMATTE) {
     return session;
   }
@@ -123,9 +118,9 @@ static blender::bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_no
 
 static CryptomatteEntry *cryptomatte_find(const NodeCryptomatte &n, float encoded_hash)
 {
-  LISTBASE_FOREACH (CryptomatteEntry *, entry, &n.entries) {
-    if (entry->encoded_hash == encoded_hash) {
-      return entry;
+  for (CryptomatteEntry &entry : n.entries) {
+    if (entry.encoded_hash == encoded_hash) {
+      return &entry;
     }
   }
   return nullptr;
@@ -138,10 +133,9 @@ static void cryptomatte_add(bNode &node, NodeCryptomatte &node_cryptomatte, floa
     return;
   }
 
-  CryptomatteEntry *entry = MEM_new_for_free<CryptomatteEntry>(__func__);
+  CryptomatteEntry *entry = MEM_new<CryptomatteEntry>(__func__);
   entry->encoded_hash = encoded_hash;
-  blender::bke::cryptomatte::CryptomatteSessionPtr session = cryptomatte_init_from_node(node,
-                                                                                        true);
+  bke::cryptomatte::CryptomatteSessionPtr session = cryptomatte_init_from_node(node, true);
   if (session) {
     BKE_cryptomatte_find_name(session.get(), encoded_hash, entry->name, sizeof(entry->name));
   }
@@ -156,7 +150,7 @@ static void cryptomatte_remove(NodeCryptomatte &n, float encoded_hash)
     return;
   }
   BLI_remlink(&n.entries, entry);
-  MEM_freeN(entry);
+  MEM_delete(entry);
 }
 
 void ntreeCompositCryptomatteSyncFromAdd(bNode *node)
@@ -178,20 +172,18 @@ void ntreeCompositCryptomatteSyncFromRemove(bNode *node)
     zero_v3(n->runtime.remove);
   }
 }
+
 void ntreeCompositCryptomatteUpdateLayerNames(bNode *node)
 {
   BLI_assert(node->type_legacy == CMP_NODE_CRYPTOMATTE);
   NodeCryptomatte *n = static_cast<NodeCryptomatte *>(node->storage);
   BLI_freelistN(&n->runtime.layers);
 
-  blender::bke::cryptomatte::CryptomatteSessionPtr session = cryptomatte_init_from_node(*node,
-                                                                                        false);
+  bke::cryptomatte::CryptomatteSessionPtr session = cryptomatte_init_from_node(*node, false);
 
   if (session) {
-    for (blender::StringRef layer_name :
-         blender::bke::cryptomatte::BKE_cryptomatte_layer_names_get(*session))
-    {
-      CryptomatteLayer *layer = MEM_new_for_free<CryptomatteLayer>(__func__);
+    for (StringRef layer_name : bke::cryptomatte::BKE_cryptomatte_layer_names_get(*session)) {
+      CryptomatteLayer *layer = MEM_new<CryptomatteLayer>(__func__);
       layer_name.copy_utf8_truncated(layer->name);
       BLI_addtail(&n->runtime.layers, layer);
     }
@@ -201,15 +193,12 @@ void ntreeCompositCryptomatteUpdateLayerNames(bNode *node)
 void ntreeCompositCryptomatteLayerPrefix(const bNode *node, char *r_prefix, size_t prefix_maxncpy)
 {
   BLI_assert(node->type_legacy == CMP_NODE_CRYPTOMATTE);
-  NodeCryptomatte *node_cryptomatte = (NodeCryptomatte *)node->storage;
-  blender::bke::cryptomatte::CryptomatteSessionPtr session = cryptomatte_init_from_node(*node,
-                                                                                        false);
+  NodeCryptomatte *node_cryptomatte = static_cast<NodeCryptomatte *>(node->storage);
+  bke::cryptomatte::CryptomatteSessionPtr session = cryptomatte_init_from_node(*node, false);
   std::string first_layer_name;
 
   if (session) {
-    for (blender::StringRef layer_name :
-         blender::bke::cryptomatte::BKE_cryptomatte_layer_names_get(*session))
-    {
+    for (StringRef layer_name : bke::cryptomatte::BKE_cryptomatte_layer_names_get(*session)) {
       if (first_layer_name.empty()) {
         first_layer_name = layer_name;
       }
@@ -227,12 +216,37 @@ void ntreeCompositCryptomatteLayerPrefix(const bNode *node, char *r_prefix, size
 
 CryptomatteSession *ntreeCompositCryptomatteSession(bNode *node)
 {
-  blender::bke::cryptomatte::CryptomatteSessionPtr session_ptr = cryptomatte_init_from_node(*node,
-                                                                                            true);
+  bke::cryptomatte::CryptomatteSessionPtr session_ptr = cryptomatte_init_from_node(*node, true);
   return session_ptr.release();
 }
 
-namespace blender::nodes::node_composite_base_cryptomatte_cc {
+namespace nodes::node_composite_base_cryptomatte_cc {
+
+static void node_free_cryptomatte(bNode *node)
+{
+  BLI_assert(ELEM(node->type_legacy, CMP_NODE_CRYPTOMATTE, CMP_NODE_CRYPTOMATTE_LEGACY));
+  NodeCryptomatte *nc = static_cast<NodeCryptomatte *>(node->storage);
+
+  if (nc) {
+    MEM_SAFE_DELETE(nc->matte_id);
+    BLI_freelistN(&nc->runtime.layers);
+    BLI_freelistN(&nc->entries);
+    MEM_delete(nc);
+  }
+}
+
+static void node_copy_cryptomatte(bNodeTree * /*dst_ntree*/,
+                                  bNode *dest_node,
+                                  const bNode *src_node)
+{
+  NodeCryptomatte *src_nc = static_cast<NodeCryptomatte *>(src_node->storage);
+  NodeCryptomatte *dest_nc = static_cast<NodeCryptomatte *>(MEM_dupalloc(src_nc));
+
+  BLI_duplicatelist(&dest_nc->entries, &src_nc->entries);
+  BLI_listbase_clear(&dest_nc->runtime.layers);
+  dest_nc->matte_id = static_cast<char *>(MEM_dupalloc(src_nc->matte_id));
+  dest_node->storage = dest_nc;
+}
 
 NODE_STORAGE_FUNCS(NodeCryptomatte)
 
@@ -245,23 +259,23 @@ class BaseCryptoMatteOperation : public NodeOperation {
   /* Should return the input image result. */
   virtual Result &get_input_image() = 0;
 
-  /* Should returns all the Cryptomatte layers in order. */
+  /* Should return all the Cryptomatte layers in order. The caller should release the returned
+   * layers. */
   virtual Vector<Result> get_layers() = 0;
-
-  /* If only a subset area of the Cryptomatte layers is to be considered, this method should return
-   * the lower bound of that area. The upper bound will be derived from the operation domain. */
-  virtual int2 get_layers_lower_bound()
-  {
-    return int2(0);
-  }
 
   void execute() override
   {
     Vector<Result> layers = get_layers();
     if (layers.is_empty()) {
-      allocate_invalid();
+      this->allocate_default_remaining_outputs();
       return;
     }
+
+    BLI_SCOPED_DEFER([&]() {
+      for (Result &layer : layers) {
+        layer.release();
+      }
+    });
 
     Result &output_pick = get_result("Pick");
     if (output_pick.should_compute()) {
@@ -281,29 +295,10 @@ class BaseCryptoMatteOperation : public NodeOperation {
     }
 
     if (matte_output.should_compute()) {
-      matte_output.steal_data(matte);
-    }
-    else {
-      matte.release();
-    }
-  }
-
-  void allocate_invalid()
-  {
-    Result &pick = get_result("Pick");
-    if (pick.should_compute()) {
-      pick.allocate_invalid();
+      matte_output.share_data(matte);
     }
 
-    Result &matte = get_result("Matte");
-    if (matte.should_compute()) {
-      matte.allocate_invalid();
-    }
-
-    Result &image = get_result("Image");
-    if (image.should_compute()) {
-      image.allocate_invalid();
-    }
+    matte.release();
   }
 
   /* Computes the pick result, which is a special human-viewable image that the user can pick
@@ -332,9 +327,6 @@ class BaseCryptoMatteOperation : public NodeOperation {
                                                ResultPrecision::Full);
     GPU_shader_bind(shader);
 
-    const int2 lower_bound = this->get_layers_lower_bound();
-    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
-
     const Result &first_layer = layers[0];
     first_layer.bind_as_texture(shader, "first_layer_tx");
 
@@ -352,8 +344,6 @@ class BaseCryptoMatteOperation : public NodeOperation {
 
   void compute_pick_cpu(const Vector<Result> &layers)
   {
-    const int2 lower_bound = this->get_layers_lower_bound();
-
     const Result &first_layer = layers[0];
 
     const Domain domain = this->compute_domain();
@@ -382,7 +372,7 @@ class BaseCryptoMatteOperation : public NodeOperation {
     parallel_for(domain.data_size, [&](const int2 texel) {
       /* Each layer stores two ranks, each rank contains a pair, the identifier and the coverage of
        * the entity identified by the identifier. */
-      float2 first_rank = float4(first_layer.load_pixel<Color>(texel + lower_bound)).xy();
+      float2 first_rank = float4(first_layer.load_pixel<Color>(texel)).xy();
       float id_of_first_rank = first_rank.x;
 
       /* There is no logic to this, we just compute arbitrary compressed versions of the identifier
@@ -417,7 +407,7 @@ class BaseCryptoMatteOperation : public NodeOperation {
     const float4 zero_color = float4(0.0f);
     GPU_texture_clear(output_matte, GPU_DATA_FLOAT, zero_color);
 
-    Vector<float> identifiers = get_identifiers();
+    const Vector<float> identifiers = this->get_identifiers();
     /* The user haven't selected any entities, return the currently zero matte. */
     if (identifiers.is_empty()) {
       return output_matte;
@@ -426,26 +416,41 @@ class BaseCryptoMatteOperation : public NodeOperation {
     gpu::Shader *shader = context().get_shader("compositor_cryptomatte_matte");
     GPU_shader_bind(shader);
 
-    const int2 lower_bound = this->get_layers_lower_bound();
-    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
-    GPU_shader_uniform_1i(shader, "identifiers_count", identifiers.size());
-    GPU_shader_uniform_1f_array(shader, "identifiers", identifiers.size(), identifiers.data());
+    const Vector<Span<float>> identifiers_slices = this->get_identifiers_slices(identifiers);
+    for (const Span<float> &identifier_slice : identifiers_slices) {
+      GPU_shader_uniform_1i(shader, "identifiers_count", identifier_slice.size());
+      GPU_shader_uniform_1f_array(
+          shader, "identifiers", identifier_slice.size(), identifier_slice.data());
 
-    for (const Result &layer : layers) {
-      layer.bind_as_texture(shader, "layer_tx");
+      for (const Result &layer : layers) {
+        layer.bind_as_texture(shader, "layer_tx");
 
-      /* Bind the matte with read access, since we will be accumulating in it. */
-      output_matte.bind_as_image(shader, "matte_img", true);
+        /* Bind the matte with read access, since we will be accumulating in it. */
+        output_matte.bind_as_image(shader, "matte_img", true);
 
-      compute_dispatch_threads_at_least(shader, domain.data_size);
+        compute_dispatch_threads_at_least(shader, domain.data_size);
 
-      layer.unbind_as_texture();
-      output_matte.unbind_as_image();
+        layer.unbind_as_texture();
+        output_matte.unbind_as_image();
+      }
     }
 
     GPU_shader_unbind();
 
     return output_matte;
+  }
+
+  /* Divides the given identifiers vector into a number of slices with a maximum of 32 element per
+   * slice. This is needed because the GPU shader can only be passed 32 identifiers at a time. */
+  Vector<Span<float>> get_identifiers_slices(const Vector<float> &identifiers)
+  {
+    Vector<Span<float>> slices;
+    constexpr int slice_size = 32;
+    const int slices_count = ((identifiers.size() - 1) / slice_size) + 1;
+    for (int i = 0; i < slices_count; i++) {
+      slices.append(identifiers.as_span().slice_safe(i * slice_size, slice_size));
+    }
+    return slices;
   }
 
   Result compute_matte_cpu(const Vector<Result> &layers)
@@ -463,7 +468,6 @@ class BaseCryptoMatteOperation : public NodeOperation {
       return matte;
     }
 
-    const int2 lower_bound = this->get_layers_lower_bound();
     for (const Result &layer_result : layers) {
       /* Loops over all identifiers selected by the user, and accumulate the coverage of ranks
        * whose identifiers match that of the user selected identifiers.
@@ -475,7 +479,7 @@ class BaseCryptoMatteOperation : public NodeOperation {
        * blur and transparency." ACM SIGGRAPH 2015 Posters. 2015. 1-1.
        */
       parallel_for(domain.data_size, [&](const int2 texel) {
-        float4 layer = float4(layer_result.load_pixel<Color>(texel + lower_bound));
+        float4 layer = float4(layer_result.load_pixel<Color>(texel));
 
         /* Each Cryptomatte layer stores two ranks. */
         float2 first_rank = layer.xy();
@@ -565,37 +569,37 @@ class BaseCryptoMatteOperation : public NodeOperation {
   Vector<float> get_identifiers()
   {
     Vector<float> identifiers;
-    LISTBASE_FOREACH (CryptomatteEntry *, cryptomatte_entry, &node_storage(node()).entries) {
-      identifiers.append(cryptomatte_entry->encoded_hash);
+    for (CryptomatteEntry &cryptomatte_entry : node_storage(node()).entries) {
+      identifiers.append(cryptomatte_entry.encoded_hash);
     }
     return identifiers;
   }
 };
 
-}  // namespace blender::nodes::node_composite_base_cryptomatte_cc
+}  // namespace nodes::node_composite_base_cryptomatte_cc
 
-namespace blender::nodes::node_composite_cryptomatte_cc {
+namespace nodes::node_composite_cryptomatte_cc {
 
 NODE_STORAGE_FUNCS(NodeCryptomatte)
 
-static void cmp_node_cryptomatte_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.0f, 0.0f, 0.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Matte").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Pick").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Matte"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Pick"_ustr).structure_type(StructureType::Dynamic);
 }
 
-static void node_init_cryptomatte(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeCryptomatte *user = MEM_new_for_free<NodeCryptomatte>(__func__);
+  NodeCryptomatte *user = MEM_new<NodeCryptomatte>(__func__);
   node->storage = user;
 }
 
-static void node_init_api_cryptomatte(const bContext *C, PointerRNA *ptr)
+static void node_init_api(const bContext *C, PointerRNA *ptr)
 {
   Scene *scene = CTX_data_scene(C);
   bNode *node = static_cast<bNode *>(ptr->data);
@@ -604,35 +608,8 @@ static void node_init_api_cryptomatte(const bContext *C, PointerRNA *ptr)
   id_us_plus(node->id);
 }
 
-static void node_free_cryptomatte(bNode *node)
+static void node_update(bNodeTree * /*ntree*/, bNode *node)
 {
-  BLI_assert(ELEM(node->type_legacy, CMP_NODE_CRYPTOMATTE, CMP_NODE_CRYPTOMATTE_LEGACY));
-  NodeCryptomatte *nc = static_cast<NodeCryptomatte *>(node->storage);
-
-  if (nc) {
-    MEM_SAFE_FREE(nc->matte_id);
-    BLI_freelistN(&nc->runtime.layers);
-    BLI_freelistN(&nc->entries);
-    MEM_freeN(nc);
-  }
-}
-
-static void node_copy_cryptomatte(bNodeTree * /*dst_ntree*/,
-                                  bNode *dest_node,
-                                  const bNode *src_node)
-{
-  NodeCryptomatte *src_nc = static_cast<NodeCryptomatte *>(src_node->storage);
-  NodeCryptomatte *dest_nc = static_cast<NodeCryptomatte *>(MEM_dupallocN(src_nc));
-
-  BLI_duplicatelist(&dest_nc->entries, &src_nc->entries);
-  BLI_listbase_clear(&dest_nc->runtime.layers);
-  dest_nc->matte_id = static_cast<char *>(MEM_dupallocN(src_nc->matte_id));
-  dest_node->storage = dest_nc;
-}
-
-static void node_update_cryptomatte(bNodeTree *ntree, bNode *node)
-{
-  cmp_node_update_default(ntree, node);
   ntreeCompositCryptomatteUpdateLayerNames(node);
 }
 
@@ -682,7 +659,8 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
     return get_input("Image");
   }
 
-  /* Returns all the relevant Cryptomatte layers from the selected source. */
+  /* Returns all the relevant Cryptomatte layers from the selected source. The caller should
+   * release the returned layers. */
   Vector<Result> get_layers() override
   {
     switch (get_source()) {
@@ -696,7 +674,8 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
     return Vector<Result>();
   }
 
-  /* Returns all the relevant Cryptomatte layers from the selected layer. */
+  /* Returns all the relevant Cryptomatte layers from the selected layer. The caller should release
+   * the returned layers. */
   Vector<Result> get_layers_from_render()
   {
     Vector<Result> layers;
@@ -708,12 +687,11 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
 
     const std::string type_name = get_type_name();
 
-    int view_layer_index = 0;
-    LISTBASE_FOREACH_INDEX (ViewLayer *, view_layer, &scene->view_layers, view_layer_index) {
+    for (const auto [view_layer_index, view_layer] : scene->view_layers.enumerate()) {
       /* Find out which type of Cryptomatte layer the node uses, if non matched, then this is not
        * the view layer used by the node and we check other view layers. */
       const char *cryptomatte_type = nullptr;
-      const std::string layer_prefix = std::string(view_layer->name) + ".";
+      const std::string layer_prefix = std::string(view_layer.name) + ".";
       if (type_name == layer_prefix + RE_PASSNAME_CRYPTOMATTE_OBJECT) {
         cryptomatte_type = RE_PASSNAME_CRYPTOMATTE_OBJECT;
       }
@@ -730,14 +708,15 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
       }
 
       /* Each layer stores two ranks/levels, so do ceiling division by two. */
-      const int cryptomatte_layers_count = int(math::ceil(view_layer->cryptomatte_levels / 2.0f));
+      const int cryptomatte_layers_count = int(math::ceil(view_layer.cryptomatte_levels / 2.0f));
       for (int i = 0; i < cryptomatte_layers_count; i++) {
         const std::string pass_name = fmt::format("{}{:02}", cryptomatte_type, i);
         Result pass_result = this->context().get_pass(scene, view_layer_index, pass_name.c_str());
 
         /* If this Cryptomatte layer wasn't found, then all later Cryptomatte layers can't be used
          * even if they were found. */
-        if (!pass_result.is_allocated()) {
+        if (pass_result.is_single_value()) {
+          pass_result.release();
           return layers;
         }
         layers.append(pass_result);
@@ -750,7 +729,8 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
     return layers;
   }
 
-  /* Returns all the relevant Cryptomatte layers from the selected EXR image. */
+  /* Returns all the relevant Cryptomatte layers from the selected EXR image. The caller should
+   * release the returned layers. */
   Vector<Result> get_layers_from_image()
   {
     Vector<Result> layers;
@@ -776,35 +756,37 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
      * freed when retrieving the images. */
     Vector<std::string> pass_names;
 
-    int layer_index;
+    int layer_index = 0;
     const std::string type_name = this->get_type_name();
-    LISTBASE_FOREACH_INDEX (RenderLayer *, render_layer, &render_result->layers, layer_index) {
+    for (RenderLayer &render_layer : render_result->layers) {
       /* If the Cryptomatte type name doesn't start with the layer name, then it is not a
        * Cryptomatte layer. Unless it is an unnamed layer, in which case, we need to check its
        * passes. */
-      const bool is_unnamed_layer = render_layer->name[0] == '\0';
-      if (!is_unnamed_layer && !StringRefNull(type_name).startswith(render_layer->name)) {
+      const bool is_unnamed_layer = render_layer.name[0] == '\0';
+      if (!is_unnamed_layer && !StringRefNull(type_name).startswith(render_layer.name)) {
+        layer_index++;
         continue;
       }
 
-      LISTBASE_FOREACH (RenderPass *, render_pass, &render_layer->passes) {
+      for (RenderPass &render_pass : render_layer.passes) {
         /* If the combined pass name doesn't start with the Cryptomatte type name, then it is not a
          * Cryptomatte layer. Furthermore, if it is equal to the Cryptomatte type name with no
          * suffix, then it can be ignored, because it is a deprecated Cryptomatte preview layer
          * according to the "EXR File: Layer Naming" section of the Cryptomatte specification. */
-        const std::string combined_name = this->get_combined_layer_pass_name(render_layer,
-                                                                             render_pass);
+        const std::string combined_name = this->get_combined_layer_pass_name(&render_layer,
+                                                                             &render_pass);
         if (combined_name == type_name || !StringRef(combined_name).startswith(type_name)) {
           continue;
         }
 
-        pass_names.append(render_pass->name);
+        pass_names.append(render_pass.name);
       }
 
       /* If we already found Cryptomatte layers, no need to check other render layers. */
       if (!pass_names.is_empty()) {
         break;
       }
+      layer_index++;
     }
 
     BKE_image_release_renderresult(nullptr, image, render_result);
@@ -813,7 +795,14 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
     for (const std::string &pass_name : pass_names) {
       Result pass_result = context().cache_manager().cached_images.get(
           context(), image, &image_user_for_layer, pass_name.c_str());
-      layers.append(pass_result);
+
+      /* The layers will be released by the caller, so return a wrapper around the cached image
+       * instead. */
+      Result layer_result = this->context().create_result(pass_result.type(),
+                                                          pass_result.precision());
+      layer_result.share_data(pass_result);
+
+      layers.append(layer_result);
     }
 
     return layers;
@@ -838,20 +827,6 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
     char type_name[MAX_NAME];
     ntreeCompositCryptomatteLayerPrefix(&node(), type_name, sizeof(type_name));
     return std::string(type_name);
-  }
-
-  int2 get_layers_lower_bound() override
-  {
-    switch (get_source()) {
-      case CMP_NODE_CRYPTOMATTE_SOURCE_RENDER: {
-        return this->context().get_input_region().min;
-      }
-      case CMP_NODE_CRYPTOMATTE_SOURCE_IMAGE:
-        return int2(0);
-    }
-
-    BLI_assert_unreachable();
-    return int2(0);
   }
 
   /* The domain should be centered with the same size as the source. In case of invalid source,
@@ -923,44 +898,35 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new CryptoMatteOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_cryptomatte_cc
-
-static void register_node_type_cmp_cryptomatte()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_cryptomatte_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeCryptomatteV2", CMP_NODE_CRYPTOMATTE);
+  cmp_node_type_base(&ntype, "CompositorNodeCryptomatteV2"_ustr, CMP_NODE_CRYPTOMATTE);
   ntype.ui_name = "Cryptomatte";
   ntype.ui_description =
       "Generate matte for individual objects and materials using Cryptomatte render passes";
   ntype.enum_name_legacy = "CRYPTOMATTE_V2";
   ntype.nclass = NODE_CLASS_MATTE;
-  ntype.declare = file_ns::cmp_node_cryptomatte_declare;
-  blender::bke::node_type_size(ntype, 240, 100, 700);
-  ntype.initfunc = file_ns::node_init_cryptomatte;
-  ntype.initfunc_api = file_ns::node_init_api_cryptomatte;
-  ntype.get_extra_info = file_ns::node_extra_info;
-  ntype.updatefunc = file_ns::node_update_cryptomatte;
-  blender::bke::node_type_storage(
-      ntype, "NodeCryptomatte", file_ns::node_free_cryptomatte, file_ns::node_copy_cryptomatte);
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  bke::node_type_size(ntype, 240, 100, 700);
+  ntype.initfunc = node_init;
+  ntype.initfunc_api = node_init_api;
+  ntype.get_extra_info = node_extra_info;
+  ntype.updatefunc = node_update;
+  bke::node_type_storage(ntype, "NodeCryptomatte", node_free_cryptomatte, node_copy_cryptomatte);
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_cryptomatte)
+NOD_REGISTER_NODE(node_register)
 
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Cryptomatte Legacy
- * \{ */
+}  // namespace nodes::node_composite_cryptomatte_cc
 
 void ntreeCompositCryptomatteAddSocket(bNode *node)
 {
@@ -980,34 +946,34 @@ bool ntreeCompositCryptomatteRemoveSocket(bNode *node)
   return true;
 }
 
-namespace blender::nodes::node_composite_legacy_cryptomatte_cc {
+namespace nodes::node_composite_legacy_cryptomatte_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.0f, 0.0f, 0.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Matte").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Pick").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Matte"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Pick"_ustr).structure_type(StructureType::Dynamic);
 
   const bNode *node = b.node_or_null();
   if (!node) {
-    b.add_input<decl::Color>("Crypto 00").structure_type(StructureType::Dynamic);
+    b.add_input<decl::Color>("Crypto 00"_ustr).structure_type(StructureType::Dynamic);
     return;
   }
 
   const int inputs_count = static_cast<NodeCryptomatte *>(node->storage)->inputs_num;
   for (int i = 0; i < inputs_count; i++) {
     const std::string name = fmt::format("Crypto {:02}", i);
-    b.add_input<decl::Color>(name).structure_type(StructureType::Dynamic);
+    b.add_input<decl::Color>(UString(name)).structure_type(StructureType::Dynamic);
   }
 }
 
-static void node_init_cryptomatte_legacy(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeCryptomatte *storage = MEM_new_for_free<NodeCryptomatte>(__func__);
+  NodeCryptomatte *storage = MEM_new<NodeCryptomatte>(__func__);
   node->storage = storage;
 
   /* Add three inputs by default, as recommended by the Cryptomatte specification. */
@@ -1041,40 +1007,42 @@ class LegacyCryptoMatteOperation : public BaseCryptoMatteOperation {
          * Cryptomatte layers can't be used even if they were valid. */
         break;
       }
-      layers.append(input);
+
+      /* The layers will be released by the caller, so return a wrapper around the input result
+       * instead. */
+      Result layer_result = this->context().create_result(input.type(), input.precision());
+      layer_result.share_data(input);
+
+      layers.append(layer_result);
     }
     return layers;
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new LegacyCryptoMatteOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_legacy_cryptomatte_cc
-
-static void register_node_type_cmp_cryptomatte_legacy()
+static void node_register()
 {
-  namespace legacy_file_ns = blender::nodes::node_composite_legacy_cryptomatte_cc;
-  namespace file_ns = blender::nodes::node_composite_cryptomatte_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeCryptomatte", CMP_NODE_CRYPTOMATTE_LEGACY);
+  cmp_node_type_base(&ntype, "CompositorNodeCryptomatte"_ustr, CMP_NODE_CRYPTOMATTE_LEGACY);
   ntype.ui_name = "Cryptomatte (Legacy)";
   ntype.ui_description = "Deprecated. Use Cryptomatte Node instead";
   ntype.enum_name_legacy = "CRYPTOMATTE";
   ntype.nclass = NODE_CLASS_MATTE;
-  ntype.declare = legacy_file_ns::node_declare;
-  ntype.initfunc = legacy_file_ns::node_init_cryptomatte_legacy;
-  blender::bke::node_type_storage(
-      ntype, "NodeCryptomatte", file_ns::node_free_cryptomatte, file_ns::node_copy_cryptomatte);
+  ntype.declare = node_declare;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(ntype, "NodeCryptomatte", node_free_cryptomatte, node_copy_cryptomatte);
   ntype.gather_link_search_ops = nullptr;
-  ntype.get_compositor_operation = legacy_file_ns::get_compositor_operation;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_cryptomatte_legacy)
+NOD_REGISTER_NODE(node_register)
 
-/** \} */
+}  // namespace nodes::node_composite_legacy_cryptomatte_cc
+
+}  // namespace blender

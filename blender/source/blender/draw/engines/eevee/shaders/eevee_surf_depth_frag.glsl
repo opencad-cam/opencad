@@ -23,7 +23,7 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_surf_depth)
 #include "eevee_transparency_lib.glsl"
 #include "eevee_velocity_lib.glsl"
 
-float4 closure_to_rgba(Closure cl)
+float4 closure_to_rgba(Closure /*cl*/)
 {
   float4 out_color;
   out_color.rgb = g_emission;
@@ -72,4 +72,8 @@ void main()
   out_velocity = velocity_surface(interp.P + motion.prev, interp.P, interp.P + motion.next);
   out_velocity = velocity_pack(out_velocity);
 #endif
+
+  /* Always written, but may be optimized out by frame-buffer/subpass setup. */
+  out_normal.rgb = normalize(interp.N) * 0.5f + 0.5f;
+  out_object_id = drw_resource_id() & 0xFFFF;
 }

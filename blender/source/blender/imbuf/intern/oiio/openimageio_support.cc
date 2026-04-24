@@ -22,6 +22,8 @@
 
 #include "CLG_log.h"
 
+namespace blender {
+
 static CLG_LogRef LOG_READ = {"image.read"};
 static CLG_LogRef LOG_WRITE = {"image.write"};
 
@@ -30,7 +32,7 @@ OIIO_NAMESPACE_USING
 using std::string;
 using std::unique_ptr;
 
-namespace blender::imbuf {
+namespace imbuf {
 
 /* An OIIO IOProxy used during file packing to write into an in-memory #ImBuf buffer. */
 class ImBufMemWriter : public Filesystem::IOProxy {
@@ -126,8 +128,8 @@ static ImBuf *load_pixels(
   const stride_t ibuf_xstride = sizeof(T) * 4;
   const stride_t ibuf_ystride = ibuf_xstride * width;
   const TypeDesc format = is_float ? TypeDesc::FLOAT : TypeDesc::UINT8;
-  uchar *rect = is_float ? reinterpret_cast<uchar *>(ibuf->float_buffer.data) :
-                           reinterpret_cast<uchar *>(ibuf->byte_buffer.data);
+  uchar *rect = is_float ? reinterpret_cast<uchar *>(ibuf->float_data_for_write()) :
+                           reinterpret_cast<uchar *>(ibuf->byte_data_for_write());
   void *ibuf_data = rect + ((stride_t(height) - 1) * ibuf_ystride);
 
   bool ok = in->read_image(
@@ -397,19 +399,19 @@ WriteContext imb_create_write_context(const char *file_format,
 
   const int width = ibuf->x;
   const int height = ibuf->y;
-  const bool use_float = prefer_float && (ibuf->float_buffer.data != nullptr);
+  const bool use_float = prefer_float && (ibuf->float_data() != nullptr);
   if (use_float) {
     const int mem_channels = ibuf->channels ? ibuf->channels : 4;
     ctx.mem_xstride = sizeof(float) * mem_channels;
     ctx.mem_ystride = width * ctx.mem_xstride;
-    ctx.mem_start = reinterpret_cast<uchar *>(ibuf->float_buffer.data);
+    ctx.mem_start = reinterpret_cast<uchar *>(ibuf->float_data_for_write());
     ctx.mem_spec = ImageSpec(width, height, mem_channels, TypeDesc::FLOAT);
   }
   else {
     const int mem_channels = 4;
     ctx.mem_xstride = sizeof(uchar) * mem_channels;
     ctx.mem_ystride = width * ctx.mem_xstride;
-    ctx.mem_start = ibuf->byte_buffer.data;
+    ctx.mem_start = ibuf->byte_data_for_write();
     ctx.mem_spec = ImageSpec(width, height, mem_channels, TypeDesc::UINT8);
   }
 
@@ -435,12 +437,12 @@ ImageSpec imb_create_write_spec(const WriteContext &ctx, int file_channels, Type
    */
 
   if (ctx.ibuf->metadata) {
-    LISTBASE_FOREACH (IDProperty *, prop, &ctx.ibuf->metadata->data.group) {
-      if (prop->type == IDP_STRING) {
+    for (IDProperty &prop : ctx.ibuf->metadata->data.group) {
+      if (prop.type == IDP_STRING) {
         /* If this property has a prefixed name (oiio:, tiff:, etc.) and it belongs to
          * oiio or a different format, then skip. */
-        if (char *colon = strchr(prop->name, ':')) {
-          std::string prefix(prop->name, colon);
+        if (char *colon = strchr(prop.name, ':')) {
+          std::string prefix(prop.name, colon);
           Strutil::to_lower(prefix);
           if (prefix == "oiio" ||
               (!STREQ(prefix.c_str(), ctx.file_format) && OIIO::is_imageio_format_name(prefix)))
@@ -450,7 +452,7 @@ ImageSpec imb_create_write_spec(const WriteContext &ctx, int file_channels, Type
           }
         }
 
-        file_spec.attribute(prop->name, IDP_string_get(prop));
+        file_spec.attribute(prop.name, IDP_string_get(&prop));
       }
     }
   }
@@ -496,4 +498,5 @@ ImageSpec imb_create_write_spec(const WriteContext &ctx, int file_channels, Type
   return file_spec;
 }
 
-}  // namespace blender::imbuf
+}  // namespace imbuf
+}  // namespace blender

@@ -20,47 +20,69 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* Evaluate shader on light. */
-ccl_device_noinline_cpu Spectrum
-light_sample_shader_eval(KernelGlobals kg,
-                         IntegratorState state,
-                         ccl_private ShaderData *ccl_restrict emission_sd,
-                         ccl_private LightSample *ccl_restrict ls,
-                         const float time)
+/* Evaluate constant factors for a direct light sample. */
+ccl_device bool light_sample_shader_eval_nee_constant(KernelGlobals kg,
+                                                      const int shader_id,
+                                                      const int prim,
+                                                      const bool is_light,
+                                                      ccl_private Spectrum &eval)
 {
+  eval = one_spectrum();
+  const bool is_constant = surface_shader_constant_emission(kg, shader_id, &eval);
+
+  if (is_light) {
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, prim);
+    eval *= rgb_to_spectrum(
+        make_float3(klight->strength[0], klight->strength[1], klight->strength[2]));
+  }
+
+  return is_constant;
+}
+
+/* Evaluate shader on light. Not supported for background and triangle lights, that happens
+ * in shade_surface and shader_background. */
+ccl_device_noinline_cpu ShaderEvalResult
+light_sample_shader_eval_forward(KernelGlobals kg,
+                                 IntegratorState state,
+                                 const int light_id,
+                                 const float3 ray_P,
+                                 const float3 ray_D,
+                                 const float t,
+                                 const float time,
+                                 ccl_private Spectrum &r_eval)
+{
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, light_id);
+
   /* setup shading at emitter */
   Spectrum eval = zero_spectrum();
 
-  if (surface_shader_constant_emission(kg, ls->shader, &eval)) {
-    if ((ls->prim != PRIM_NONE) && dot(ls->Ng, ls->D) > 0.0f) {
-      ls->Ng = -ls->Ng;
-    }
-  }
-  else {
+  if (!surface_shader_constant_emission(kg, klight->shader_id, &eval)) {
     /* Setup shader data and call surface_shader_eval once, better
      * for GPU coherence and compile times. */
     PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_LIGHT_SETUP);
-    if (ls->type == LIGHT_BACKGROUND) {
-      shader_setup_from_background(kg, emission_sd, ls->P, ls->D, time);
-    }
-    else {
-      shader_setup_from_sample(kg,
-                               emission_sd,
-                               ls->P,
-                               ls->Ng,
-                               -ls->D,
-                               ls->shader,
-                               ls->object,
-                               ls->prim,
-                               ls->u,
-                               ls->v,
-                               ls->t,
-                               time,
-                               false,
-                               ls->type != LIGHT_TRIANGLE);
 
-      ls->Ng = emission_sd->Ng;
-    }
+    ShaderDataTinyStorage emission_sd_storage;
+    ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
+
+    const float3 P = (t == FLT_MAX) ? -ray_D : ray_P + ray_D * t;
+    float3 Ng = zero_float3();
+    float2 uv = zero_float2();
+    light_normal_uv_from_position(kg, klight, P, ray_D, Ng, uv);
+
+    shader_setup_from_sample(kg,
+                             emission_sd,
+                             P,
+                             Ng,
+                             -ray_D,
+                             klight->shader_id,
+                             klight->object_id,
+                             light_id,
+                             uv.x,
+                             uv.y,
+                             t,
+                             time,
+                             false,
+                             true);
 
     PROFILING_SHADER(emission_sd->object, emission_sd->shader);
     PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
@@ -69,28 +91,34 @@ light_sample_shader_eval(KernelGlobals kg,
      * weak but we'd have to do multiple evaluations otherwise. */
     surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
         kg, state, emission_sd, nullptr, PATH_RAY_EMISSION);
+    if (emission_sd->flag & SD_CACHE_MISS) {
+      return SHADER_EVAL_CACHE_MISS;
+    }
 
     /* Evaluate closures. */
-    if (ls->type == LIGHT_BACKGROUND) {
-      eval = surface_shader_background(emission_sd);
-    }
-    else {
-      eval = surface_shader_emission(emission_sd);
-    }
+    eval = surface_shader_emission(emission_sd);
   }
 
-  eval *= ls->eval_fac;
-
-  if (ls->type != LIGHT_TRIANGLE) {
-    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
+  {
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, light_id);
     eval *= rgb_to_spectrum(
         make_float3(klight->strength[0], klight->strength[1], klight->strength[2]));
   }
 
-  return eval;
+  r_eval = eval;
+
+  return SHADER_EVAL_OK;
 }
 
 /* Early path termination of shadow rays. */
+ccl_device_inline float light_sample_terminate_probability(KernelGlobals kg,
+                                                           ccl_private Spectrum eval)
+{
+  return (kernel_data.integrator.light_inv_rr_threshold > 0.0f) ?
+             reduce_max(fabs(eval)) * kernel_data.integrator.light_inv_rr_threshold :
+             1.0f;
+}
+
 ccl_device_inline bool light_sample_terminate(KernelGlobals kg,
                                               ccl_private BsdfEval *ccl_restrict eval,
                                               const float rand_terminate)
@@ -99,15 +127,35 @@ ccl_device_inline bool light_sample_terminate(KernelGlobals kg,
     return true;
   }
 
-  if (kernel_data.integrator.light_inv_rr_threshold > 0.0f) {
-    const float probability = reduce_max(fabs(bsdf_eval_sum(eval))) *
-                              kernel_data.integrator.light_inv_rr_threshold;
-    if (probability < 1.0f) {
-      if (rand_terminate >= probability) {
-        return true;
-      }
-      bsdf_eval_mul(eval, 1.0f / probability);
+  const float probability = light_sample_terminate_probability(kg, bsdf_eval_sum(eval));
+  if (probability < 1.0f) {
+    if (rand_terminate >= probability) {
+      return true;
     }
+    bsdf_eval_mul(eval, 1.0f / probability);
+  }
+
+  return false;
+}
+
+ccl_device_inline bool light_sample_terminate(KernelGlobals kg,
+                                              ccl_private Spectrum &light_eval,
+                                              const float bsdf_eval,
+                                              const float rand_terminate)
+{
+  /* Same logic as above, but where bsdf_eval is already part of the throughput so
+   * we only need to modify the light eval while still taking into account bsdf eval
+   * for the termination probability. */
+  if (is_zero(light_eval)) {
+    return true;
+  }
+
+  const float probability = light_sample_terminate_probability(kg, light_eval * bsdf_eval);
+  if (probability < 1.0f) {
+    if (rand_terminate >= probability) {
+      return true;
+    }
+    light_eval /= probability;
   }
 
   return false;
@@ -125,11 +173,11 @@ ccl_device_inline float3 shadow_ray_smooth_surface_offset(
   float3 N[3];
 
   if (sd->type == PRIMITIVE_MOTION_TRIANGLE) {
-    motion_triangle_vertices_and_normals(kg, sd->object, sd->prim, sd->time, V, N);
+    motion_triangle_vertices_and_normals(kg, sd, V, N);
   }
   else {
     kernel_assert(sd->type == PRIMITIVE_TRIANGLE);
-    triangle_vertices_and_normals(kg, sd->prim, V, N);
+    triangle_vertices_and_normals(kg, sd, V, N);
   }
 
   const float u = 1.0f - sd->u - sd->v;
@@ -220,27 +268,25 @@ ccl_device_inline void shadow_ray_setup(const ccl_private ShaderData *ccl_restri
                                         ccl_private Ray *ray,
                                         const bool skip_self)
 {
-  if (ls->shader & SHADER_CAST_SHADOW) {
-    /* setup ray */
-    ray->P = P;
-    ray->tmin = 0.0f;
+  /* Setup ray. */
+  ray->P = P;
+  ray->tmin = 0.0f;
 
-    if (ls->t == FLT_MAX) {
-      /* distant light */
-      ray->D = ls->D;
-      ray->tmax = ls->t;
-    }
-    else {
-      /* other lights, avoid self-intersection */
-      ray->D = ls->P - P;
-      ray->D = safe_normalize_len(ray->D, &ray->tmax);
-    }
+  if (ls->t == FLT_MAX) {
+    /* Distant light. */
+    ray->D = ls->D;
+    ray->tmax = ls->t;
   }
   else {
-    /* signal to not cast shadow ray */
-    ray->P = zero_float3();
-    ray->D = zero_float3();
-    ray->tmax = 0.0f;
+    /* Other lights, avoid self-intersection. */
+    ray->D = ls->P - P;
+    ray->D = safe_normalize_len(ray->D, &ray->tmax);
+  }
+
+  if ((ls->shader & SHADER_CAST_SHADOW) == 0) {
+    /* Signal to not cast shadow ray.
+     * Relies on the intersection_ray_valid() rejecting the ray early on. */
+    ray->tmin = FLT_MAX;
   }
 
   ray->dP = differential_make_compact(sd->dP);
@@ -396,7 +442,7 @@ ccl_device_forceinline void light_sample_update(KernelGlobals kg,
   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
 
   if (ls->type == LIGHT_POINT) {
-    point_light_mnee_sample_update(kg, klight, ls, P, N, path_flag);
+    point_light_mnee_sample_update(klight, ls, P, N, path_flag);
   }
   else if (ls->type == LIGHT_SPOT) {
     spot_light_mnee_sample_update(kg, klight, ls, P, N, path_flag);
@@ -467,7 +513,8 @@ ccl_device_inline float light_sample_mis_weight_forward_surface(KernelGlobals kg
 ccl_device_inline float light_sample_mis_weight_forward_lamp(KernelGlobals kg,
                                                              IntegratorState state,
                                                              const uint32_t path_flag,
-                                                             const ccl_private LightSample *ls,
+                                                             const int object_id,
+                                                             const float light_sample_pdf,
                                                              const float3 P)
 {
   if (path_flag & PATH_RAY_MIS_SKIP) {
@@ -475,7 +522,7 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(KernelGlobals kg,
   }
 
   const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-  float pdf = ls->pdf;
+  float pdf = light_sample_pdf;
 
   /* Light selection pdf. */
 #ifdef __LIGHT_TREE__
@@ -488,7 +535,7 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(KernelGlobals kg,
                           dt,
                           path_flag,
                           0,
-                          kernel_data_fetch(light_to_tree, ls->prim),
+                          kernel_data_fetch(light_to_tree, object_id),
                           light_link_receiver_forward(kg, state));
   }
   else
@@ -503,10 +550,12 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(KernelGlobals kg,
 ccl_device_inline float light_sample_mis_weight_forward_distant(KernelGlobals kg,
                                                                 IntegratorState state,
                                                                 const uint32_t path_flag,
-                                                                const ccl_private LightSample *ls)
+                                                                const int object_id,
+                                                                const float light_sample_pdf)
 {
   const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
-  return light_sample_mis_weight_forward_lamp(kg, state, path_flag, ls, ray_P);
+  return light_sample_mis_weight_forward_lamp(
+      kg, state, path_flag, object_id, light_sample_pdf, ray_P);
 }
 
 ccl_device_inline float light_sample_mis_weight_forward_background(KernelGlobals kg,
@@ -529,7 +578,7 @@ ccl_device_inline float light_sample_mis_weight_forward_background(KernelGlobals
   if (kernel_data.integrator.use_light_tree) {
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
     const float dt = INTEGRATOR_STATE(state, ray, previous_dt);
-    const uint light = kernel_data_fetch(light_to_tree, kernel_data.background.light_index);
+    const uint light = kernel_data_fetch(light_to_tree, kernel_data.background.object_index);
     pdf *= light_tree_pdf(
         kg, ray_P, N, dt, path_flag, 0, light, light_link_receiver_forward(kg, state));
   }

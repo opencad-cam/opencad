@@ -12,13 +12,16 @@
 #include <pxr/usd/usdUI/accessibilityAPI.h>
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
 namespace {
 
 template<typename VECT>
 void set_array_prop(IDProperty *idgroup,
-                    const blender::StringRefNull prop_name,
+                    const StringRefNull prop_name,
                     const pxr::UsdAttribute &attr,
                     const pxr::UsdTimeCode time)
 {
@@ -83,7 +86,7 @@ bool equivalent(const pxr::SdfValueTypeName &type_name1, const pxr::SdfValueType
 
 }  // anonymous namespace
 
-namespace blender::io::usd {
+namespace io::usd {
 
 static void set_string_prop(IDProperty *idgroup,
                             const StringRefNull prop_name,
@@ -189,7 +192,7 @@ static void set_accessibility_property(const pxr::UsdAttribute &attr,
 
 void set_id_props_from_prim(ID *id,
                             const pxr::UsdPrim &prim,
-                            const eUSDPropertyImportMode property_import_mode,
+                            const PropertyImportMode property_import_mode,
                             const pxr::UsdTimeCode time_code)
 {
   for (const auto &api : pxr::UsdUIAccessibilityAPI::GetAll(prim)) {
@@ -204,7 +207,7 @@ void set_id_props_from_prim(ID *id,
     return;
   }
 
-  bool all_custom_attrs = (property_import_mode == USD_ATTR_IMPORT_ALL);
+  bool all_custom_attrs = (property_import_mode == PropertyImportMode::All);
 
   for (const pxr::UsdAttribute &attr : attribs) {
     if (!attr.IsCustom()) {
@@ -327,4 +330,5 @@ void set_id_props_from_prim(ID *id,
   }
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

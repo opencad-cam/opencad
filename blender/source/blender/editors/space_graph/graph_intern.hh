@@ -10,6 +10,8 @@
 
 #include "ED_keyframes_edit.hh"
 
+namespace blender {
+
 struct ARegion;
 struct ARegionType;
 struct SpaceGraph;
@@ -28,7 +30,7 @@ struct bContext;
 void graph_draw_channel_names(bContext *C,
                               bAnimContext *ac,
                               ARegion *region,
-                              const ListBase /*bAnimListElem*/ &anim_data);
+                              const ListBaseT<bAnimListElem> &anim_data);
 
 /**
  * This is called twice from `space_graph.cc`, #graph_main_region_draw()
@@ -96,7 +98,7 @@ enum eGraphKeys_ColumnSelect_Mode {
 /* `graph_edit.cc` */
 
 /**
- * Get the min/max keyframes.
+ * Get the keyframe bounds, with added padding, to ensure that the bounds always have a size > 0.
  * \note it should return total bound-box, filter for selection only can be argument.
  */
 void get_graph_keyframe_extents(bAnimContext *ac,
@@ -105,7 +107,7 @@ void get_graph_keyframe_extents(bAnimContext *ac,
                                 float *ymin,
                                 float *ymax,
                                 bool do_sel_only,
-                                bool include_handles);
+                                bool include_handles) ATTR_NONNULL(2, 3);
 
 void GRAPH_OT_previewrange_set(wmOperatorType *ot);
 void GRAPH_OT_view_all(wmOperatorType *ot);
@@ -249,3 +251,5 @@ bool graphop_selected_fcurve_poll(bContext *C);
 
 void graphedit_keymap(wmKeyConfig *keyconf);
 void graphedit_operatortypes();
+
+}  // namespace blender

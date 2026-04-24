@@ -17,6 +17,8 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
+#include "BLT_translation.hh"
+
 #include "DNA_asset_types.h"
 #include "DNA_screen_types.h"
 
@@ -80,7 +82,7 @@ class AssetDragController : public ui::AbstractViewItemDragController {
 
   std::optional<eWM_DragDataType> get_drag_type() const override;
   void *create_drag_data() const override;
-  void on_drag_start(bContext &C) override;
+  void on_drag_start(bContext &C, ui::AbstractViewItem &item) override;
 };
 
 AssetView::AssetView(const AssetLibraryReference &library_ref, const AssetShelf &shelf)
@@ -147,8 +149,8 @@ void AssetView::build_items()
 bool AssetView::begin_filtering(const bContext &C) const
 {
   const ScrArea *area = CTX_wm_area(&C);
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    if (ui::textbutton_activate_rna(&C, region, &shelf_, "search_filter")) {
+  for (ARegion &region : area->regionbase) {
+    if (ui::textbutton_activate_rna(&C, &region, &shelf_, "search_filter")) {
       return true;
     }
   }
@@ -199,7 +201,7 @@ void AssetViewItem::disable_asset_drag()
 
 /**
  * Needs freeing with #WM_operator_properties_free() (will be done by button if passed to that) and
- * #MEM_freeN().
+ * #MEM_delete().
  */
 static std::optional<wmOperatorCallParams> create_asset_operator_params(
     const StringRefNull op_name, const asset_system::AssetRepresentation &asset)
@@ -217,12 +219,12 @@ static std::optional<wmOperatorCallParams> create_asset_operator_params(
   return wmOperatorCallParams{ot, op_props, wm::OpCallContext::InvokeRegionWin};
 }
 
-void AssetViewItem::build_grid_tile(const bContext & /*C*/, ui::Layout &layout) const
+void AssetViewItem::build_grid_tile(const bContext &C, ui::Layout &layout) const
 {
   const AssetView &asset_view = reinterpret_cast<const AssetView &>(this->get_view());
   const AssetShelfType &shelf_type = *asset_view.shelf_.type;
 
-  PointerRNA asset_ptr = RNA_pointer_create_discrete(nullptr, &RNA_AssetRepresentation, &asset_);
+  PointerRNA asset_ptr = RNA_pointer_create_discrete(nullptr, RNA_AssetRepresentation, &asset_);
   button_context_ptr_set(
       layout.block(), reinterpret_cast<ui::Button *>(view_item_but_), "asset", &asset_ptr);
 
@@ -256,7 +258,7 @@ void AssetViewItem::build_grid_tile(const bContext & /*C*/, ui::Layout &layout) 
   /* Request preview when drawing. Grid views have an optimization to only draw items that are
    * actually visible, so only previews scrolled into view will be loaded this way. This reduces
    * total loading time and memory footprint. */
-  asset_.ensure_previewable();
+  asset_.ensure_previewable(C);
 
   const int preview_id = [&]() -> int {
     /* Show loading icon while list is loading still. Previews might get pushed out of view again
@@ -269,15 +271,43 @@ void AssetViewItem::build_grid_tile(const bContext & /*C*/, ui::Layout &layout) 
     return asset_preview_or_icon(asset_);
   }();
 
-  ui::PreviewGridItem::build_grid_tile_button(layout, preview_id);
+  ui::GridViewStyle grid_style = asset_view.get_style();
+  /* Add overlap layout so indicator icons can be displayed on top of the preview. */
+  ui::Layout &overlap = layout.overlap();
+  overlap.ui_units_x_set(grid_style.tile_width / UI_UNIT_X);
+  overlap.ui_units_y_set(grid_style.tile_height / UI_UNIT_Y);
+
+  ui::PreviewGridItem::build_grid_tile_button(overlap.column(true), preview_id);
+
+  ui::Layout &overlay_row = overlap.row(true);
+  overlay_row.alignment_set(ui::LayoutAlign::Right);
+
+  const bool is_highlighted = this->is_selected() || this->is_active() || this->is_hovered();
+  if (asset_.is_online() && is_highlighted) {
+    ui::Button *online_icon = uiItemL_ex(&overlay_row, "", ICON_INTERNET, false, false);
+    button_label_alpha_factor_set(online_icon, 0.6f);
+    button_label_draw_icon_border_set(online_icon, true);
+  }
 }
 
 void AssetViewItem::build_context_menu(bContext &C, ui::Layout &column) const
 {
   const AssetView &asset_view = dynamic_cast<const AssetView &>(this->get_view());
   const AssetShelfType &shelf_type = *asset_view.shelf_.type;
+
+  bool has_items = false;
+
+  if (asset_.is_online()) {
+    column.op("asset.assets_download", IFACE_("Download Asset"), ICON_NONE);
+    has_items = true;
+  }
+
   if (shelf_type.draw_context_menu) {
+    if (has_items) {
+      column.separator();
+    }
     shelf_type.draw_context_menu(&C, &shelf_type, &asset_, column);
+    has_items = true;
   }
 }
 
@@ -391,7 +421,7 @@ std::optional<eWM_DragDataType> AssetDragController::get_drag_type() const
   return asset_.is_local_id() ? WM_DRAG_ID : WM_DRAG_ASSET;
 }
 
-void AssetDragController::on_drag_start(bContext &C)
+void AssetDragController::on_drag_start(bContext &C, ui::AbstractViewItem &item)
 {
   const AssetView &asset_view = this->get_view<AssetView>();
   const AssetShelfType &shelf_type = *asset_view.shelf_.type;
@@ -402,6 +432,14 @@ void AssetDragController::on_drag_start(bContext &C)
     WM_operator_name_call_ptr(&C, drag_op->optype, drag_op->opcontext, drag_op->opptr, nullptr);
     WM_operator_properties_free(drag_op->opptr);
     MEM_delete(drag_op->opptr);
+
+    /* Display as active so it's clear which item is being operated on. #activate() would trigger
+     * the activation operator. We really don't want this for poses, since dragging shouldn't fully
+     * apply a pose, but trigger interactive pose blending instead.
+     *
+     * Messing with the active state could cause problems, in that case a separate highlighting
+     * feature might make sense (so e.g. dragged from assets get an outline). */
+    item.set_state_active();
   }
 }
 

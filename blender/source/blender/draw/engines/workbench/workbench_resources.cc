@@ -25,15 +25,15 @@ static bool get_matcap_tx(Texture &matcap_tx, StudioLight &studio_light)
                                   STUDIOLIGHT_MATCAP_SPECULAR_GPUTEXTURE);
   ImBuf *matcap_diffuse = studio_light.matcap_diffuse.ibuf;
   ImBuf *matcap_specular = studio_light.matcap_specular.ibuf;
-  if (matcap_diffuse && matcap_diffuse->float_buffer.data) {
+  if (matcap_diffuse && matcap_diffuse->float_data()) {
     int layers = 1;
-    float *buffer = matcap_diffuse->float_buffer.data;
+    const float *buffer = matcap_diffuse->float_data();
     Vector<float> combined_buffer;
 
-    if (matcap_specular && matcap_specular->float_buffer.data) {
+    if (matcap_specular && matcap_specular->float_data()) {
       int size = matcap_diffuse->x * matcap_diffuse->y * 4;
-      combined_buffer.extend(matcap_diffuse->float_buffer.data, size);
-      combined_buffer.extend(matcap_specular->float_buffer.data, size);
+      combined_buffer.extend(matcap_diffuse->float_data(), size);
+      combined_buffer.extend(matcap_specular->float_data(), size);
       buffer = combined_buffer.begin();
       layers++;
     }
@@ -51,7 +51,7 @@ static bool get_matcap_tx(Texture &matcap_tx, StudioLight &studio_light)
 
 static float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z)
 {
-  float4x4 V = blender::draw::View::default_get().viewmat();
+  float4x4 V = draw::View::default_get().viewmat();
   float R[4][4];
   axis_angle_to_mat4_single(R, 'Z', -studiolight_rot_z);
   mul_m4_m4m4(R, V.ptr(), R);

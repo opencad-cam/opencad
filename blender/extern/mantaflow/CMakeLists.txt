@@ -4,6 +4,13 @@
 
 set(MANTAVERSION "0.13")
 
+# avoid noisy warnings
+if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
+  add_cxx_flag(
+    "-Wno-unused-result"
+  )
+endif()
+
 add_definitions(-DWITH_FLUID=1)
 
 # Compile Mantaflow dependencies too (e.g. `cnpy` for NUMPY file IO).
@@ -46,6 +53,8 @@ endif()
 
 if(WIN32)
   add_definitions(-D_USE_MATH_DEFINES)
+  remove_definitions(-DNOMINMAX)
+  remove_definitions(-DWIN32_LEAN_AND_MEAN)
 endif()
 
 if(WITH_MANTA_NUMPY AND WITH_PYTHON_NUMPY)
@@ -68,8 +77,6 @@ if(WITH_MANTA_DEPENDENCIES)
 endif()
 
 set(INC_SYS
-  ${PYTHON_INCLUDE_DIRS}
-  ${ZLIB_INCLUDE_DIRS}
 )
 
 if(WITH_MANTA_NUMPY AND WITH_PYTHON_NUMPY)
@@ -229,8 +236,8 @@ endif()
 set(LIB
   PRIVATE bf::dependencies::optional::openvdb
   PRIVATE bf::dependencies::optional::tbb
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::zlib
 )
 
 blender_add_lib(extern_mantaflow "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

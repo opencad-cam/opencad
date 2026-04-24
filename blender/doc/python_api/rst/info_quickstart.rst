@@ -16,7 +16,7 @@ but some areas are still being extended and improved.
 - Create new tools.
 - Create interactive tools.
 - Create new rendering engines that integrate with Blender.
-- Subscribe to changes to data and it's properties.
+- Subscribe to changes to data and its properties.
 - Define new settings in existing Blender data.
 - Draw in the 3D Viewport using Python.
 
@@ -293,7 +293,7 @@ In Python, this is done by defining a class, which is a subclass of an existing 
 Example Operator
 ----------------
 
-.. literalinclude:: __/__/__/scripts/templates_py/operator_simple.py
+.. literalinclude:: __/__/__/scripts/templates_py/Operator/simple.py
 
 Once this script runs, ``SimpleOperator`` is registered with Blender
 and can be called from Operator Search or added to the toolbar.
@@ -325,7 +325,7 @@ Example Panel
 Panels are registered as a class, like an operator.
 Notice the extra ``bl_`` variables used to set the context they display in.
 
-.. literalinclude:: __/__/__/scripts/templates_py/ui_panel_simple.py
+.. literalinclude:: __/__/__/scripts/templates_py/UI/panel_simple.py
 
 To run the script:
 
@@ -398,14 +398,14 @@ Mathutils Types
 
 Accessible from :mod:`mathutils` are vectors, quaternions, Euler angles, matrix and color types.
 Some attributes such as :class:`bpy.types.Object.location`,
-:class:`bpy.types.PoseBone.rotation_euler` and :class:`bpy.types.Scene.cursor_location`
+:class:`bpy.types.PoseBone.rotation_euler` and :class:`bpy.types.View3DCursor.location`
 can be accessed as special math types which can be used together and manipulated in various useful ways.
 
 Example of a matrix, vector multiplication:
 
 .. code-block:: python
 
-   bpy.context.object.matrix_world @ bpy.context.object.data.verts[0].co
+   bpy.context.object.matrix_world @ bpy.context.object.data.vertices[0].co
 
 .. note::
 

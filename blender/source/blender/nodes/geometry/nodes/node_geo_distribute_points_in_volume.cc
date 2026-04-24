@@ -42,45 +42,45 @@ static const EnumPropertyItem mode_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Volume")
+  b.add_input<decl::Geometry>("Volume"_ustr)
       .supported_type(GeometryComponent::Type::Volume)
       .translation_context(BLT_I18NCONTEXT_ID_ID)
       .description("Volume with fog grids that points are scattered in");
-  b.add_input<decl::Menu>("Mode")
+  b.add_input<decl::Menu>("Mode"_ustr)
       .static_items(mode_items)
       .optional_label()
       .description("Method to use for scattering points");
-  b.add_input<decl::Float>("Density")
+  b.add_input<decl::Float>("Density"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(100000.0f)
       .subtype(PROP_NONE)
       .description("Number of points to sample per unit volume")
       .usage_by_single_menu(GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_RANDOM);
-  b.add_input<decl::Int>("Seed")
+  b.add_input<decl::Int>("Seed"_ustr)
       .min(-10000)
       .max(10000)
       .description("Seed used by the random number generator to generate random points")
       .usage_by_single_menu(GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_RANDOM);
-  b.add_input<decl::Vector>("Spacing")
+  b.add_input<decl::Vector>("Spacing"_ustr)
       .default_value({0.3, 0.3, 0.3})
       .min(0.0001f)
       .subtype(PROP_XYZ)
       .description("Spacing between grid points")
       .usage_by_single_menu(GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_GRID);
-  b.add_input<decl::Float>("Threshold")
+  b.add_input<decl::Float>("Threshold"_ustr)
       .default_value(0.1f)
       .min(0.0f)
       .max(FLT_MAX)
       .description("Minimum density of a volume cell to contain a grid point")
       .usage_by_single_menu(GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_GRID);
-  b.add_output<decl::Geometry>("Points").propagate_all();
+  b.add_output<decl::Geometry>("Points"_ustr).propagate_all();
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   /* Still used for forward compatibility. */
-  node->storage = MEM_new_for_free<NodeGeometryDistributePointsInVolume>(__func__);
+  node->storage = MEM_new<NodeGeometryDistributePointsInVolume>(__func__);
 }
 
 #ifdef WITH_OPENVDB
@@ -173,20 +173,20 @@ static void point_scatter_density_grid(const openvdb::FloatGrid &grid,
 static void node_geo_exec(GeoNodeExecParams params)
 {
 #ifdef WITH_OPENVDB
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Volume");
-  const auto mode = params.extract_input<GeometryNodeDistributePointsInVolumeMode>("Mode");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Volume"_ustr);
+  const auto mode = params.extract_input<GeometryNodeDistributePointsInVolumeMode>("Mode"_ustr);
 
   float density;
   int seed;
   float3 spacing{0, 0, 0};
   float threshold;
   if (mode == GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_RANDOM) {
-    density = params.extract_input<float>("Density");
-    seed = params.extract_input<int>("Seed");
+    density = params.extract_input<float>("Density"_ustr);
+    seed = params.extract_input<int>("Seed"_ustr);
   }
   else if (mode == GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_GRID) {
-    spacing = params.extract_input<float3>("Spacing");
-    threshold = params.extract_input<float>("Threshold");
+    spacing = params.extract_input<float3>("Spacing"_ustr);
+    threshold = params.extract_input<float>("Threshold"_ustr);
   }
 
   geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
@@ -226,11 +226,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     PointCloud *pointcloud = BKE_pointcloud_new_nomain(positions.size());
     bke::MutableAttributeAccessor point_attributes = pointcloud->attributes_for_write();
     pointcloud->positions_for_write().copy_from(positions);
-    bke::SpanAttributeWriter<float> point_radii =
-        point_attributes.lookup_or_add_for_write_only_span<float>("radius", AttrDomain::Point);
-
-    point_radii.span.fill(0.05f);
-    point_radii.finish();
+    point_attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.05f));
 
     geometry::debug_randomize_point_order(pointcloud);
 
@@ -238,7 +234,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     geometry_set.keep_only({GeometryComponent::Type::PointCloud, GeometryComponent::Type::Edit});
   });
 
-  params.set_output("Points", std::move(geometry_set));
+  params.set_output("Points"_ustr, std::move(geometry_set));
 
 #else
   node_geo_exec_with_missing_openvdb(params);
@@ -247,22 +243,22 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
   geo_node_type_base(
-      &ntype, "GeometryNodeDistributePointsInVolume", GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME);
+      &ntype, "GeometryNodeDistributePointsInVolume"_ustr, GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME);
   ntype.ui_name = "Distribute Points in Volume";
   ntype.ui_description = "Generate points inside a volume";
   ntype.enum_name_legacy = "DISTRIBUTE_POINTS_IN_VOLUME";
   ntype.nclass = NODE_CLASS_GEOMETRY;
-  blender::bke::node_type_storage(ntype,
-                                  "NodeGeometryDistributePointsInVolume",
-                                  node_free_standard_storage,
-                                  node_copy_standard_storage);
+  bke::node_type_storage(ntype,
+                         "NodeGeometryDistributePointsInVolume",
+                         node_free_standard_storage,
+                         node_copy_standard_storage);
   ntype.initfunc = node_init;
-  blender::bke::node_type_size(ntype, 170, 100, 320);
+  bke::node_type_size(ntype, 170, 100, 320);
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -91,6 +91,7 @@ dict_custom = {
     "confusticated",
     "constructability",
     "constructible",
+    "contextless",
     "convolved",
     "coplanarity",
     "copyable",
@@ -174,6 +175,7 @@ dict_custom = {
     "elementwise",
     "embedder",
     "enablement",
+    "encodable",
     "enqueueing",
     "equiangular",
     "evolute",
@@ -920,6 +922,9 @@ files_ignore = {
     "source/blender/blenlib/intern/fnmatch.c",
     "source/blender/draw/intern/shaders/common_fxaa_lib.glsl",
     "source/blender/gpu/shaders/common/gpu_shader_smaa_lib.glsl",
+
+    # Contains `Lorem Ipsum`.
+    "source/blender/blenlib/tests/BLI_resource_strings.h",
 }
 
 # These contain many typos that could be resolved, then removed from this list.

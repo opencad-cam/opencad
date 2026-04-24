@@ -21,11 +21,7 @@
 
 #include "bmesh.hh"
 
-using blender::Array;
-using blender::float3;
-using blender::float4x4;
-using blender::MutableSpan;
-using blender::Span;
+namespace blender {
 
 const BMAllocTemplate bm_mesh_allocsize_default = {512, 1024, 2048, 512};
 const BMAllocTemplate bm_mesh_chunksize_default = {512, 1024, 2048, 512};
@@ -132,7 +128,7 @@ void BM_mesh_elem_toolflags_clear(BMesh *bm)
 BMesh *BM_mesh_create(const BMAllocTemplate *allocsize, const BMeshCreateParams *params)
 {
   /* allocate the structure */
-  BMesh *bm = MEM_new_for_free<BMesh>(__func__);
+  BMesh *bm = MEM_new<BMesh>(__func__);
 
   /* allocate the memory pools for the mesh elements */
   bm_mempool_init(bm, allocsize, params->use_toolflags);
@@ -215,13 +211,13 @@ void BM_mesh_data_free(BMesh *bm)
   BLI_mempool_destroy(bm->fpool);
 
   if (bm->vtable) {
-    MEM_freeN(bm->vtable);
+    MEM_delete(bm->vtable);
   }
   if (bm->etable) {
-    MEM_freeN(bm->etable);
+    MEM_delete(bm->etable);
   }
   if (bm->ftable) {
-    MEM_freeN(bm->ftable);
+    MEM_delete(bm->ftable);
   }
 
   /* destroy flag pool */
@@ -235,7 +231,7 @@ void BM_mesh_data_free(BMesh *bm)
 
   if (bm->lnor_spacearr) {
     BKE_lnor_spacearr_free(bm->lnor_spacearr);
-    MEM_freeN(bm->lnor_spacearr);
+    MEM_delete(bm->lnor_spacearr);
   }
 
   BMO_error_clear(bm);
@@ -276,7 +272,7 @@ void BM_mesh_free(BMesh *bm)
     bm->py_handle = nullptr;
   }
 
-  MEM_freeN(bm);
+  MEM_delete(bm);
 }
 
 void bmesh_edit_begin(BMesh * /*bm*/, BMOpTypeFlag /*type_flag*/)
@@ -301,7 +297,7 @@ void bmesh_edit_begin(BMesh * /*bm*/, BMOpTypeFlag /*type_flag*/)
 
 void bmesh_edit_end(BMesh *bm, BMOpTypeFlag type_flag)
 {
-  ListBase select_history;
+  ListBaseT<BMEditSelection> select_history;
 
   /* BMO_OPTYPE_FLAG_UNTAN_MULTIRES disabled for now, see comment above in bmesh_edit_begin. */
 #ifdef BMOP_UNTAN_MULTIRES_ENABLED
@@ -540,7 +536,7 @@ bool BM_mesh_elem_table_check(BMesh *bm)
 
   if (bm->vtable && ((bm->elem_table_dirty & BM_VERT) == 0)) {
     BM_ITER_MESH_INDEX (ele, &iter, bm, BM_VERTS_OF_MESH, i) {
-      if (ele != (BMElem *)bm->vtable[i]) {
+      if (ele != reinterpret_cast<BMElem *>(bm->vtable[i])) {
         return false;
       }
     }
@@ -548,7 +544,7 @@ bool BM_mesh_elem_table_check(BMesh *bm)
 
   if (bm->etable && ((bm->elem_table_dirty & BM_EDGE) == 0)) {
     BM_ITER_MESH_INDEX (ele, &iter, bm, BM_EDGES_OF_MESH, i) {
-      if (ele != (BMElem *)bm->etable[i]) {
+      if (ele != reinterpret_cast<BMElem *>(bm->etable[i])) {
         return false;
       }
     }
@@ -556,7 +552,7 @@ bool BM_mesh_elem_table_check(BMesh *bm)
 
   if (bm->ftable && ((bm->elem_table_dirty & BM_FACE) == 0)) {
     BM_ITER_MESH_INDEX (ele, &iter, bm, BM_FACES_OF_MESH, i) {
-      if (ele != (BMElem *)bm->ftable[i]) {
+      if (ele != reinterpret_cast<BMElem *>(bm->ftable[i])) {
         return false;
       }
     }
@@ -590,13 +586,13 @@ void BM_mesh_elem_table_ensure(BMesh *bm, const char htype)
     }
     else {
       if (bm->vtable) {
-        MEM_freeN(bm->vtable);
+        MEM_delete(bm->vtable);
       }
-      bm->vtable = static_cast<BMVert **>(
-          MEM_mallocN(sizeof(void **) * bm->totvert, "bm->vtable"));
+      bm->vtable = MEM_new_array_uninitialized<BMVert *>(bm->totvert, "bm->vtable");
       bm->vtable_tot = bm->totvert;
     }
-    BM_iter_as_array(bm, BM_VERTS_OF_MESH, nullptr, (void **)bm->vtable, bm->totvert);
+    BM_iter_as_array(
+        bm, BM_VERTS_OF_MESH, nullptr, reinterpret_cast<void **>(bm->vtable), bm->totvert);
   }
   if (htype_needed & BM_EDGE) {
     if (bm->etable && bm->totedge <= bm->etable_tot && bm->totedge * 2 >= bm->etable_tot) {
@@ -604,13 +600,13 @@ void BM_mesh_elem_table_ensure(BMesh *bm, const char htype)
     }
     else {
       if (bm->etable) {
-        MEM_freeN(bm->etable);
+        MEM_delete(bm->etable);
       }
-      bm->etable = static_cast<BMEdge **>(
-          MEM_mallocN(sizeof(void **) * bm->totedge, "bm->etable"));
+      bm->etable = MEM_new_array_uninitialized<BMEdge *>(bm->totedge, "bm->etable");
       bm->etable_tot = bm->totedge;
     }
-    BM_iter_as_array(bm, BM_EDGES_OF_MESH, nullptr, (void **)bm->etable, bm->totedge);
+    BM_iter_as_array(
+        bm, BM_EDGES_OF_MESH, nullptr, reinterpret_cast<void **>(bm->etable), bm->totedge);
   }
   if (htype_needed & BM_FACE) {
     if (bm->ftable && bm->totface <= bm->ftable_tot && bm->totface * 2 >= bm->ftable_tot) {
@@ -618,13 +614,13 @@ void BM_mesh_elem_table_ensure(BMesh *bm, const char htype)
     }
     else {
       if (bm->ftable) {
-        MEM_freeN(bm->ftable);
+        MEM_delete(bm->ftable);
       }
-      bm->ftable = static_cast<BMFace **>(
-          MEM_mallocN(sizeof(void **) * bm->totface, "bm->ftable"));
+      bm->ftable = MEM_new_array_uninitialized<BMFace *>(bm->totface, "bm->ftable");
       bm->ftable_tot = bm->totface;
     }
-    BM_iter_as_array(bm, BM_FACES_OF_MESH, nullptr, (void **)bm->ftable, bm->totface);
+    BM_iter_as_array(
+        bm, BM_FACES_OF_MESH, nullptr, reinterpret_cast<void **>(bm->ftable), bm->totface);
   }
 
 finally:
@@ -647,15 +643,15 @@ void BM_mesh_elem_table_init(BMesh *bm, const char htype)
 void BM_mesh_elem_table_free(BMesh *bm, const char htype)
 {
   if (htype & BM_VERT) {
-    MEM_SAFE_FREE(bm->vtable);
+    MEM_SAFE_DELETE(bm->vtable);
   }
 
   if (htype & BM_EDGE) {
-    MEM_SAFE_FREE(bm->etable);
+    MEM_SAFE_DELETE(bm->etable);
   }
 
   if (htype & BM_FACE) {
-    MEM_SAFE_FREE(bm->ftable);
+    MEM_SAFE_DELETE(bm->ftable);
   }
 }
 
@@ -740,9 +736,9 @@ int BM_mesh_elem_count(BMesh *bm, const char htype)
 void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const uint *face_idx)
 {
   /* Mapping old to new pointers. */
-  blender::Map<BMVert *, BMVert *> *vptr_map = nullptr;
-  blender::Map<BMEdge *, BMEdge *> *eptr_map = nullptr;
-  blender::Map<BMFace *, BMFace *> *fptr_map = nullptr;
+  Map<BMVert *, BMVert *> *vptr_map = nullptr;
+  Map<BMEdge *, BMEdge *> *eptr_map = nullptr;
+  Map<BMFace *, BMFace *> *fptr_map = nullptr;
   BMIter iter, iterl;
   BMVert *ve;
   BMEdge *ed;
@@ -768,8 +764,10 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
 
     /* Make a copy of all vertices. */
     verts_pool = bm->vtable;
-    verts_copy = MEM_malloc_arrayN<BMVert>(totvert, __func__);
-    void **pyptrs = (cd_vert_pyptr != -1) ? MEM_malloc_arrayN<void *>(totvert, __func__) : nullptr;
+    verts_copy = MEM_new_array_uninitialized<BMVert>(totvert, __func__);
+    void **pyptrs = (cd_vert_pyptr != -1) ?
+                        MEM_new_array_uninitialized<void *>(totvert, __func__) :
+                        nullptr;
     for (i = totvert, ve = verts_copy + totvert - 1, vep = verts_pool + totvert - 1; i--;
          ve--, vep--)
     {
@@ -782,7 +780,7 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
     }
 
     /* Init the old-to-new vert pointers mapping. */
-    vptr_map = MEM_new<blender::Map<BMVert *, BMVert *>>(__func__);
+    vptr_map = MEM_new<Map<BMVert *, BMVert *>>(__func__);
     vptr_map->reserve(bm->totvert);
 
     /* Copy back verts to their new place, and update old2new pointers mapping. */
@@ -806,9 +804,9 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
     bm->elem_index_dirty |= BM_VERT;
     bm->elem_table_dirty |= BM_VERT;
 
-    MEM_freeN(verts_copy);
+    MEM_delete(verts_copy);
     if (pyptrs) {
-      MEM_freeN(pyptrs);
+      MEM_delete(pyptrs);
     }
   }
 
@@ -824,8 +822,10 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
 
     /* Make a copy of all vertices. */
     edges_pool = bm->etable;
-    edges_copy = MEM_malloc_arrayN<BMEdge>(totedge, __func__);
-    void **pyptrs = (cd_edge_pyptr != -1) ? MEM_malloc_arrayN<void *>(totedge, __func__) : nullptr;
+    edges_copy = MEM_new_array_uninitialized<BMEdge>(totedge, __func__);
+    void **pyptrs = (cd_edge_pyptr != -1) ?
+                        MEM_new_array_uninitialized<void *>(totedge, __func__) :
+                        nullptr;
     for (i = totedge, ed = edges_copy + totedge - 1, edp = edges_pool + totedge - 1; i--;
          ed--, edp--)
     {
@@ -837,7 +837,7 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
     }
 
     /* Init the old-to-new vert pointers mapping. */
-    eptr_map = MEM_new<blender::Map<BMEdge *, BMEdge *>>(__func__);
+    eptr_map = MEM_new<Map<BMEdge *, BMEdge *>>(__func__);
     eptr_map->reserve(totedge);
 
     /* Copy back verts to their new place, and update old2new pointers mapping. */
@@ -861,9 +861,9 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
     bm->elem_index_dirty |= BM_EDGE;
     bm->elem_table_dirty |= BM_EDGE;
 
-    MEM_freeN(edges_copy);
+    MEM_delete(edges_copy);
     if (pyptrs) {
-      MEM_freeN(pyptrs);
+      MEM_delete(pyptrs);
     }
   }
 
@@ -879,8 +879,10 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
 
     /* Make a copy of all vertices. */
     faces_pool = bm->ftable;
-    faces_copy = MEM_malloc_arrayN<BMFace>(totface, __func__);
-    void **pyptrs = (cd_poly_pyptr != -1) ? MEM_malloc_arrayN<void *>(totface, __func__) : nullptr;
+    faces_copy = MEM_new_array_uninitialized<BMFace>(totface, __func__);
+    void **pyptrs = (cd_poly_pyptr != -1) ?
+                        MEM_new_array_uninitialized<void *>(totface, __func__) :
+                        nullptr;
     for (i = totface, fa = faces_copy + totface - 1, fap = faces_pool + totface - 1; i--;
          fa--, fap--)
     {
@@ -892,7 +894,7 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
     }
 
     /* Init the old-to-new vert pointers mapping. */
-    fptr_map = MEM_new<blender::Map<BMFace *, BMFace *>>(__func__);
+    fptr_map = MEM_new<Map<BMFace *, BMFace *>>(__func__);
     fptr_map->reserve(totface);
 
     /* Copy back verts to their new place, and update old2new pointers mapping. */
@@ -913,9 +915,9 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
     bm->elem_index_dirty |= BM_FACE | BM_LOOP;
     bm->elem_table_dirty |= BM_FACE;
 
-    MEM_freeN(faces_copy);
+    MEM_delete(faces_copy);
     if (pyptrs) {
-      MEM_freeN(pyptrs);
+      MEM_delete(pyptrs);
     }
   }
 
@@ -986,24 +988,24 @@ void BM_mesh_remap(BMesh *bm, const uint *vert_idx, const uint *edge_idx, const 
 
   /* Selection history */
   {
-    LISTBASE_FOREACH (BMEditSelection *, ese, &bm->selected) {
-      switch (ese->htype) {
+    for (BMEditSelection &ese : bm->selected) {
+      switch (ese.htype) {
         case BM_VERT:
           if (vptr_map) {
-            ese->ele = reinterpret_cast<BMElem *>(
-                vptr_map->lookup(reinterpret_cast<BMVert *>(ese->ele)));
+            ese.ele = reinterpret_cast<BMElem *>(
+                vptr_map->lookup(reinterpret_cast<BMVert *>(ese.ele)));
           }
           break;
         case BM_EDGE:
           if (eptr_map) {
-            ese->ele = reinterpret_cast<BMElem *>(
-                eptr_map->lookup(reinterpret_cast<BMEdge *>(ese->ele)));
+            ese.ele = reinterpret_cast<BMElem *>(
+                eptr_map->lookup(reinterpret_cast<BMEdge *>(ese.ele)));
           }
           break;
         case BM_FACE:
           if (fptr_map) {
-            ese->ele = reinterpret_cast<BMElem *>(
-                fptr_map->lookup(reinterpret_cast<BMFace *>(ese->ele)));
+            ese.ele = reinterpret_cast<BMElem *>(
+                fptr_map->lookup(reinterpret_cast<BMFace *>(ese.ele)));
           }
           break;
       }
@@ -1031,14 +1033,18 @@ void BM_mesh_rebuild(BMesh *bm,
   const char remap = (vpool_dst ? BM_VERT : 0) | (epool_dst ? BM_EDGE : 0) |
                      (lpool_dst ? BM_LOOP : 0) | (fpool_dst ? BM_FACE : 0);
 
-  BMVert **vtable_dst = (remap & BM_VERT) ? MEM_malloc_arrayN<BMVert *>(bm->totvert, __func__) :
-                                            nullptr;
-  BMEdge **etable_dst = (remap & BM_EDGE) ? MEM_malloc_arrayN<BMEdge *>(bm->totedge, __func__) :
-                                            nullptr;
-  BMLoop **ltable_dst = (remap & BM_LOOP) ? MEM_malloc_arrayN<BMLoop *>(bm->totloop, __func__) :
-                                            nullptr;
-  BMFace **ftable_dst = (remap & BM_FACE) ? MEM_malloc_arrayN<BMFace *>(bm->totface, __func__) :
-                                            nullptr;
+  BMVert **vtable_dst = (remap & BM_VERT) ?
+                            MEM_new_array_uninitialized<BMVert *>(bm->totvert, __func__) :
+                            nullptr;
+  BMEdge **etable_dst = (remap & BM_EDGE) ?
+                            MEM_new_array_uninitialized<BMEdge *>(bm->totedge, __func__) :
+                            nullptr;
+  BMLoop **ltable_dst = (remap & BM_LOOP) ?
+                            MEM_new_array_uninitialized<BMLoop *>(bm->totloop, __func__) :
+                            nullptr;
+  BMFace **ftable_dst = (remap & BM_FACE) ?
+                            MEM_new_array_uninitialized<BMFace *>(bm->totface, __func__) :
+                            nullptr;
 
   const bool use_toolflags = params->use_toolflags;
 
@@ -1050,10 +1056,9 @@ void BM_mesh_rebuild(BMesh *bm,
       BMVert *v_dst = static_cast<BMVert *>(BLI_mempool_alloc(vpool_dst));
       memcpy(v_dst, v_src, sizeof(BMVert));
       if (use_toolflags) {
-        ((BMVert_OFlag *)v_dst)->oflags = bm->vtoolflagpool ?
-                                              static_cast<BMFlagLayer *>(
-                                                  BLI_mempool_calloc(bm->vtoolflagpool)) :
-                                              nullptr;
+        (reinterpret_cast<BMVert_OFlag *>(v_dst))->oflags =
+            bm->vtoolflagpool ? static_cast<BMFlagLayer *>(BLI_mempool_calloc(bm->vtoolflagpool)) :
+                                nullptr;
       }
 
       vtable_dst[index] = v_dst;
@@ -1069,10 +1074,9 @@ void BM_mesh_rebuild(BMesh *bm,
       BMEdge *e_dst = static_cast<BMEdge *>(BLI_mempool_alloc(epool_dst));
       memcpy(e_dst, e_src, sizeof(BMEdge));
       if (use_toolflags) {
-        ((BMEdge_OFlag *)e_dst)->oflags = bm->etoolflagpool ?
-                                              static_cast<BMFlagLayer *>(
-                                                  BLI_mempool_calloc(bm->etoolflagpool)) :
-                                              nullptr;
+        (reinterpret_cast<BMEdge_OFlag *>(e_dst))->oflags =
+            bm->etoolflagpool ? static_cast<BMFlagLayer *>(BLI_mempool_calloc(bm->etoolflagpool)) :
+                                nullptr;
       }
 
       etable_dst[index] = e_dst;
@@ -1090,10 +1094,10 @@ void BM_mesh_rebuild(BMesh *bm,
         BMFace *f_dst = static_cast<BMFace *>(BLI_mempool_alloc(fpool_dst));
         memcpy(f_dst, f_src, sizeof(BMFace));
         if (use_toolflags) {
-          ((BMFace_OFlag *)f_dst)->oflags = bm->ftoolflagpool ?
-                                                static_cast<BMFlagLayer *>(
-                                                    BLI_mempool_calloc(bm->ftoolflagpool)) :
-                                                nullptr;
+          (reinterpret_cast<BMFace_OFlag *>(f_dst))->oflags =
+              bm->ftoolflagpool ?
+                  static_cast<BMFlagLayer *>(BLI_mempool_calloc(bm->ftoolflagpool)) :
+                  nullptr;
         }
 
         ftable_dst[index] = f_dst;
@@ -1197,21 +1201,21 @@ void BM_mesh_rebuild(BMesh *bm,
     }
   }
 
-  LISTBASE_FOREACH (BMEditSelection *, ese, &bm->selected) {
-    switch (ese->htype) {
+  for (BMEditSelection &ese : bm->selected) {
+    switch (ese.htype) {
       case BM_VERT:
         if (remap & BM_VERT) {
-          ese->ele = (BMElem *)MAP_VERT(ese->ele);
+          ese.ele = reinterpret_cast<BMElem *>(MAP_VERT(ese.ele));
         }
         break;
       case BM_EDGE:
         if (remap & BM_EDGE) {
-          ese->ele = (BMElem *)MAP_EDGE(ese->ele);
+          ese.ele = reinterpret_cast<BMElem *>(MAP_EDGE(ese.ele));
         }
         break;
       case BM_FACE:
         if (remap & BM_FACE) {
-          ese->ele = (BMElem *)MAP_FACE(ese->ele);
+          ese.ele = reinterpret_cast<BMElem *>(MAP_FACE(ese.ele));
         }
         break;
     }
@@ -1240,7 +1244,7 @@ void BM_mesh_rebuild(BMesh *bm,
       bm->vtable_tot = bm->totvert;
       bm->elem_table_dirty &= ~BM_VERT;
     }
-    MEM_freeN(vtable_dst);
+    MEM_delete(vtable_dst);
     BLI_mempool_destroy(bm->vpool);
     bm->vpool = vpool_dst;
   }
@@ -1251,14 +1255,14 @@ void BM_mesh_rebuild(BMesh *bm,
       bm->etable_tot = bm->totedge;
       bm->elem_table_dirty &= ~BM_EDGE;
     }
-    MEM_freeN(etable_dst);
+    MEM_delete(etable_dst);
     BLI_mempool_destroy(bm->epool);
     bm->epool = epool_dst;
   }
 
   if (remap & BM_LOOP) {
     /* no loop table */
-    MEM_freeN(ltable_dst);
+    MEM_delete(ltable_dst);
     BLI_mempool_destroy(bm->lpool);
     bm->lpool = lpool_dst;
   }
@@ -1269,7 +1273,7 @@ void BM_mesh_rebuild(BMesh *bm,
       bm->ftable_tot = bm->totface;
       bm->elem_table_dirty &= ~BM_FACE;
     }
-    MEM_freeN(ftable_dst);
+    MEM_delete(ftable_dst);
     BLI_mempool_destroy(bm->fpool);
     bm->fpool = fpool_dst;
   }
@@ -1360,3 +1364,5 @@ void BM_mesh_vert_coords_apply_with_mat4(BMesh *bm,
 }
 
 /** \} */
+
+}  // namespace blender

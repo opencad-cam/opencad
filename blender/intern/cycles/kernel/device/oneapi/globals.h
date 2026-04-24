@@ -12,7 +12,7 @@
 #include "kernel/util/profiler.h"
 
 #include "util/color.h"
-#include "util/texture.h"
+#include "util/types_image.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -26,21 +26,11 @@ struct IntegratorQueueCounter;
 struct KernelGlobalsGPU {
 
 #define KERNEL_DATA_ARRAY(type, name) const type *__##name = nullptr;
+#define KERNEL_DATA_ARRAY_WRITABLE(type, name) type *__##name = nullptr;
 #include "kernel/data_arrays.h"
-#undef KERNEL_DATA_ARRAY
   IntegratorStateGPU *integrator_state;
   const KernelData *__data;
-
-#ifdef WITH_ONEAPI_SYCL_HOST_TASK
-  size_t nd_item_local_id_0;
-  size_t nd_item_local_range_0;
-  size_t nd_item_group_id_0;
-  size_t nd_item_group_range_0;
-  size_t nd_item_global_id_0;
-  size_t nd_item_global_range_0;
-#else
   sycl::kernel_handler kernel_handler;
-#endif
 };
 
 using KernelGlobals = ccl_global KernelGlobalsGPU *ccl_restrict;
@@ -50,7 +40,8 @@ using KernelGlobals = ccl_global KernelGlobalsGPU *ccl_restrict;
 
 /* data lookup defines */
 
-#define kernel_data_fetch(name, index) __##name[index]
+#define kernel_data_fetch(name, index) __##name[(index)]
+#define kernel_data_write(name, index, value) __##name[(index)] = (value)
 #define kernel_data_array(name) __##name
 
 CCL_NAMESPACE_END

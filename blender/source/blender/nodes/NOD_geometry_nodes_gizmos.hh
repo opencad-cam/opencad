@@ -13,11 +13,13 @@
 
 #include "BKE_compute_context_cache_fwd.hh"
 
+namespace blender {
+
 struct Object;
 struct NodesModifierData;
 struct wmWindowManager;
 
-namespace blender::nodes::gizmos {
+namespace nodes::gizmos {
 
 namespace ie = inverse_eval;
 
@@ -37,11 +39,7 @@ struct TreeGizmoPropagation {
   MultiValueMap<ie::SocketElem, ie::SocketElem> gizmo_inputs_by_node_inputs;
   MultiValueMap<ie::GroupInputElem, ie::SocketElem> gizmo_inputs_by_group_inputs;
 
-  BLI_STRUCT_EQUALITY_OPERATORS_4(TreeGizmoPropagation,
-                                  gizmo_nodes,
-                                  gizmo_inputs_by_value_nodes,
-                                  gizmo_inputs_by_node_inputs,
-                                  gizmo_inputs_by_group_inputs)
+  friend bool operator==(const TreeGizmoPropagation &a, const TreeGizmoPropagation &b) = default;
 };
 
 /**
@@ -130,7 +128,7 @@ ie::ElemVariant get_editable_gizmo_elem(const ComputeContext &gizmo_context,
 void apply_gizmo_change(bContext &C,
                         Object &object,
                         NodesModifierData &nmd,
-                        geo_eval_log::GeoNodesLog &eval_log,
+                        eval_log::NodesEvalLog &eval_log,
                         const ComputeContext &gizmo_context,
                         const bNodeSocket &gizmo_socket,
                         FunctionRef<void(bke::SocketValueVariant &value)> apply_on_gizmo_value_fn);
@@ -140,4 +138,5 @@ void apply_gizmo_change(bContext &C,
  */
 bool value_node_has_gizmo(const bNodeTree &tree, const bNode &node);
 
-}  // namespace blender::nodes::gizmos
+}  // namespace nodes::gizmos
+}  // namespace blender

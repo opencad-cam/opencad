@@ -18,17 +18,18 @@ namespace blender::nodes::node_fn_value_to_string_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.is_function_node();
   const bNode *node = b.node_or_null();
 
   if (node != nullptr) {
     const eNodeSocketDatatype data_type = eNodeSocketDatatype(node->custom1);
-    b.add_input(data_type, "Value");
+    b.add_input(data_type, "Value"_ustr);
 
-    auto &decimals = b.add_input<decl::Int>("Decimals").min(0);
+    auto &decimals = b.add_input<decl::Int>("Decimals"_ustr).min(0);
     decimals.available(data_type == SOCK_FLOAT);
   }
 
-  b.add_output<decl::String>("String");
+  b.add_output<decl::String>("String"_ustr);
 }
 
 static const mf::MultiFunction *get_multi_function(const bNode &bnode)
@@ -71,21 +72,21 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   if (params.in_out() == SOCK_IN) {
     if (socket_type == SOCK_INT) {
       params.add_item(IFACE_("Value"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("FunctionNodeValueToString");
+        bNode &node = params.add_node("FunctionNodeValueToString"_ustr);
         node.custom1 = SOCK_INT;
-        params.update_and_connect_available_socket(node, "Value");
+        params.update_and_connect_available_socket(node, "Value"_ustr);
       });
       params.add_item(IFACE_("Decimals"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("FunctionNodeValueToString");
-        params.update_and_connect_available_socket(node, "Decimals");
+        bNode &node = params.add_node("FunctionNodeValueToString"_ustr);
+        params.update_and_connect_available_socket(node, "Decimals"_ustr);
       });
     }
     else {
       if (params.node_tree().typeinfo->validate_link(socket_type, SOCK_FLOAT)) {
         params.add_item(IFACE_("Value"), [](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("FunctionNodeValueToString");
+          bNode &node = params.add_node("FunctionNodeValueToString"_ustr);
           node.custom1 = SOCK_FLOAT;
-          params.update_and_connect_available_socket(node, "Value");
+          params.update_and_connect_available_socket(node, "Value"_ustr);
         });
       }
     }
@@ -93,8 +94,8 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   else {
     if (socket_type == SOCK_STRING) {
       params.add_item(IFACE_("String"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("FunctionNodeValueToString");
-        params.update_and_connect_available_socket(node, "String");
+        bNode &node = params.add_node("FunctionNodeValueToString"_ustr);
+        params.update_and_connect_available_socket(node, "String"_ustr);
       });
     }
   }
@@ -124,9 +125,9 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeValueToString", FN_NODE_VALUE_TO_STRING);
+  fn_cmp_node_type_base(&ntype, "FunctionNodeValueToString"_ustr, FN_NODE_VALUE_TO_STRING);
   ntype.ui_name = "Value to String";
   ntype.ui_description = "Generate a string representation of the given input value";
   ntype.enum_name_legacy = "VALUE_TO_STRING";
@@ -136,7 +137,7 @@ static void node_register()
   ntype.draw_buttons = node_layout;
   ntype.build_multi_function = node_build_multi_function;
   ntype.gather_link_search_ops = node_gather_link_searches;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

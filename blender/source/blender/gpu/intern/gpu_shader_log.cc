@@ -19,11 +19,14 @@
 
 #include "CLG_log.h"
 
-#include "fmt/format.h"
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
+namespace blender {
 
 static CLG_LogRef LOG = {"gpu.shader"};
 
-namespace blender::gpu {
+namespace gpu {
 
 /* -------------------------------------------------------------------- */
 /** \name Debug functions
@@ -256,7 +259,7 @@ void Shader::print_log(Span<StringRefNull> sources,
     }
     const char *_str = BLI_dynstr_get_cstring(dynstr);
     CLOG_AT_LEVEL(&LOG, level, "%s %s: %s", this->name, stage, _str);
-    MEM_freeN(_str);
+    MEM_delete(_str);
   }
 
   BLI_dynstr_free(dynstr);
@@ -451,4 +454,5 @@ void printf_end(Context *ctx)
 
 /** \} */
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

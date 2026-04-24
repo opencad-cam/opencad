@@ -9,6 +9,8 @@
 
 #pragma once
 
+namespace blender {
+
 /* Grease Pencil Modifiers */
 
 enum eArrayGpencil_Flag {
@@ -158,7 +160,8 @@ enum {
        DT_TYPE_SKIN, \
        DT_TYPE_BWEIGHT_VERT, \
        DT_TYPE_MLOOPCOL_VERT, \
-       DT_TYPE_MPROPCOL_VERT)
+       DT_TYPE_MPROPCOL_VERT, \
+       DT_TYPE_MPROPCOL_VERT | DT_TYPE_MLOOPCOL_VERT)
 #define DT_DATATYPE_IS_EDGE(_dt) \
   ELEM(_dt, \
        DT_TYPE_CREASE, \
@@ -167,9 +170,13 @@ enum {
        DT_TYPE_BWEIGHT_EDGE, \
        DT_TYPE_FREESTYLE_EDGE)
 #define DT_DATATYPE_IS_LOOP(_dt) \
-  ELEM(_dt, DT_TYPE_UV, DT_TYPE_LNOR, DT_TYPE_MLOOPCOL_LOOP, DT_TYPE_MPROPCOL_LOOP)
+  ELEM(_dt, \
+       DT_TYPE_UV, \
+       DT_TYPE_LNOR, \
+       DT_TYPE_MLOOPCOL_LOOP, \
+       DT_TYPE_MPROPCOL_LOOP, \
+       DT_TYPE_MPROPCOL_LOOP | DT_TYPE_MLOOPCOL_LOOP)
 #define DT_DATATYPE_IS_FACE(_dt) ELEM(_dt, DT_TYPE_UV, DT_TYPE_SHARP_FACE, DT_TYPE_FREESTYLE_FACE)
-
 #define DT_DATATYPE_IS_MULTILAYERS(_dt) \
   ELEM(_dt, \
        DT_TYPE_MDEFORMVERT, \
@@ -328,3 +335,5 @@ enum {
   CDT_MIX_MUL = 19,
   /* Etc. */
 };
+
+}  // namespace blender

@@ -4,10 +4,12 @@
 
 #ifdef WITH_HIPRT
 
+#  include "device/hiprt/device_impl.h"
+
+#  include <hiprt/hiprt.h>
 #  include <iomanip>
 
 #  include "device/hip/util.h"
-#  include "device/hiprt/device_impl.h"
 #  include "kernel/device/hiprt/globals.h"
 
 #  include "util/log.h"
@@ -17,9 +19,12 @@
 #  include "util/string.h"
 #  include "util/time.h"
 #  include "util/types.h"
+#  include "util/vector.h"
 
-#  ifdef _WIN32
+#  if defined(_WIN32)
 #    include "util/windows.h"
+#  elif defined(__linux__)
+#    include <dlfcn.h>
 #  endif
 
 #  include "bvh/hiprt.h"
@@ -53,7 +58,47 @@ static void get_hiprt_transform(float matrix[][4], Transform &tfm)
   matrix[row][col++] = tfm.z.w;
 }
 
-class HIPRTDevice;
+bool HIPRTDevice::is_supported()
+{
+#  if defined(__linux__)
+  static bool is_initialized = false;
+  static bool is_supported = false;
+
+  if (is_initialized) {
+    return is_supported;
+  }
+  is_initialized = true;
+
+  /* The current version of HIP-RT requires libamdhip64.so which Fedora puts in a separate package
+   * than libamdhip64.so.6 as required by HIP. For now check for the existence of this. In the
+   * future update we'll make HIP-RT consistent, and this code can be removed. */
+  const vector<const char *> hip_paths = {
+      "libamdhip64.so",
+      "/opt/rocm/lib/libamdhip64.so",
+      "/opt/rocm/hip/lib/libamdhip64.so",
+  };
+
+  LOG_INFO << "Checking for libamdhip64.so";
+
+  for (const char *hip_path : hip_paths) {
+    void *hip_lib = dlopen(hip_path, RTLD_LAZY);
+    if (hip_lib) {
+      LOG_DEBUG << "Found libamdhip64.so at: " << hip_path;
+      is_supported = true;
+      dlclose(hip_lib);
+      break;
+    }
+  }
+
+  if (!is_supported) {
+    LOG_INFO << "libamdhip64.so not found, HIP-RT will be disabled";
+  }
+
+  return is_supported;
+#  else
+  return true;
+#  endif
+}
 
 BVHLayoutMask HIPRTDevice::get_bvh_layout_mask(const uint /* kernel_features */) const
 {
@@ -66,6 +111,7 @@ HIPRTDevice::HIPRTDevice(const DeviceInfo &info,
                          const bool headless)
     : HIPDevice(info, stats, profiler, headless),
       hiprt_context(nullptr),
+      hiprt_module_(nullptr),
       scene(nullptr),
       functions_table(nullptr),
       scratch_buffer_size(0),
@@ -87,8 +133,7 @@ HIPRTDevice::HIPRTDevice(const DeviceInfo &info,
   hiprt_context_input.ctxt = hipContext;
   hiprt_context_input.device = hipDevice;
   hiprt_context_input.deviceType = hiprtDeviceAMD;
-  hiprtError rt_result = hiprtCreateContext(
-      HIPRT_API_VERSION, hiprt_context_input, &hiprt_context);
+  hiprtError rt_result = hiprtCreateContext(HIPRT_API_VERSION, hiprt_context_input, hiprt_context);
 
   if (rt_result != hiprtSuccess) {
     set_error("Failed to create HIPRT context");
@@ -129,6 +174,11 @@ HIPRTDevice::~HIPRTDevice()
   hiprtDestroyGlobalStackBuffer(hiprt_context, global_stack_buffer);
   hiprtDestroyFuncTable(hiprt_context, functions_table);
   hiprtDestroyScene(hiprt_context, scene);
+
+  if (hiprt_module_) {
+    hip_assert(hipModuleUnload(hiprt_module_));
+  }
+
   hiprtDestroyContext(hiprt_context);
 }
 
@@ -141,7 +191,7 @@ string HIPRTDevice::compile_kernel_get_common_cflags(const uint kernel_features)
 {
   string cflags = HIPDevice::compile_kernel_get_common_cflags(kernel_features);
 
-  cflags += " -D __HIPRT__ ";
+  cflags += " -D __KERNEL_HIPRT__ ";
 
   return cflags;
 }
@@ -261,7 +311,7 @@ string HIPRTDevice::compile_kernel(const uint kernel_features, const char *name,
 
 bool HIPRTDevice::load_kernels(const uint kernel_features)
 {
-  if (hipModule) {
+  if (hiprt_module_) {
     if (use_adaptive_compilation()) {
       LOG_INFO << "Skipping HIP kernel reload for adaptive compilation, not currently supported.";
     }
@@ -296,7 +346,7 @@ bool HIPRTDevice::load_kernels(const uint kernel_features)
   hipError_t result;
 
   if (path_read_compressed_text(fatbin, fatbin_data)) {
-    result = hipModuleLoadData(&hipModule, fatbin_data.c_str());
+    result = hipModuleLoadData(&hiprt_module_, fatbin_data.c_str());
   }
   else {
     result = hipErrorFileNotFound;
@@ -307,33 +357,20 @@ bool HIPRTDevice::load_kernels(const uint kernel_features)
         "Failed to load HIP kernel from '%s' (%s)", fatbin.c_str(), hipewErrorString(result)));
   }
 
-  if (result == hipSuccess) {
-    kernels.load(this);
-    {
-      const DeviceKernel test_kernel = (kernel_features & KERNEL_FEATURE_NODE_RAYTRACE) ?
-                                           DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE :
-                                       (kernel_features & KERNEL_FEATURE_MNEE) ?
-                                           DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE :
-                                           DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE;
-
-      HIPRTDeviceQueue queue(this);
-
-      device_ptr d_path_index = 0;
-      device_ptr d_render_buffer = 0;
-      int d_work_size = 0;
-      DeviceKernelArguments args(&d_path_index, &d_render_buffer, &d_work_size);
-
-      queue.init_execution();
-      queue.enqueue(test_kernel, 1, args);
-      queue.synchronize();
-    }
+  if (result != hipSuccess) {
+    return false;
   }
 
-  return (result == hipSuccess);
+  kernels.load_raytrace(this, hiprt_module_);
+
+  return HIPDevice::load_kernels(kernel_features);
 }
 
 void HIPRTDevice::const_copy_to(const char *name, void *host, const size_t size)
 {
+  /* Set constant memory for HIP module. */
+  HIPDevice::const_copy_to(name, host, size);
+
   HIPContextScope scope(this);
   hipDeviceptr_t mem;
   size_t bytes;
@@ -344,7 +381,7 @@ void HIPRTDevice::const_copy_to(const char *name, void *host, const size_t size)
     *(hiprtScene *)&data->device_bvh = scene;
   }
 
-  hip_assert(hipModuleGetGlobal(&mem, &bytes, hipModule, "kernel_params"));
+  hip_assert(hipModuleGetGlobal(&mem, &bytes, hiprt_module_, "kernel_params"));
   assert(bytes == sizeof(KernelParamsHIPRT));
 
 #  define KERNEL_DATA_ARRAY(data_type, data_name) \
@@ -784,7 +821,11 @@ void HIPRTDevice::build_blas(BVHHIPRT *bvh, Geometry *geom, hiprtBuildOptions op
       break;
     }
 
-    case Geometry::LIGHT:
+    case Geometry::AREA_LIGHT:
+    case Geometry::BACKGROUND_LIGHT:
+    case Geometry::POINT_LIGHT:
+    case Geometry::SPOT_LIGHT:
+    case Geometry::SUN_LIGHT:
       return;
 
     default:
@@ -991,7 +1032,8 @@ hiprtScene HIPRTDevice::build_tlas(BVHHIPRT *bvh,
   size_t table_ptr_size = 0;
   hipDeviceptr_t table_device_ptr;
 
-  hip_assert(hipModuleGetGlobal(&table_device_ptr, &table_ptr_size, hipModule, "kernel_params"));
+  hip_assert(
+      hipModuleGetGlobal(&table_device_ptr, &table_ptr_size, hiprt_module_, "kernel_params"));
   if (have_error()) {
     return nullptr;
   }

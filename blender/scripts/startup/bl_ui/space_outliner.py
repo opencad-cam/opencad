@@ -66,7 +66,8 @@ class OUTLINER_HT_header(Header):
             )
 
         if display_mode in {'LIBRARIES', 'ORPHAN_DATA'}:
-            row.prop(space, "use_filter_id_type", text="", icon='FILTER')
+            row.prop(space, "use_filter_id_type", text="", icon=(
+                'FILTER_FILLED' if space.use_filter_id_type else 'FILTER'))
             sub = row.row(align=True)
             sub.active = space.use_filter_id_type
             sub.prop(space, "filter_id_type", text="", icon_only=True)
@@ -435,8 +436,12 @@ class OUTLINER_PT_filter(Panel):
             col.prop(space, "use_sort_alpha")
 
         if display_mode != 'LIBRARY_OVERRIDES':
-            row = layout.row(align=True)
+            col = layout.column(align=True)
+            row = col.row(align=True)
             row.prop(space, "use_sync_select", text="Sync Selection")
+            row = col.row(align=True)
+            row.active = space.use_sync_select
+            row.prop(space, "scroll_to_active", text="Scroll to Active")
 
             row = layout.row(align=True)
             row.prop(space, "show_mode_column", text="Show Mode Column")

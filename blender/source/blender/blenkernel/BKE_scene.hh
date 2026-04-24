@@ -14,6 +14,8 @@
 
 #include "DNA_userdef_enums.h"
 
+namespace blender {
+
 struct Base;
 struct Collection;
 struct Depsgraph;
@@ -38,22 +40,22 @@ enum eSceneCopyMethod {
 };
 
 /** Use as the contents of a 'for' loop: `for (SETLOOPER(...)) { ... }`. */
-#define SETLOOPER(_sce_basis, _sce_iter, _base) \
+#define SETLOOPER(_bmain, _sce_basis, _sce_iter, _base) \
   _sce_iter = _sce_basis, \
   _base = _setlooper_base_step( \
-      &_sce_iter, BKE_view_layer_context_active_PLACEHOLDER(_sce_basis), NULL); \
+      (_bmain), &_sce_iter, BKE_view_layer_context_active_PLACEHOLDER(_sce_basis), NULL); \
   _base; \
-  _base = _setlooper_base_step(&_sce_iter, NULL, _base)
+  _base = _setlooper_base_step((_bmain), &_sce_iter, NULL, _base)
 
-#define SETLOOPER_VIEW_LAYER(_sce_basis, _view_layer, _sce_iter, _base) \
-  _sce_iter = _sce_basis, _base = _setlooper_base_step(&_sce_iter, _view_layer, NULL); \
+#define SETLOOPER_VIEW_LAYER(_bmain, _sce_basis, _view_layer, _sce_iter, _base) \
+  _sce_iter = _sce_basis, _base = _setlooper_base_step((_bmain), &_sce_iter, _view_layer, NULL); \
   _base; \
-  _base = _setlooper_base_step(&_sce_iter, NULL, _base)
+  _base = _setlooper_base_step((_bmain), &_sce_iter, NULL, _base)
 
-#define SETLOOPER_SET_ONLY(_sce_basis, _sce_iter, _base) \
-  _sce_iter = _sce_basis, _base = _setlooper_base_step(&_sce_iter, NULL, NULL); \
+#define SETLOOPER_SET_ONLY(_bmain, _sce_basis, _sce_iter, _base) \
+  _sce_iter = _sce_basis, _base = _setlooper_base_step((_bmain), &_sce_iter, NULL, NULL); \
   _base; \
-  _base = _setlooper_base_step(&_sce_iter, NULL, _base)
+  _base = _setlooper_base_step((_bmain), &_sce_iter, NULL, _base)
 
 /**
  * Helper function for the #SETLOOPER and #SETLOOPER_VIEW_LAYER macros
@@ -61,7 +63,7 @@ enum eSceneCopyMethod {
  * It iterates over the bases of the active layer and then the bases
  * of the active layer of the background (set) scenes recursively.
  */
-Base *_setlooper_base_step(Scene **sce_iter, ViewLayer *view_layer, Base *base);
+Base *_setlooper_base_step(const Main &bmain, Scene **sce_iter, ViewLayer *view_layer, Base *base);
 
 Scene *BKE_scene_add(Main *bmain, const char *name);
 
@@ -70,8 +72,8 @@ void BKE_scene_remove_rigidbody_object(Main *bmain, Scene *scene, Object *ob, bo
 /**
  * Check if there is any instance of the object in the scene.
  */
-bool BKE_scene_object_find(Scene *scene, Object *ob);
-Object *BKE_scene_object_find_by_name(const Scene *scene, const char *name);
+bool BKE_scene_object_find(const Main &bmain, Scene *scene, Object *ob);
+Object *BKE_scene_object_find_by_name(const Main &bmain, const Scene *scene, const char *name);
 
 /* Scene base iteration function.
  * Define struct here, so no need to bother with alloc/free it.
@@ -92,7 +94,7 @@ struct SceneBaseIter {
 int BKE_scene_base_iter_next(
     Depsgraph *depsgraph, SceneBaseIter *iter, Scene **scene, int val, Base **base, Object **ob);
 
-void BKE_scene_base_flag_to_objects(const Scene *scene, ViewLayer *view_layer);
+void BKE_scene_base_flag_to_objects(const Main &bmain, const Scene *scene, ViewLayer *view_layer);
 /**
  * Synchronize object base flags
  *
@@ -151,12 +153,12 @@ bool BKE_scene_can_be_removed(const Main *bmain, const Scene *scene);
 Scene *BKE_scene_find_replacement(
     const Main &bmain,
     const Scene &scene,
-    blender::FunctionRef<bool(const Scene &scene)> scene_validate_cb = nullptr);
+    FunctionRef<bool(const Scene &scene)> scene_validate_cb = nullptr);
 
 bool BKE_scene_has_view_layer(const Scene *scene, const ViewLayer *layer);
 Scene *BKE_scene_find_from_collection(const Main *bmain, const Collection *collection);
 
-Object *BKE_scene_camera_switch_find(Scene *scene);
+Object *BKE_scene_camera_switch_find(const Scene *scene, const int time);
 bool BKE_scene_camera_switch_update(Scene *scene);
 
 const char *BKE_scene_find_marker_name(const Scene *scene, int frame);
@@ -192,6 +194,21 @@ float BKE_scene_frame_get(const Scene *scene);
  * Set current frame and sub-frame based on a fractional frame.
  */
 void BKE_scene_frame_set(Scene *scene, float frame);
+
+struct ScenePlaybackRange {
+  /** The start frame is always less or equal the end frame. */
+  int start_frame;
+  int end_frame;
+};
+
+/**
+ * Returns the current playback range, which is either the scene range or the playback range.
+ */
+ScenePlaybackRange BKE_scene_get_playback_range(const Scene *scene);
+/**
+ * Clamps the current frame to be between the playback bounds which can be the preview range.
+ */
+void BKE_scene_frame_clamp_for_playback(Scene *scene, bool is_playing_forward);
 
 TransformOrientationSlot *BKE_scene_orientation_slot_get_from_flag(Scene *scene, int flag);
 TransformOrientationSlot *BKE_scene_orientation_slot_get(Scene *scene, int slot_index);
@@ -295,7 +312,7 @@ void BKE_scene_multiview_view_filepath_get(const RenderData *rd,
                                            char *r_filepath);
 const char *BKE_scene_multiview_view_suffix_get(const RenderData *rd, const char *viewname);
 const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, int view_id);
-void BKE_scene_multiview_view_prefix_get(Scene *scene,
+void BKE_scene_multiview_view_prefix_get(const Scene *scene,
                                          const char *filepath,
                                          char *r_prefix,
                                          const char **r_ext);
@@ -337,3 +354,5 @@ TransformOrientation *BKE_scene_transform_orientation_find(const Scene *scene, i
  */
 int BKE_scene_transform_orientation_get_index(const Scene *scene,
                                               const TransformOrientation *orientation);
+
+}  // namespace blender

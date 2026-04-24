@@ -40,8 +40,6 @@ if(WIN32)
     src/blendthumb_win32_dll.cc
   )
 
-  add_definitions(-DNOMINMAX)
-
   add_library(BlendThumb SHARED ${SRC} ${SRC_WIN32})
 
   setup_platform_linker_flags(BlendThumb)
@@ -103,7 +101,5 @@ elseif(UNIX)
   setup_platform_linker_flags(blender-thumbnailer)
   setup_platform_linker_libs(blender-thumbnailer)
   target_link_libraries(blender-thumbnailer PRIVATE bf_blenlib bf_blenloader_core)
-  if(DEFINED PTHREADS_LIBRARIES)
-    target_link_libraries(blender-thumbnailer PRIVATE ${PTHREADS_LIBRARIES})
-  endif()
+  target_link_libraries(blender-thumbnailer PRIVATE bf::dependencies::pthreads)
 endif()

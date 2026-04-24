@@ -11,19 +11,26 @@
 #include "DNA_ID.h"
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
-#include "DNA_userdef_types.h"
+#include "DNA_theme_types.h"
 
 #include "BLI_enum_flags.hh"
+#include "BLI_span.hh"
 
-#ifdef __cplusplus
-#  include "BLI_span.hh"
-namespace blender::animrig {
+namespace blender {
+
+namespace animrig {
 class BoneColor;
 }
-#endif
+
+namespace bke {
+struct bArmature_Runtime;
+}
 
 struct AnimData;
 struct BoneCollection;
+struct BoneCollectionMember;
+struct BoneCollectionReference;
+struct EditBone;
 
 /* armature->flag */
 /* don't use bit 7, was saved in files to disable stuff */
@@ -100,8 +107,8 @@ enum eBone_Flag {
    *
    * However the bone may not be visible to the user since the bones collection
    * may be hidden.
-   * In most cases `blender::animrig::bone_is_visible` or
-   * `blender::animrig::bone_is_visible` should be used to check if the bone is visible to
+   * In most cases `animrig::bone_is_visible` or
+   * `animrig::bone_is_visible` should be used to check if the bone is visible to
    * the user before operating on them.
    */
   BONE_SELECTED = (1 << 0),
@@ -280,13 +287,13 @@ struct BoneColor {
   uint8_t _pad0[7] = {};
   ThemeWireColor custom = {};
 #ifdef __cplusplus
-  blender::animrig::BoneColor &wrap();
-  const blender::animrig::BoneColor &wrap() const;
+  animrig::BoneColor &wrap();
+  const animrig::BoneColor &wrap() const;
 #endif
 };
 
 struct Bone_Runtime {
-  ListBaseT<struct BoneCollectionReference> collections = {nullptr, nullptr};
+  ListBaseT<BoneCollectionReference> collections = {nullptr, nullptr};
 };
 
 struct Bone {
@@ -390,18 +397,6 @@ struct Bone {
   Bone_Runtime runtime;
 };
 
-struct bArmature_Runtime {
-  /**
-   * Index of the active collection, -1 if there is no collection active.
-   *
-   * For UIList support in the user interface. Assigning here does nothing, use
-   * `ANIM_armature_bonecoll_active_set` to set the active bone collection.
-   */
-  int active_collection_index = 0;
-  uint8_t _pad0[4] = {};
-  struct BoneCollection *active_collection = nullptr;
-};
-
 struct bArmature {
 #ifdef __cplusplus
   DNA_DEFINE_CXX_METHODS(bArmature)
@@ -419,7 +414,7 @@ struct bArmature {
   void *_pad1 = nullptr;
 
   /** #EditBone list (use an allocated pointer so the state can be checked). */
-  ListBaseT<struct EditBone> *edbo = nullptr;
+  ListBaseT<EditBone> *edbo = nullptr;
 
   /* active bones should work like active object where possible
    * - active and selection are unrelated
@@ -476,20 +471,20 @@ struct bArmature {
   float axes_position = 0;
 
   /** Keep last, for consistency with the position of other DNA runtime structures. */
-  struct bArmature_Runtime runtime;
+  bke::bArmature_Runtime *runtime = nullptr;
 
 #ifdef __cplusplus
   /* Collection array access for convenient for-loop iteration. */
-  blender::Span<const BoneCollection *> collections_span() const;
-  blender::Span<BoneCollection *> collections_span();
+  Span<const BoneCollection *> collections_span() const;
+  Span<BoneCollection *> collections_span();
 
   /* Span of all root collections. */
-  blender::Span<const BoneCollection *> collections_roots() const;
-  blender::Span<BoneCollection *> collections_roots();
+  Span<const BoneCollection *> collections_roots() const;
+  Span<BoneCollection *> collections_roots();
 
   /* Return the span of children of the given bone collection. */
-  blender::Span<const BoneCollection *> collection_children(const BoneCollection *parent) const;
-  blender::Span<BoneCollection *> collection_children(BoneCollection *parent);
+  Span<const BoneCollection *> collection_children(const BoneCollection *parent) const;
+  Span<BoneCollection *> collection_children(BoneCollection *parent);
 #endif
 };
 
@@ -509,7 +504,7 @@ struct BoneCollection {
 
   char name[/*MAX_NAME*/ 64] = "";
 
-  ListBaseT<struct BoneCollectionMember> bones = {nullptr, nullptr};
+  ListBaseT<BoneCollectionMember> bones = {nullptr, nullptr};
 
   /** eBoneCollection_Flag. */
   uint8_t flags = 0;
@@ -590,12 +585,14 @@ struct BoneCollectionReference {
 
 #ifdef __cplusplus
 
-inline blender::animrig::BoneColor &BoneColor::wrap()
+inline animrig::BoneColor &BoneColor::wrap()
 {
-  return *reinterpret_cast<blender::animrig::BoneColor *>(this);
+  return *reinterpret_cast<animrig::BoneColor *>(this);
 }
-inline const blender::animrig::BoneColor &BoneColor::wrap() const
+inline const animrig::BoneColor &BoneColor::wrap() const
 {
-  return *reinterpret_cast<const blender::animrig::BoneColor *>(this);
+  return *reinterpret_cast<const animrig::BoneColor *>(this);
 }
 #endif
+
+}  // namespace blender

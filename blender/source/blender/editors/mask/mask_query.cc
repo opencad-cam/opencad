@@ -28,6 +28,8 @@
 
 #include "mask_intern.hh" /* own include */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Spatial Queries
  * \{ */
@@ -137,9 +139,9 @@ bool ED_mask_find_nearest_diff_point(const bContext *C,
           }
 
           if (feather_points != nullptr) {
-            MEM_freeN(feather_points);
+            MEM_delete(feather_points);
           }
-          MEM_freeN(diff_points);
+          MEM_delete(diff_points);
         }
       }
     }
@@ -440,7 +442,7 @@ bool ED_mask_feather_find_nearest(const bContext *C,
         }
       }
 
-      MEM_freeN(feather_points);
+      MEM_delete(feather_points);
     }
   }
 
@@ -494,7 +496,7 @@ void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float 
         break;
       }
       case SPACE_SEQ: {
-        blender::ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &r_co[0], &r_co[1]);
+        ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &r_co[0], &r_co[1]);
         break;
       }
       case SPACE_IMAGE: {
@@ -597,10 +599,10 @@ void ED_mask_point_pos__reverse(
 
 static void handle_position_for_minmax(const MaskSplinePoint *point,
                                        eMaskWhichHandle which_handle,
-                                       bool handles_as_control_point,
+                                       bool handles_as_knot,
                                        float r_handle[2])
 {
-  if (handles_as_control_point) {
+  if (handles_as_knot) {
     copy_v2_v2(r_handle, point->bezt.vec[1]);
     return;
   }
@@ -610,7 +612,8 @@ static void handle_position_for_minmax(const MaskSplinePoint *point,
 bool ED_mask_selected_minmax(const bContext *C,
                              float min[2],
                              float max[2],
-                             bool handles_as_control_point)
+                             const bool handles_as_knot,
+                             const bool handles_as_knot_selected_only)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Mask *mask = CTX_data_edit_mask(C);
@@ -627,41 +630,42 @@ bool ED_mask_selected_minmax(const bContext *C,
   Mask *mask_eval = DEG_get_evaluated(depsgraph, mask);
 
   INIT_MINMAX2(min, max);
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask_eval->masklayers) {
-    if (mask_layer->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &mask_layer : mask_eval->masklayers) {
+    if (mask_layer.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
-    LISTBASE_FOREACH (MaskSpline *, spline, &mask_layer->splines) {
-      MaskSplinePoint *points_array = BKE_mask_spline_point_array(spline);
-      for (int i = 0; i < spline->tot_point; i++) {
-        const MaskSplinePoint *point = &spline->points[i];
+    for (MaskSpline &spline : mask_layer.splines) {
+      MaskSplinePoint *points_array = BKE_mask_spline_point_array(&spline);
+      for (int i = 0; i < spline.tot_point; i++) {
+        const MaskSplinePoint *point = &spline.points[i];
         const MaskSplinePoint *deform_point = &points_array[i];
         const BezTriple *bezt = &point->bezt;
         float handle[2];
         if (!BKE_mask_point_selected(point)) {
           continue;
         }
-        if (bezt->f2 & SELECT) {
+        if (bezt->f2 & SELECT || handles_as_knot_selected_only) {
           minmax_v2v2_v2(min, max, deform_point->bezt.vec[1]);
           ok = true;
+          continue;
         }
 
         if (BKE_mask_point_handles_mode_get(point) == MASK_HANDLE_MODE_STICK) {
           handle_position_for_minmax(
-              deform_point, MASK_WHICH_HANDLE_STICK, handles_as_control_point, handle);
+              deform_point, MASK_WHICH_HANDLE_STICK, handles_as_knot, handle);
           minmax_v2v2_v2(min, max, handle);
           ok = true;
         }
         else {
           if ((bezt->f1 & SELECT) && (bezt->h1 != HD_VECT)) {
             handle_position_for_minmax(
-                deform_point, MASK_WHICH_HANDLE_LEFT, handles_as_control_point, handle);
+                deform_point, MASK_WHICH_HANDLE_LEFT, handles_as_knot, handle);
             minmax_v2v2_v2(min, max, handle);
             ok = true;
           }
           if ((bezt->f3 & SELECT) && (bezt->h2 != HD_VECT)) {
             handle_position_for_minmax(
-                deform_point, MASK_WHICH_HANDLE_RIGHT, handles_as_control_point, handle);
+                deform_point, MASK_WHICH_HANDLE_RIGHT, handles_as_knot, handle);
             minmax_v2v2_v2(min, max, handle);
             ok = true;
           }
@@ -672,11 +676,16 @@ bool ED_mask_selected_minmax(const bContext *C,
   return ok;
 }
 
-void ED_mask_center_from_pivot_ex(
-    const bContext *C, ScrArea *area, float r_center[2], char mode, bool *r_has_select)
+void ED_mask_center_from_pivot_ex(const bContext *C,
+                                  ScrArea *area,
+                                  const char mode,
+                                  const bool handles_as_knot_selected_only,
+                                  float r_center[2],
+                                  bool *r_has_select)
 {
   float min[2], max[2];
-  const bool mask_selected = ED_mask_selected_minmax(C, min, max, false);
+  const bool mask_selected = ED_mask_selected_minmax(
+      C, min, max, false, handles_as_knot_selected_only);
 
   switch (mode) {
     case V3D_AROUND_CURSOR:
@@ -801,7 +810,7 @@ void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, 
         SpaceClip *sc = static_cast<SpaceClip *>(area->spacedata.first);
         float aspx, aspy;
 
-        blender::ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
+        ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
         ED_space_clip_get_aspect(sc, &aspx, &aspy);
 
         *r_scalex *= aspx;
@@ -816,7 +825,7 @@ void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, 
         SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
         float aspx, aspy;
 
-        blender::ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
+        ui::view2d_scale_get(&region->v2d, r_scalex, r_scaley);
         ED_space_image_get_aspect(sima, &aspx, &aspy);
 
         *r_scalex *= aspx;
@@ -868,3 +877,5 @@ void ED_mask_cursor_location_get(ScrArea *area, float cursor[2])
 }
 
 /** \} */
+
+}  // namespace blender

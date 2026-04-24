@@ -11,8 +11,8 @@
 #include "kernel/integrator/state.h"
 #include "kernel/util/profiler.h"  // IWYU pragma: export
 
-#include "util/color.h"    // IWYU pragma: export
-#include "util/texture.h"  // IWYU pragma: export
+#include "util/color.h"        // IWYU pragma: export
+#include "util/types_image.h"  // IWYU pragma: export
 
 /* The size of global stack  available to each thread (memory reserved for each thread in
  * global_stack_buffer). */
@@ -52,6 +52,7 @@ using KernelGlobals = ccl_global KernelGlobalsGPU *ccl_restrict;
 struct KernelParamsHIPRT {
   KernelData data;
 #define KERNEL_DATA_ARRAY(type, name) const type *name;
+#define KERNEL_DATA_ARRAY_WRITABLE(type, name) type *name;
   KERNEL_DATA_ARRAY(int, user_instance_id)
   KERNEL_DATA_ARRAY(uint64_t, blas_ptr)
   KERNEL_DATA_ARRAY(int2, custom_prim_info)
@@ -145,6 +146,7 @@ typedef hiprtEmptyInstanceStack Instance_Stack;
 /* Abstraction macros */
 #define kernel_data kernel_params.data
 #define kernel_data_fetch(name, index) kernel_params.name[(index)]
+#define kernel_data_write(name, index, value) kernel_params.name[(index)] = (value)
 #define kernel_data_array(name) (kernel_params.name)
 #define kernel_integrator_state kernel_params.integrator_state
 

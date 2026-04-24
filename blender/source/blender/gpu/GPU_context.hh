@@ -12,6 +12,14 @@
 
 #include "GPU_platform.hh"
 
+class GHOST_IContext;
+class GHOST_ISystem;
+class GHOST_IWindow;
+
+namespace blender {
+
+struct GPUContext;
+
 /* GPU back-ends abstract the differences between different APIs. #GPU_context_create
  * automatically initializes the back-end, and #GPU_context_discard frees it when there
  * are no more contexts. */
@@ -58,10 +66,8 @@ int GPU_backend_vsync_get();
 void GPU_backend_vsync_set_override(int vsync);
 bool GPU_backend_vsync_is_overridden();
 
-/** Opaque type hiding blender::gpu::Context. */
-struct GPUContext;
-
-GPUContext *GPU_context_create(void *ghost_window, void *ghost_context);
+/** Opaque type hiding gpu::Context. */
+GPUContext *GPU_context_create(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context);
 /**
  * To be called after #GPU_context_active_set(ctx_to_destroy).
  */
@@ -118,10 +124,27 @@ void GPU_render_end();
 void GPU_render_step(bool force_resource_release = false);
 
 /** For when we need access to a system context in order to create a GPU context. */
-void GPU_backend_ghost_system_set(void *ghost_system_handle);
-void *GPU_backend_ghost_system_get();
+void GPU_backend_ghost_system_set(GHOST_ISystem *ghost_system_handle);
+GHOST_ISystem *GPU_backend_ghost_system_get();
 
-namespace blender::gpu {
+namespace gpu {
+
+struct GPUSecondaryContextData {
+  GHOST_IContext *ghost_context = nullptr;
+  GPUContext *gpu_context = nullptr;
+};
+
+/** Creates a secondary off-screen GHOST and GPU contexts. Must be called on the main thread. */
+GPUSecondaryContextData GPU_create_secondary_context();
+
+/** Activates the given secondary GPU context. */
+void GPU_activate_secondary_context(const GPUSecondaryContextData &data);
+
+/** Deactivates the given secondary GPU context. */
+void GPU_deactivate_secondary_context(const GPUSecondaryContextData &data);
+
+/** Destroys the given secondary GPU context. */
+void GPU_destroy_secondary_context(GPUSecondaryContextData &data);
 
 /**
  * Abstracts secondary GHOST and GPU context creation, activation and deletion.
@@ -130,8 +153,7 @@ namespace blender::gpu {
  */
 class GPUSecondaryContext {
  private:
-  void *ghost_context_;
-  GPUContext *gpu_context_;
+  GPUSecondaryContextData data_;
 
  public:
   GPUSecondaryContext();
@@ -159,4 +181,5 @@ struct DebugScopePipelineCreation {
   }
 };
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

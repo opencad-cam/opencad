@@ -23,6 +23,8 @@
 
 #include "implicit.h"
 
+namespace blender {
+
 using Scalar = float;
 
 /* slightly extended Eigen vector class
@@ -85,14 +87,14 @@ class Matrix3 : public Eigen::Matrix3f {
 
   operator ctype()
   {
-    return (ctype)data();
+    return reinterpret_cast<ctype>(data());
   }
 };
 
 using lVector = Eigen::VectorXf;
 
 /* Extension of dense Eigen vectors,
- * providing 3-float block access for blenlib math functions
+ * providing 3-float block access for `blenlib` math functions
  */
 class lVector3f : public Eigen::VectorXf {
  public:
@@ -207,3 +209,5 @@ BLI_INLINE void print_lmatrix(const lMatrix &m)
     printf("\n");
   }
 }
+
+}  // namespace blender

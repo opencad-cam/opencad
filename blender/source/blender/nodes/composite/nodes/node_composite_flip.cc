@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_vector_types.hh"
 
 #include "GPU_shader.hh"
@@ -15,22 +11,22 @@
 
 #include "node_composite_util.hh"
 
-/* **************** Flip  ******************** */
-
 namespace blender::nodes::node_composite_flip_cc {
 
-static void cmp_node_flip_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Bool>("Flip X").default_value(false);
-  b.add_input<decl::Bool>("Flip Y").default_value(false);
+  b.add_input<decl::Bool>("Flip X"_ustr).default_value(false);
+  b.add_input<decl::Bool>("Flip Y"_ustr).default_value(false);
 }
 
 using namespace blender::compositor;
@@ -114,27 +110,25 @@ class FlipOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new FlipOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_flip_cc
-
-static void register_node_type_cmp_flip()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_flip_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeFlip", CMP_NODE_FLIP);
+  cmp_node_type_base(&ntype, "CompositorNodeFlip"_ustr, CMP_NODE_FLIP);
   ntype.ui_name = "Flip";
   ntype.ui_description = "Flip an image along a defined axis";
   ntype.enum_name_legacy = "FLIP";
   ntype.nclass = NODE_CLASS_DISTORT;
-  ntype.declare = file_ns::cmp_node_flip_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_flip)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_flip_cc

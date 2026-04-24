@@ -7,13 +7,15 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_bevel_cc {
+namespace blender {
+
+namespace nodes::node_shader_bevel_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Radius").default_value(0.05f).min(0.0f).max(1000.0f);
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_output<decl::Vector>("Normal");
+  b.add_input<decl::Float>("Radius"_ustr).default_value(0.05f).min(0.0f).max(1000.0f);
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_output<decl::Vector>("Normal"_ustr);
 }
 
 static void node_shader_buts_bevel(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -48,16 +50,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_bevel_cc
+}  // namespace nodes::node_shader_bevel_cc
 
 /* node type definition */
 void register_node_type_sh_bevel()
 {
-  namespace file_ns = blender::nodes::node_shader_bevel_cc;
+  namespace file_ns = nodes::node_shader_bevel_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeBevel", SH_NODE_BEVEL);
+  sh_node_type_base(&ntype, "ShaderNodeBevel"_ustr, SH_NODE_BEVEL);
   ntype.ui_name = "Bevel";
   ntype.ui_description =
       "Generates normals with round corners.\nNote: only supported in Cycles, and may slow down "
@@ -70,5 +72,7 @@ void register_node_type_sh_bevel()
   ntype.gpu_fn = file_ns::gpu_shader_bevel;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

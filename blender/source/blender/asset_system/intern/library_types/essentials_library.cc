@@ -20,12 +20,9 @@ namespace blender::asset_system {
 EssentialsAssetLibrary::EssentialsAssetLibrary()
     : OnDiskAssetLibrary(ASSET_LIBRARY_ESSENTIALS,
                          {},
-                         utils::normalize_directory_path(essentials_directory_path()))
+                         utils::normalize_directory_path(essentials_directory_path()),
+                         /*is_read_only=*/true)
 {
-  import_method_ = ASSET_IMPORT_PACK;
-  if (U.experimental.no_data_block_packing) {
-    import_method_ = ASSET_IMPORT_APPEND_REUSE;
-  }
 }
 
 std::optional<AssetLibraryReference> EssentialsAssetLibrary::library_reference() const
@@ -36,12 +33,12 @@ std::optional<AssetLibraryReference> EssentialsAssetLibrary::library_reference()
   return library_ref;
 }
 
-void EssentialsAssetLibrary::update_default_import_method()
+std::optional<eAssetImportMethod> EssentialsAssetLibrary::import_method() const
 {
-  import_method_ = ASSET_IMPORT_PACK;
   if (U.experimental.no_data_block_packing) {
-    import_method_ = ASSET_IMPORT_APPEND_REUSE;
+    return ASSET_IMPORT_APPEND_REUSE;
   }
+  return ASSET_IMPORT_PACK;
 }
 
 StringRefNull essentials_directory_path()

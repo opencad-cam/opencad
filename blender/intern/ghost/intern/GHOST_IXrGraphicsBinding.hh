@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 #include "GHOST_Xr_openxr_includes.hh"
 
 class GHOST_IXrGraphicsBinding {
@@ -45,6 +45,23 @@ class GHOST_IXrGraphicsBinding {
   } oxr_binding;
 
   virtual ~GHOST_IXrGraphicsBinding() = default;
+
+  /**
+   * \brief load the functions for the graphics binding.
+   *
+   * A graphic binding uses an extension. These extensions provide graphics platform specific
+   * functions. This function is called before #checkVersionRequirements allowing to preload the
+   * function pointers.
+   *
+   * \param instance: XrInstance where to retrieve the functions from.
+   *
+   * \returns true when the extensions functions were successfully loaded, return false when
+   *    the extension functions could not be loaded or would not allow to use the binding.
+   *
+   * \note These functions should be stored as instance variable as they can differ between
+   * XrSessions.
+   */
+  virtual bool loadExtensionFunctions(XrInstance instance) = 0;
 
   /**
    * Does __not__ require this object to be initialized (can be called prior to

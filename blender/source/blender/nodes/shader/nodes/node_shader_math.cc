@@ -9,6 +9,8 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
+#include "BKE_node.hh"
+
 #include "NOD_inverse_eval_params.hh"
 #include "NOD_math_functions.hh"
 #include "NOD_socket_search_link.hh"
@@ -16,15 +18,20 @@
 
 #include "RNA_enum_types.hh"
 
+namespace blender {
+
 /* **************** SCALAR MATH ******************** */
 
-namespace blender::nodes::node_shader_math_cc {
+namespace nodes::node_shader_math_cc {
 
 static void sh_node_math_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Float>("Value").default_value(0.5f).min(-10000.0f).max(10000.0f).label_fn(
-      [](bNode node) {
+  b.add_input<decl::Float>("Value"_ustr)
+      .default_value(0.5f)
+      .min(-10000.0f)
+      .max(10000.0f)
+      .label_fn([](bNode node) {
         switch (node.custom1) {
           case NODE_MATH_POWER:
             return IFACE_("Base");
@@ -36,7 +43,7 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
             return IFACE_("Value");
         }
       });
-  b.add_input<decl::Float>("Value", "Value_001")
+  b.add_input<decl::Float>("Value"_ustr, "Value_001"_ustr)
       .default_value(0.5f)
       .min(-10000.0f)
       .max(10000.0f)
@@ -61,7 +68,7 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
             return IFACE_("Value");
         }
       });
-  b.add_input<decl::Float>("Value", "Value_002")
+  b.add_input<decl::Float>("Value"_ustr, "Value_002"_ustr)
       .default_value(0.5f)
       .min(-10000.0f)
       .max(10000.0f)
@@ -80,17 +87,52 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
             return IFACE_("Value");
         }
       });
-  b.add_output<decl::Float>("Value");
+  b.add_output<decl::Float>("Value"_ustr);
+}
+
+static void math_input_defaults(bNode &node, const NodeMathOperation mode)
+{
+  bNodeSocket *socket_2 = bke::node_find_socket(node, SOCK_IN, "Value_001");
+  BLI_assert(socket_2 != nullptr);
+  float &value_2 = socket_2->default_value_typed<bNodeSocketValueFloat>()->value;
+
+  bNodeSocket *socket_3 = bke::node_find_socket(node, SOCK_IN, "Value_002");
+  BLI_assert(socket_3 != nullptr);
+  float &value_3 = socket_3->default_value_typed<bNodeSocketValueFloat>()->value;
+
+  switch (mode) {
+    case NODE_MATH_MULTIPLY:
+    case NODE_MATH_DIVIDE:
+    case NODE_MATH_POWER:
+    case NODE_MATH_FLOORED_MODULO:
+    case NODE_MATH_MODULO:
+    case NODE_MATH_ARCTAN2:
+      value_2 = 1.0f;
+      break;
+    case NODE_MATH_ADD:
+    case NODE_MATH_SUBTRACT:
+      value_2 = 0.0f;
+      break;
+    case NODE_MATH_MULTIPLY_ADD:
+      value_2 = 1.0f;
+      value_3 = 0.0f;
+      break;
+
+    default:
+      /* Use the default defined in the node declaration otherwise. */
+      break;
+  }
 }
 
 class SocketSearchOp {
  public:
-  std::string socket_name;
+  UString socket_name;
   NodeMathOperation mode = NODE_MATH_ADD;
   void operator()(LinkSearchOpParams &params)
   {
-    bNode &node = params.add_node("ShaderNodeMath");
+    bNode &node = params.add_node("ShaderNodeMath"_ustr);
     node.custom1 = mode;
+    math_input_defaults(node, mode);
     params.update_and_connect_available_socket(node, socket_name);
   }
 };
@@ -116,7 +158,7 @@ static void sh_node_math_gather_link_searches(GatherLinkSearchOpParams &params)
               -1 :
               weight;
       params.add_item(CTX_IFACE_(BLT_I18NCONTEXT_ID_NODETREE, item->name),
-                      SocketSearchOp{"Value", (NodeMathOperation)item->value},
+                      SocketSearchOp{"Value"_ustr, NodeMathOperation(item->value)},
                       gn_weight);
     }
   }
@@ -165,9 +207,9 @@ static void node_eval_elem(value_elem::ElemEvalParams &params)
     case NODE_MATH_SUBTRACT:
     case NODE_MATH_MULTIPLY:
     case NODE_MATH_DIVIDE: {
-      FloatElem output_elem = params.get_input_elem<FloatElem>("Value");
-      output_elem.merge(params.get_input_elem<FloatElem>("Value_001"));
-      params.set_output_elem("Value", output_elem);
+      FloatElem output_elem = params.get_input_elem<FloatElem>("Value"_ustr);
+      output_elem.merge(params.get_input_elem<FloatElem>("Value_001"_ustr));
+      params.set_output_elem("Value"_ustr, output_elem);
       break;
     }
     default:
@@ -183,7 +225,8 @@ static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
     case NODE_MATH_SUBTRACT:
     case NODE_MATH_MULTIPLY:
     case NODE_MATH_DIVIDE: {
-      params.set_input_elem("Value", params.get_output_elem<value_elem::FloatElem>("Value"));
+      params.set_input_elem("Value"_ustr,
+                            params.get_output_elem<value_elem::FloatElem>("Value"_ustr));
       break;
     }
     default:
@@ -194,9 +237,9 @@ static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
 static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
 {
   const NodeMathOperation op = NodeMathOperation(params.node.custom1);
-  const StringRef first_input_id = "Value";
-  const StringRef second_input_id = "Value_001";
-  const StringRef output_id = "Value";
+  const UString first_input_id = "Value"_ustr;
+  const UString second_input_id = "Value_001"_ustr;
+  const UString output_id = "Value"_ustr;
   switch (op) {
     case NODE_MATH_ADD: {
       params.set_input(first_input_id,
@@ -407,15 +450,15 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_math_cc
+}  // namespace nodes::node_shader_math_cc
 
 void register_node_type_sh_math()
 {
-  namespace file_ns = blender::nodes::node_shader_math_cc;
+  namespace file_ns = nodes::node_shader_math_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeMath", SH_NODE_MATH);
+  common_node_type_base(&ntype, "ShaderNodeMath"_ustr, SH_NODE_MATH);
   ntype.ui_name = "Math";
   ntype.ui_description = "Perform math operations";
   ntype.enum_name_legacy = "MATH";
@@ -424,12 +467,14 @@ void register_node_type_sh_math()
   ntype.labelfunc = node_math_label;
   ntype.gpu_fn = file_ns::gpu_shader_math;
   ntype.updatefunc = node_math_update;
-  ntype.build_multi_function = blender::nodes::node_math_build_multi_function;
+  ntype.build_multi_function = nodes::node_math_build_multi_function;
   ntype.gather_link_search_ops = file_ns::sh_node_math_gather_link_searches;
   ntype.materialx_fn = file_ns::node_shader_materialx;
   ntype.eval_elem = file_ns::node_eval_elem;
   ntype.eval_inverse_elem = file_ns::node_eval_inverse_elem;
   ntype.eval_inverse = file_ns::node_eval_inverse;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -4,14 +4,16 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_output_material_cc {
+namespace blender {
+
+namespace nodes::node_shader_output_material_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Shader>("Surface");
-  b.add_input<decl::Shader>("Volume").translation_context(BLT_I18NCONTEXT_ID_ID);
-  b.add_input<decl::Vector>("Displacement").hide_value();
-  b.add_input<decl::Float>("Thickness").hide_value();
+  b.add_input<decl::Shader>("Surface"_ustr);
+  b.add_input<decl::Shader>("Volume"_ustr).translation_context(BLT_I18NCONTEXT_ID_ID);
+  b.add_input<decl::Vector>("Displacement"_ustr).hide_value();
+  b.add_input<decl::Float>("Thickness"_ustr).hide_value();
 }
 
 static int node_shader_gpu_output_material(GPUMaterial *mat,
@@ -69,16 +71,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_output_material_cc
+}  // namespace nodes::node_shader_output_material_cc
 
 /* node type definition */
 void register_node_type_sh_output_material()
 {
-  namespace file_ns = blender::nodes::node_shader_output_material_cc;
+  namespace file_ns = nodes::node_shader_output_material_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeOutputMaterial", SH_NODE_OUTPUT_MATERIAL);
+  sh_node_type_base(&ntype, "ShaderNodeOutputMaterial"_ustr, SH_NODE_OUTPUT_MATERIAL);
   ntype.ui_name = "Material Output";
   ntype.ui_description = "Output surface material information for use in rendering";
   ntype.enum_name_legacy = "OUTPUT_MATERIAL";
@@ -90,5 +92,7 @@ void register_node_type_sh_output_material()
 
   ntype.no_muting = true;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

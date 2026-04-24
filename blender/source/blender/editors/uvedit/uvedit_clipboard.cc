@@ -35,7 +35,7 @@
 #include "uvedit_clipboard_graph_iso.hh"
 #include "uvedit_intern.hh" /* Own include. */
 
-using blender::Vector;
+namespace blender {
 
 void UV_clipboard_free();
 
@@ -50,18 +50,18 @@ class UV_ClipboardBuffer {
   bool find_isomorphism(UvElementMap *dest_element_map,
                         int island_index,
                         int cd_loop_uv_offset,
-                        blender::Vector<int> &r_label,
+                        Vector<int> &r_label,
                         bool *r_search_abandoned);
 
   void write_uvs(UvElementMap *element_map,
                  int island_index,
                  const int cd_loop_uv_offset,
-                 const blender::Vector<int> &label);
+                 const Vector<int> &label);
 
  private:
-  blender::Vector<GraphISO *> graph;
-  blender::Vector<int> offset;
-  blender::Vector<std::pair<float, float>> uv;
+  Vector<GraphISO *> graph;
+  Vector<int> offset;
+  Vector<std::pair<float, float>> uv;
 };
 
 static UV_ClipboardBuffer *uv_clipboard = nullptr;
@@ -170,7 +170,7 @@ void UV_ClipboardBuffer::append(UvElementMap *element_map, const int cd_loop_uv_
 void UV_ClipboardBuffer::write_uvs(UvElementMap *element_map,
                                    int island_index,
                                    const int cd_loop_uv_offset,
-                                   const blender::Vector<int> &label)
+                                   const Vector<int> &label)
 {
   BLI_assert(label.size() == element_map->island_total_unique_uvs[island_index]);
 
@@ -207,7 +207,7 @@ static bool find_isomorphism(UvElementMap *dest,
                              const int dest_island_index,
                              GraphISO *graph_source,
                              const int cd_loop_uv_offset,
-                             blender::Vector<int> &r_label,
+                             Vector<int> &r_label,
                              bool *r_search_abandoned)
 {
 
@@ -219,7 +219,7 @@ static bool find_isomorphism(UvElementMap *dest,
 
   GraphISO *graph_dest = build_iso_graph(dest, dest_island_index, cd_loop_uv_offset);
 
-  int (*solution)[2] = (int (*)[2])MEM_mallocN(graph_source->n * sizeof(*solution), __func__);
+  int (*solution)[2] = MEM_new_array_uninitialized<int[2]>(graph_source->n, __func__);
   int solution_length = 0;
   const bool found = ED_uvedit_clipboard_maximum_common_subgraph(
       graph_source, graph_dest, solution, &solution_length, r_search_abandoned);
@@ -237,7 +237,7 @@ static bool find_isomorphism(UvElementMap *dest,
     }
   }
 
-  MEM_SAFE_FREE(solution);
+  MEM_SAFE_DELETE(solution);
   delete graph_dest;
   return found;
 }
@@ -245,16 +245,16 @@ static bool find_isomorphism(UvElementMap *dest,
 bool UV_ClipboardBuffer::find_isomorphism(UvElementMap *dest_element_map,
                                           const int dest_island_index,
                                           const int cd_loop_uv_offset,
-                                          blender::Vector<int> &r_label,
+                                          Vector<int> &r_label,
                                           bool *r_search_abandoned)
 {
   for (const int64_t source_island_index : graph.index_range()) {
-    if (::find_isomorphism(dest_element_map,
-                           dest_island_index,
-                           graph[source_island_index],
-                           cd_loop_uv_offset,
-                           r_label,
-                           r_search_abandoned))
+    if (blender::find_isomorphism(dest_element_map,
+                                  dest_island_index,
+                                  graph[source_island_index],
+                                  cd_loop_uv_offset,
+                                  r_label,
+                                  r_search_abandoned))
     {
       const int island_total_unique_uvs =
           dest_element_map->island_total_unique_uvs[dest_island_index];
@@ -277,11 +277,12 @@ static wmOperatorStatus uv_copy_exec(bContext *C, wmOperator * /*op*/)
   UV_clipboard_free();
   uv_clipboard = new UV_ClipboardBuffer();
 
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Scene *scene = CTX_data_scene(C);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   for (Object *ob : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(ob);
@@ -307,11 +308,12 @@ static wmOperatorStatus uv_paste_exec(bContext *C, wmOperator *op)
   if (!uv_clipboard) {
     return OPERATOR_FINISHED; /* Nothing to do. */
   }
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Scene *scene = CTX_data_scene(C);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   bool changed_multi = false;
   int complicated_search = 0;
@@ -333,7 +335,7 @@ static wmOperatorStatus uv_paste_exec(bContext *C, wmOperator *op)
 
     for (int i = 0; i < dest_element_map->total_islands; i++) {
       total_search++;
-      blender::Vector<int> label;
+      Vector<int> label;
       bool search_abandoned = false;
       const bool found = uv_clipboard->find_isomorphism(
           dest_element_map, i, cd_loop_uv_offset, label, &search_abandoned);
@@ -353,7 +355,7 @@ static wmOperatorStatus uv_paste_exec(bContext *C, wmOperator *op)
     if (changed) {
       changed_multi = true;
 
-      DEG_id_tag_update(static_cast<ID *>(ob->data), ID_RECALC_GEOMETRY);
+      DEG_id_tag_update(ob->data, ID_RECALC_GEOMETRY);
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
     }
   }
@@ -400,3 +402,5 @@ void UV_clipboard_free()
   delete uv_clipboard;
   uv_clipboard = nullptr;
 }
+
+}  // namespace blender

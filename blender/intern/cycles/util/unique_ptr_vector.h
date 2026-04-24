@@ -5,8 +5,10 @@
 #pragma once
 
 #include <cassert>
+#include <utility>
 
 #include "util/algorithm.h"
+#include "util/random_access_iterator_mixin.h"
 #include "util/set.h"
 #include "util/unique_ptr.h"
 #include "util/vector.h"
@@ -34,9 +36,24 @@ template<typename T> class unique_ptr_vector {
     return local;
   }
 
+  T *back() const
+  {
+    return data.back().get();
+  }
+
   void push_back(unique_ptr<T> &&value)
   {
     data.push_back(std::move(value));
+  }
+
+  void replace(const size_t i, unique_ptr<T> &&value)
+  {
+    data[i] = std::move(value);
+  }
+
+  void resize(const size_t new_size)
+  {
+    data.resize(new_size);
   }
 
   bool empty() const
@@ -59,6 +76,12 @@ template<typename T> class unique_ptr_vector {
     data.free_memory();
   }
 
+  void erase_by_swap(const size_t index)
+  {
+    swap(data[index], data[data.size() - 1]);
+    data.resize(data.size() - 1);
+  }
+
   void erase(const T *value)
   {
     const size_t size = data.size();
@@ -79,11 +102,12 @@ template<typename T> class unique_ptr_vector {
     const size_t size = data.size();
     for (size_t i = 0; i < size; i++) {
       if (data[i].get() == value) {
-        swap(data[i], data[data.size() - 1]);
-        break;
+        erase_by_swap(i);
+        return;
       }
     }
-    data.resize(data.size() - 1);
+
+    assert(0);
   }
 
   void erase_in_set(const set<T *> &values)
@@ -102,47 +126,36 @@ template<typename T> class unique_ptr_vector {
     data.resize(new_size);
   }
 
+  /* Remove trailing null entries. */
+  void trim()
+  {
+    while (!data.empty() && !data.back()) {
+      data.pop_back();
+    }
+  }
+
   /* Basic iterators for range based for loop. */
-  struct ConstIterator {
-    using iterator_category = std::random_access_iterator_tag;
+  struct ConstIterator : public random_access_iterator_mixin<ConstIterator> {
+   private:
+    using It = typename vector<unique_ptr<T>>::const_iterator;
+    It it_;
 
-    using value_type = typename vector<unique_ptr<T>>::value_type;
-    using difference_type = typename vector<unique_ptr<T>>::difference_type;
-    using pointer = typename vector<unique_ptr<T>>::const_pointer;
-    using reference = typename vector<unique_ptr<T>>::reference;
+   public:
+    using value_type = const T *;
+    using pointer = const T **;
+    /** For such derived iterators, this does not have to be an actual reference. */
+    using reference = value_type;
 
-    typename vector<unique_ptr<T>>::const_iterator it;
+    ConstIterator(It it) : it_(it) {}
 
     const T *operator*() const
     {
-      return it->get();
+      return it_->get();
     }
-    bool operator==(const ConstIterator &other) const
+
+    const It &iter_prop() const
     {
-      return it == other.it;
-    }
-    bool operator!=(const ConstIterator &other) const
-    {
-      return it != other.it;
-    }
-    void operator++()
-    {
-      ++it;
-    }
-    difference_type operator-(const ConstIterator &other) const noexcept
-    {
-      return static_cast<difference_type>(it - other.it);
-    }
-    ConstIterator operator+(const difference_type offset) const noexcept
-    {
-      ConstIterator temp = *this;
-      temp += offset;
-      return temp;
-    }
-    ConstIterator &operator+=(const difference_type offset) noexcept
-    {
-      it += offset;
-      return *this;
+      return it_;
     }
   };
 
@@ -155,46 +168,27 @@ template<typename T> class unique_ptr_vector {
     return ConstIterator{data.end()};
   }
 
-  struct Iterator {
-    using iterator_category = std::random_access_iterator_tag;
+  struct Iterator : public random_access_iterator_mixin<Iterator> {
+   private:
+    using It = typename vector<unique_ptr<T>>::iterator;
+    It it_;
 
-    using value_type = typename vector<unique_ptr<T>>::value_type;
-    using difference_type = typename vector<unique_ptr<T>>::difference_type;
-    using pointer = typename vector<unique_ptr<T>>::const_pointer;
-    using reference = typename vector<unique_ptr<T>>::reference;
+   public:
+    using value_type = T *;
+    using pointer = T **;
+    /** For such derived iterators, this does not have to be an actual reference. */
+    using reference = value_type;
 
-    typename vector<unique_ptr<T>>::const_iterator it;
+    Iterator(It it) : it_(it) {}
 
     T *operator*() const
     {
-      return it->get();
+      return it_->get();
     }
-    bool operator==(const Iterator &other) const
+
+    const It &iter_prop() const
     {
-      return it == other.it;
-    }
-    bool operator!=(const Iterator &other) const
-    {
-      return it != other.it;
-    }
-    void operator++()
-    {
-      ++it;
-    }
-    difference_type operator-(const Iterator &other) const noexcept
-    {
-      return static_cast<difference_type>(it - other.it);
-    }
-    Iterator operator+(const difference_type offset) const noexcept
-    {
-      Iterator temp = *this;
-      temp += offset;
-      return temp;
-    }
-    Iterator &operator+=(const difference_type offset) noexcept
-    {
-      it += offset;
-      return *this;
+      return it_;
     }
   };
   Iterator begin()
@@ -204,6 +198,53 @@ template<typename T> class unique_ptr_vector {
   Iterator end()
   {
     return Iterator{data.end()};
+  }
+
+  /* Iterator over vector with index. */
+  template<typename UniqueVectorU, typename U> struct EnumerateT {
+    UniqueVectorU &vec;
+
+    struct Iterator {
+      size_t index;
+      UniqueVectorU &vec;
+
+      bool operator!=(const Iterator &other) const
+      {
+        return index != other.index;
+      }
+
+      void operator++()
+      {
+        index++;
+      }
+
+      std::pair<size_t, U *> operator*() const
+      {
+        return std::make_pair(index, vec[index]);
+      }
+    };
+
+    Iterator begin()
+    {
+      return Iterator{0, vec};
+    }
+    Iterator end()
+    {
+      return Iterator{vec.size(), vec};
+    }
+  };
+
+  using Enumerate = EnumerateT<unique_ptr_vector<T>, T>;
+  using ConstEnumerate = EnumerateT<const unique_ptr_vector<T>, const T>;
+
+  Enumerate enumerate()
+  {
+    return Enumerate{*this};
+  }
+
+  ConstEnumerate enumerate() const
+  {
+    return ConstEnumerate{*this};
   }
 
   /* Cast to read-only regular vector for easier interop.

@@ -1,6 +1,0 @@
-processorRunTimes.C
-domainDecomposition.C
-domainDecompositionDecompose.C
-domainDecompositionReconstruct.C
-
-LIB = $(FOAM_LIBBIN)/libparallel

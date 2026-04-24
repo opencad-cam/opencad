@@ -72,7 +72,7 @@ CurvesGeometry::CurvesGeometry(const int point_num, const int curve_num)
   this->curve_num = curve_num;
   CustomData_reset(&this->point_data);
   CustomData_reset(&this->curve_data_legacy);
-  new (&this->attribute_storage.wrap()) blender::bke::AttributeStorage();
+  new (&this->attribute_storage.wrap()) bke::AttributeStorage();
   BLI_listbase_clear(&this->vertex_group_names);
 
   this->attributes_for_write().add<float3>(
@@ -82,7 +82,7 @@ CurvesGeometry::CurvesGeometry(const int point_num, const int curve_num)
   this->custom_knot_num = 0;
 
   if (curve_num > 0) {
-    this->curve_offsets = MEM_malloc_arrayN<int>(size_t(this->curve_num) + 1, __func__);
+    this->curve_offsets = MEM_new_array_uninitialized<int>(size_t(this->curve_num) + 1, __func__);
     this->runtime->curve_offsets_sharing_info = implicit_sharing::info_for_mem_free(
         this->curve_offsets);
 #ifndef NDEBUG
@@ -249,7 +249,15 @@ void CurvesGeometry::fill_curve_types(const CurveType type)
     this->attributes_for_write().remove("curve_type");
   }
   else {
-    this->curve_types_for_write().fill(type);
+    const GPointer value(CPPType::get<int8_t>(), &type);
+    Attribute::SingleData data = Attribute::SingleData::from_value(value);
+    if (Attribute *attr = this->attribute_storage.wrap().lookup("curve_type")) {
+      attr->assign_data(std::move(data));
+    }
+    else {
+      this->attribute_storage.wrap().add(
+          "curve_type", AttrDomain::Curve, AttrType::Int8, std::move(data));
+    }
   }
   this->runtime->type_counts.fill(0);
   this->runtime->type_counts[type] = this->curves_num();
@@ -280,8 +288,8 @@ std::array<int, CURVE_TYPES_NUM> calculate_type_counts(const VArray<int8_t> &typ
   CountsType counts;
   counts.fill(0);
 
-  if (types.is_single()) {
-    counts[types.get_internal_single()] = types.size();
+  if (const std::optional<int8_t> single = types.get_if_single()) {
+    counts[*single] = types.size();
     return counts;
   }
 
@@ -538,11 +546,9 @@ IndexMask CurvesGeometry::nurbs_custom_knot_curves(IndexMaskMemory &memory) cons
 {
   const VArray<int8_t> curve_types = this->curve_types();
   const VArray<int8_t> knot_modes = this->nurbs_knots_modes();
-  return IndexMask::from_predicate(
-      this->curves_range(), GrainSize(4096), memory, [&](const int64_t curve) {
-        return curve_types[curve] == CURVE_TYPE_NURBS &&
-               knot_modes[curve] == NURBS_KNOT_MODE_CUSTOM;
-      });
+  return IndexMask::from_predicate(this->curves_range(), memory, [&](const int64_t curve) {
+    return curve_types[curve] == CURVE_TYPE_NURBS && knot_modes[curve] == NURBS_KNOT_MODE_CUSTOM;
+  });
 }
 
 OffsetIndices<int> CurvesGeometry::nurbs_custom_knots_by_curve() const
@@ -775,43 +781,45 @@ void CurvesGeometry::ensure_nurbs_basis_cache() const
     const VArray<int8_t> knots_modes = this->nurbs_knots_modes();
     const Span<float> custom_knots = this->nurbs_custom_knots();
 
-    nurbs_mask.foreach_segment(GrainSize(64), [&](const IndexMaskSegment segment) {
-      Vector<float, 32> knots;
-      for (const int curve_index : segment) {
-        const IndexRange points = points_by_curve[curve_index];
-        const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
+    nurbs_mask.foreach_segment(
+        [&](const IndexMaskSegment segment) {
+          Vector<float, 32> knots;
+          for (const int curve_index : segment) {
+            const IndexRange points = points_by_curve[curve_index];
+            const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
 
-        const int8_t order = orders[curve_index];
-        const int resolution = resolutions[curve_index];
-        const bool is_cyclic = cyclic[curve_index];
-        const KnotsMode mode = KnotsMode(knots_modes[curve_index]);
+            const int8_t order = orders[curve_index];
+            const int resolution = resolutions[curve_index];
+            const bool is_cyclic = cyclic[curve_index];
+            const KnotsMode mode = KnotsMode(knots_modes[curve_index]);
 
-        if (!curves::nurbs::check_valid_eval_params(
-                points.size(), order, is_cyclic, mode, resolution))
-        {
-          r_data[curve_index].invalid = true;
-          continue;
-        }
-        const int knots_num = curves::nurbs::knots_num(points.size(), order, is_cyclic);
-        knots.reinitialize(knots_num);
-        curves::nurbs::load_curve_knots(mode,
-                                        points.size(),
-                                        order,
-                                        is_cyclic,
-                                        custom_knots_by_curve[curve_index],
-                                        custom_knots,
-                                        knots);
+            if (!curves::nurbs::check_valid_eval_params(
+                    points.size(), order, is_cyclic, mode, resolution))
+            {
+              r_data[curve_index].invalid = true;
+              continue;
+            }
+            const int knots_num = curves::nurbs::knots_num(points.size(), order, is_cyclic);
+            knots.reinitialize(knots_num);
+            curves::nurbs::load_curve_knots(mode,
+                                            points.size(),
+                                            order,
+                                            is_cyclic,
+                                            custom_knots_by_curve[curve_index],
+                                            custom_knots,
+                                            knots);
 
-        curves::nurbs::calculate_basis_cache(points.size(),
-                                             evaluated_points.size(),
-                                             order,
-                                             resolution,
-                                             is_cyclic,
-                                             mode,
-                                             knots,
-                                             r_data[curve_index]);
-      }
-    });
+            curves::nurbs::calculate_basis_cache(points.size(),
+                                                 evaluated_points.size(),
+                                                 order,
+                                                 resolution,
+                                                 is_cyclic,
+                                                 mode,
+                                                 knots,
+                                                 r_data[curve_index]);
+          }
+        },
+        exec_mode::grain_size(64));
   });
 }
 
@@ -835,14 +843,17 @@ Span<float3> CurvesGeometry::evaluated_positions() const
     auto evaluate_catmull = [&](const IndexMask &selection) {
       const VArray<bool> cyclic = this->cyclic();
       const VArray<int> resolution = this->resolution();
-      selection.foreach_index(GrainSize(128), [&](const int curve_index) {
-        const IndexRange points = points_by_curve[curve_index];
-        const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
-        curves::catmull_rom::interpolate_to_evaluated(positions.slice(points),
-                                                      cyclic[curve_index],
-                                                      resolution[curve_index],
-                                                      evaluated_positions.slice(evaluated_points));
-      });
+      selection.foreach_index(
+          [&](const int curve_index) {
+            const IndexRange points = points_by_curve[curve_index];
+            const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
+            curves::catmull_rom::interpolate_to_evaluated(
+                positions.slice(points),
+                cyclic[curve_index],
+                resolution[curve_index],
+                evaluated_positions.slice(evaluated_points));
+          },
+          exec_mode::grain_size(128));
     };
     auto evaluate_poly = [&](const IndexMask &selection) {
       array_utils::copy_group_to_group(
@@ -857,32 +868,37 @@ Span<float3> CurvesGeometry::evaluated_positions() const
       }
       const Span<int> all_bezier_offsets =
           runtime.evaluated_offsets_cache.data().all_bezier_offsets;
-      selection.foreach_index(GrainSize(128), [&](const int curve_index) {
-        const IndexRange points = points_by_curve[curve_index];
-        const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
-        const IndexRange offsets = curves::per_curve_point_offsets_range(points, curve_index);
-        curves::bezier::calculate_evaluated_positions(positions.slice(points),
-                                                      handle_positions_left->slice(points),
-                                                      handle_positions_right->slice(points),
-                                                      all_bezier_offsets.slice(offsets),
-                                                      evaluated_positions.slice(evaluated_points));
-      });
+      selection.foreach_index(
+          [&](const int curve_index) {
+            const IndexRange points = points_by_curve[curve_index];
+            const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
+            const IndexRange offsets = curves::per_curve_point_offsets_range(points, curve_index);
+            curves::bezier::calculate_evaluated_positions(
+                positions.slice(points),
+                handle_positions_left->slice(points),
+                handle_positions_right->slice(points),
+                all_bezier_offsets.slice(offsets),
+                evaluated_positions.slice(evaluated_points));
+          },
+          exec_mode::grain_size(128));
     };
     auto evaluate_nurbs = [&](const IndexMask &selection) {
       this->ensure_nurbs_basis_cache();
       const VArray<int8_t> nurbs_orders = this->nurbs_orders();
       const std::optional<Span<float>> nurbs_weights = this->nurbs_weights();
       const Span<curves::nurbs::BasisCache> nurbs_basis_cache = runtime.nurbs_basis_cache.data();
-      selection.foreach_index(GrainSize(128), [&](const int curve_index) {
-        const IndexRange points = points_by_curve[curve_index];
-        const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
-        curves::nurbs::interpolate_to_evaluated(nurbs_basis_cache[curve_index],
-                                                nurbs_orders[curve_index],
-                                                nurbs_weights ? nurbs_weights->slice(points) :
-                                                                Span<float>(),
-                                                positions.slice(points),
-                                                evaluated_positions.slice(evaluated_points));
-      });
+      selection.foreach_index(
+          [&](const int curve_index) {
+            const IndexRange points = points_by_curve[curve_index];
+            const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
+            curves::nurbs::interpolate_to_evaluated(nurbs_basis_cache[curve_index],
+                                                    nurbs_orders[curve_index],
+                                                    nurbs_weights ? nurbs_weights->slice(points) :
+                                                                    Span<float>(),
+                                                    positions.slice(points),
+                                                    evaluated_positions.slice(evaluated_points));
+          },
+          exec_mode::grain_size(128));
     };
     curves::foreach_curve_by_type(this->curve_types(),
                                   this->curve_type_counts(),
@@ -926,27 +942,29 @@ Span<float3> CurvesGeometry::evaluated_tangents() const
       const Span<float3> handles_left = *this->handle_positions_left();
       const Span<float3> handles_right = *this->handle_positions_right();
 
-      bezier_mask.foreach_index(GrainSize(1024), [&](const int curve_index) {
-        if (cyclic[curve_index]) {
-          return;
-        }
-        const IndexRange points = points_by_curve[curve_index];
-        const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
+      bezier_mask.foreach_index(
+          [&](const int curve_index) {
+            if (cyclic[curve_index]) {
+              return;
+            }
+            const IndexRange points = points_by_curve[curve_index];
+            const IndexRange evaluated_points = evaluated_points_by_curve[curve_index];
 
-        const float epsilon = 1e-6f;
-        if (!math::almost_equal_relative(
-                handles_right[points.first()], positions[points.first()], epsilon))
-        {
-          tangents[evaluated_points.first()] = math::normalize(handles_right[points.first()] -
-                                                               positions[points.first()]);
-        }
-        if (!math::almost_equal_relative(
-                handles_left[points.last()], positions[points.last()], epsilon))
-        {
-          tangents[evaluated_points.last()] = math::normalize(positions[points.last()] -
-                                                              handles_left[points.last()]);
-        }
-      });
+            const float epsilon = 1e-6f;
+            if (!math::almost_equal_relative(
+                    handles_right[points.first()], positions[points.first()], epsilon))
+            {
+              tangents[evaluated_points.first()] = math::normalize(handles_right[points.first()] -
+                                                                   positions[points.first()]);
+            }
+            if (!math::almost_equal_relative(
+                    handles_left[points.last()], positions[points.last()], epsilon))
+            {
+              tangents[evaluated_points.last()] = math::normalize(positions[points.last()] -
+                                                                  handles_left[points.last()]);
+            }
+          },
+          exec_mode::grain_size(1024));
     }
   });
   return runtime.evaluated_tangent_cache.data();
@@ -1310,7 +1328,7 @@ void CurvesGeometry::calculate_bezier_aligned_handles()
   const IndexMask bezier_points = bke::curves::curve_type_point_selection(
       *this, CURVE_TYPE_BEZIER, memory);
   const IndexMask selection = IndexMask::from_predicate(
-      bezier_points, GrainSize(4096), memory, [&](const int64_t i) {
+      bezier_points, memory, [&](const int64_t i) {
         return types_left[i] == BEZIER_HANDLE_ALIGN && types_right[i] == BEZIER_HANDLE_ALIGN;
       });
 
@@ -1395,9 +1413,9 @@ std::optional<Bounds<float3>> CurvesGeometry::bounds_min_max(const bool use_radi
 std::optional<int> CurvesGeometry::material_index_max() const
 {
   this->runtime->max_material_index_cache.ensure([&](std::optional<int> &r_max_material_index) {
-    r_max_material_index = blender::bounds::max<int>(
+    r_max_material_index = bounds::max<int>(
         this->attributes()
-            .lookup_or_default<int>("material_index", blender::bke::AttrDomain::Curve, 0)
+            .lookup_or_default<int>("material_index", bke::AttrDomain::Curve, 0)
             .varray);
     if (r_max_material_index.has_value()) {
       r_max_material_index = std::clamp(*r_max_material_index, 0, MAXMAT);
@@ -1476,14 +1494,12 @@ CurvesGeometry curves_copy_point_selection(const CurvesGeometry &curves,
 {
   const Array<int> point_to_curve_map = curves.point_to_curve_map();
   Array<int> curve_point_counts(curves.curves_num(), 0);
-  points_to_copy.foreach_index(
+  points_to_copy.foreach_index_optimized<int64_t>(
       [&](const int64_t point_i) { curve_point_counts[point_to_curve_map[point_i]]++; });
 
   IndexMaskMemory memory;
   const IndexMask curves_to_copy = IndexMask::from_predicate(
-      curves.curves_range(), GrainSize(4096), memory, [&](const int64_t i) {
-        return curve_point_counts[i] > 0;
-      });
+      curves.curves_range(), memory, [&](const int64_t i) { return curve_point_counts[i] > 0; });
 
   CurvesGeometry dst_curves(points_to_copy.size(), curves_to_copy.size());
 
@@ -1641,7 +1657,8 @@ static void reverse_curve_point_data(const CurvesGeometry &curves,
 {
   const OffsetIndices points_by_curve = curves.points_by_curve();
   curve_selection.foreach_index(
-      GrainSize(256), [&](const int curve_i) { data.slice(points_by_curve[curve_i]).reverse(); });
+      [&](const int curve_i) { data.slice(points_by_curve[curve_i]).reverse(); },
+      exec_mode::grain_size(256));
 }
 
 template<typename T>
@@ -1651,20 +1668,22 @@ static void reverse_swap_curve_point_data(const CurvesGeometry &curves,
                                           MutableSpan<T> data_b)
 {
   const OffsetIndices points_by_curve = curves.points_by_curve();
-  curve_selection.foreach_index(GrainSize(256), [&](const int curve_i) {
-    const IndexRange points = points_by_curve[curve_i];
-    MutableSpan<T> a = data_a.slice(points);
-    MutableSpan<T> b = data_b.slice(points);
-    for (const int i : IndexRange(points.size() / 2)) {
-      const int end_index = points.size() - 1 - i;
-      std::swap(a[end_index], b[i]);
-      std::swap(b[end_index], a[i]);
-    }
-    if (points.size() % 2) {
-      const int64_t middle_index = points.size() / 2;
-      std::swap(a[middle_index], b[middle_index]);
-    }
-  });
+  curve_selection.foreach_index(
+      [&](const int curve_i) {
+        const IndexRange points = points_by_curve[curve_i];
+        MutableSpan<T> a = data_a.slice(points);
+        MutableSpan<T> b = data_b.slice(points);
+        for (const int i : IndexRange(points.size() / 2)) {
+          const int end_index = points.size() - 1 - i;
+          std::swap(a[end_index], b[i]);
+          std::swap(b[end_index], a[i]);
+        }
+        if (points.size() % 2) {
+          const int64_t middle_index = points.size() / 2;
+          std::swap(a[middle_index], b[middle_index]);
+        }
+      },
+      exec_mode::grain_size(256));
 }
 
 void CurvesGeometry::reverse_curves(const IndexMask &curves_to_reverse)
@@ -1683,13 +1702,15 @@ void CurvesGeometry::reverse_curves(const IndexMask &curves_to_reverse)
     if (iter.data_type == bke::AttrType::String) {
       return;
     }
+    if (iter.storage_type == bke::AttrStorageType::Single) {
+      return;
+    }
     if (bezier_handle_names.contains(iter.name)) {
       return;
     }
 
     GSpanAttributeWriter attribute = attributes.lookup_for_write_span(iter.name);
-    attribute_math::convert_to_static_type(attribute.span.type(), [&](auto dummy) {
-      using T = decltype(dummy);
+    attribute_math::to_static_type(attribute.span.type(), [&]<typename T>() {
       reverse_curve_point_data<T>(*this, curves_to_reverse, attribute.span.typed<T>());
     });
     attribute.finish();
@@ -1699,12 +1720,14 @@ void CurvesGeometry::reverse_curves(const IndexMask &curves_to_reverse)
   if (this->nurbs_has_custom_knots()) {
     const OffsetIndices custom_knots_by_curve = this->nurbs_custom_knots_by_curve();
     MutableSpan<float> custom_knots = this->nurbs_custom_knots_for_write();
-    curves_to_reverse.foreach_index(GrainSize(256), [&](const int64_t curve) {
-      const IndexRange curve_knots = custom_knots_by_curve[curve];
-      if (!custom_knots.is_empty()) {
-        reverse_custom_knots(custom_knots.slice(curve_knots));
-      }
-    });
+    curves_to_reverse.foreach_index(
+        [&](const int64_t curve) {
+          const IndexRange curve_knots = custom_knots_by_curve[curve];
+          if (!custom_knots.is_empty()) {
+            reverse_custom_knots(custom_knots.slice(curve_knots));
+          }
+        },
+        exec_mode::grain_size(256));
   }
 
   /* In order to maintain the shape of Bezier curves, handle attributes must reverse, but also the
@@ -1816,8 +1839,7 @@ static GVArray adapt_curve_domain_point_to_curve(const CurvesGeometry &curves,
                                                  const GVArray &varray)
 {
   GVArray new_varray;
-  attribute_math::convert_to_static_type(varray.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  attribute_math::to_static_type(varray.type(), [&]<typename T>() {
     if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
       Array<T> values(curves.curves_num());
       adapt_curve_domain_point_to_curve_impl<T>(curves, varray.typed<T>(), values);
@@ -1849,8 +1871,7 @@ static GVArray adapt_curve_domain_curve_to_point(const CurvesGeometry &curves,
                                                  const GVArray &varray)
 {
   GVArray new_varray;
-  attribute_math::convert_to_static_type(varray.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  attribute_math::to_static_type(varray.type(), [&]<typename T>() {
     Array<T> values(curves.points_num());
     adapt_curve_domain_curve_to_point_impl<T>(curves, varray.typed<T>(), values);
     new_varray = VArray<T>::from_container(std::move(values));
@@ -1906,7 +1927,7 @@ MutableAttributeAccessor CurvesGeometry::attributes_for_write()
 
 void CurvesGeometry::blend_read(BlendDataReader &reader)
 {
-  this->runtime = MEM_new<blender::bke::CurvesGeometryRuntime>(__func__);
+  this->runtime = MEM_new<bke::CurvesGeometryRuntime>(__func__);
 
   CustomData_blend_read(&reader, &this->point_data, this->point_num);
   CustomData_blend_read(&reader, &this->curve_data_legacy, this->curve_num);
@@ -1934,23 +1955,24 @@ void CurvesGeometry::blend_read(BlendDataReader &reader)
   this->update_curve_types();
 }
 
-CurvesGeometry::BlendWriteData::BlendWriteData(ResourceScope &scope)
+CurvesGeometry::BlendWriteData::BlendWriteData(BlendWriter *writer, ResourceScope &scope)
     : scope(scope),
       point_layers(scope.construct<Vector<CustomDataLayer, 16>>()),
       curve_layers(scope.construct<Vector<CustomDataLayer, 16>>()),
-      attribute_data(scope)
+      attribute_data(writer, scope)
 {
 }
 
-void CurvesGeometry::blend_write_prepare(CurvesGeometry::BlendWriteData &write_data)
+void CurvesGeometry::blend_write_prepare(CurvesGeometry::BlendWriteData &write_data,
+                                         const bool use_5_0_compatibility)
 {
   CustomData_reset(&this->curve_data_legacy);
-  attribute_storage_blend_write_prepare(this->attribute_storage.wrap(), write_data.attribute_data);
-  CustomData_blend_write_prepare(this->point_data,
-                                 AttrDomain::Point,
-                                 this->points_num(),
-                                 write_data.point_layers,
-                                 write_data.attribute_data);
+  attribute_storage_blend_write_prepare(
+      this->attribute_storage.wrap(),
+      use_5_0_compatibility,
+      [&](const AttrDomain domain) { return this->attributes().domain_size(domain); },
+      write_data.attribute_data);
+  CustomData_blend_write_prepare(this->point_data, write_data.point_layers);
   if (write_data.attribute_data.attributes.is_empty()) {
     this->attribute_storage.dna_attributes = nullptr;
     this->attribute_storage.dna_attributes_num = 0;
@@ -1959,6 +1981,9 @@ void CurvesGeometry::blend_write_prepare(CurvesGeometry::BlendWriteData &write_d
     this->attribute_storage.dna_attributes = write_data.attribute_data.attributes.data();
     this->attribute_storage.dna_attributes_num = write_data.attribute_data.attributes.size();
   }
+
+  BLO_write_generated_pointer_tag(write_data.attribute_data.writer,
+                                  this->attribute_storage.dna_attributes);
 }
 
 void CurvesGeometry::blend_write(BlendWriter &writer,
@@ -1975,7 +2000,7 @@ void CurvesGeometry::blend_write(BlendWriter &writer,
         this->curve_offsets,
         sizeof(int) * (this->curve_num + 1),
         this->runtime->curve_offsets_sharing_info,
-        [&]() { BLO_write_int32_array(&writer, this->curve_num + 1, this->curve_offsets); });
+        [&]() { writer.write_int32_array(this->curve_num + 1, this->curve_offsets); });
   }
 
   BKE_defbase_blend_write(&writer, &this->vertex_group_names);
@@ -1986,7 +2011,7 @@ void CurvesGeometry::blend_write(BlendWriter &writer,
         this->custom_knots,
         sizeof(float) * this->custom_knot_num,
         this->runtime->custom_knots_sharing_info,
-        [&]() { BLO_write_float_array(&writer, this->custom_knot_num, this->custom_knots); });
+        [&]() { writer.write_float_array(this->custom_knot_num, this->custom_knots); });
   }
 }
 

@@ -27,6 +27,8 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_enums.h"
 
+namespace blender {
+
 struct AssetWeakReference;
 struct BMFace;
 struct BMLog;
@@ -39,7 +41,6 @@ struct BrushColorJitterSettings;
 struct CurveMapping;
 struct Depsgraph;
 struct EnumPropertyItem;
-namespace blender {
 namespace bke {
 enum class AttrDomain : int8_t;
 namespace pbvh {
@@ -55,7 +56,6 @@ struct Cache;
 }
 struct StrokeCache;
 }  // namespace ed::sculpt_paint
-}  // namespace blender
 struct GHash;
 struct GridPaintMask;
 struct Image;
@@ -85,7 +85,6 @@ struct View3D;
 struct ViewLayer;
 struct bContext;
 struct bToolRef;
-struct tPaletteColorHSV;
 
 /* overlay invalidation */
 enum ePaintOverlayControlFlags {
@@ -118,8 +117,14 @@ ENUM_OPERATORS(ePaintSymmetryAreas);
 
 #define PAINT_SYMM_AREAS 8
 
-void BKE_paint_invalidate_overlay_tex(Scene *scene, ViewLayer *view_layer, const Tex *tex);
-void BKE_paint_invalidate_cursor_overlay(Scene *scene, ViewLayer *view_layer, CurveMapping *curve);
+void BKE_paint_invalidate_overlay_tex(const Main &bmain,
+                                      Scene *scene,
+                                      ViewLayer *view_layer,
+                                      const Tex *tex);
+void BKE_paint_invalidate_cursor_overlay(const Main &bmain,
+                                         Scene *scene,
+                                         ViewLayer *view_layer,
+                                         CurveMapping *curve);
 void BKE_paint_invalidate_overlay_all();
 ePaintOverlayControlFlags BKE_paint_get_overlay_flags();
 void BKE_paint_reset_overlay_invalid(ePaintOverlayControlFlags flag);
@@ -138,12 +143,6 @@ void BKE_palette_clear(Palette *palette);
 
 void BKE_palette_color_set(PaletteColor *color, const float rgb[3]);
 void BKE_palette_color_sync_legacy(PaletteColor *color);
-
-void BKE_palette_sort_hsv(tPaletteColorHSV *color_array, int totcol);
-void BKE_palette_sort_svh(tPaletteColorHSV *color_array, int totcol);
-void BKE_palette_sort_vhs(tPaletteColorHSV *color_array, int totcol);
-void BKE_palette_sort_luminance(tPaletteColorHSV *color_array, int totcol);
-bool BKE_palette_from_hash(Main *bmain, GHash *color_table, const char *name);
 
 /* Paint curves. */
 
@@ -168,10 +167,11 @@ void BKE_paint_copy(const Paint *src, Paint *dst, int flag);
 /**
  * Iterate over all paint settings in a scene.
  */
-void BKE_paint_settings_foreach_mode(ToolSettings *ts,
-                                     blender::FunctionRef<void(Paint *paint)> fn);
+void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint *paint)> fn);
 
 void BKE_paint_cavity_curve_preset(Paint *paint, int preset);
+
+void BKE_paint_mesh_automasking_settings_ensure(Paint &paint);
 
 eObjectMode BKE_paint_object_mode_from_paintmode(PaintMode mode);
 bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode);
@@ -180,10 +180,12 @@ const EnumPropertyItem *BKE_paint_get_tool_enum_from_paintmode(PaintMode mode);
 uint BKE_paint_get_brush_type_offset_from_paintmode(PaintMode mode);
 std::optional<int> BKE_paint_get_brush_type_from_obmode(const Brush *brush, eObjectMode ob_mode);
 std::optional<int> BKE_paint_get_brush_type_from_paintmode(const Brush *brush, PaintMode mode);
-Paint *BKE_paint_get_active(Scene *sce, ViewLayer *view_layer);
+Paint *BKE_paint_get_active(const Main &bmain, Scene *sce, ViewLayer *view_layer);
 Paint *BKE_paint_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref);
+bool BKE_paint_use_unified_size(const Paint *paint);
+bool BKE_paint_use_unified_strength(const Paint *paint);
 bool BKE_paint_use_unified_color(const Paint *paint);
 
 /* Paint brush retrieval and assignment. */
@@ -287,7 +289,7 @@ bool BKE_paint_always_hide_test(const Object *ob);
 /**
  * Returns whether any of the corners of the grid face whose inner corner is at (x, y) are hidden.
  */
-bool paint_is_grid_face_hidden(blender::BoundedBitSpan grid_hidden, int gridsize, int x, int y);
+bool paint_is_grid_face_hidden(BoundedBitSpan grid_hidden, int gridsize, int x, int y);
 /**
  * Return true if all vertices in the face are visible, false otherwise.
  */
@@ -301,9 +303,14 @@ void BKE_paint_face_set_overlay_color_get(int face_set, int seed, uchar r_color[
 
 /* Stroke related. */
 
+namespace bke::paint {
+bool supports_scene_size(PaintMode paint_mode);
+bool supports_symmetry_tiling(PaintMode paint_mode);
+}  // namespace bke::paint
+
 /* Random values are generated on each new stroke so each stroke
  * gets a different starting point in the perlin noise. */
-blender::float3 seed_hsv_jitter();
+float3 seed_hsv_jitter();
 
 bool paint_calculate_rake_rotation(Paint &paint,
                                    const Brush &brush,
@@ -314,39 +321,37 @@ void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float ro
 
 void BKE_paint_stroke_get_average(const Paint *paint, const Object *ob, float stroke[3]);
 
-blender::float3 BKE_paint_randomize_color(const BrushColorJitterSettings &color_jitter,
-                                          const blender::float3 &initial_hsv_jitter,
-                                          const float distance,
-                                          const float pressure,
-                                          const blender::float3 &color);
+float3 BKE_paint_randomize_color(const BrushColorJitterSettings &color_jitter,
+                                 const float3 &initial_hsv_jitter,
+                                 const float distance,
+                                 const float pressure,
+                                 const float3 &color);
 
 /* .blend I/O */
 
 void BKE_paint_blend_write(BlendWriter *writer, Paint *paint);
 void BKE_paint_blend_read_data(BlendDataReader *reader, const Scene *scene, Paint *paint);
 
-#define SCULPT_FACE_SET_NONE 0
-
 /* Data used for displaying extra visuals while using the Pose brush */
 struct SculptPoseIKChainPreview {
-  blender::Array<blender::float3> initial_orig_coords;
-  blender::Array<blender::float3> initial_head_coords;
+  Array<float3> initial_orig_coords;
+  Array<float3> initial_head_coords;
 };
 
 struct SculptBoundaryInfoCache {
   /* Indexed by base mesh vertex index.
    *
    * TODO: Evaluate whether a BitVector or a Set works better for memory footprint and lookup. */
-  blender::BitVector<> verts;
+  BitVector<> verts;
 
-  blender::Set<blender::OrderedEdge> edges;
+  Set<OrderedEdge> edges;
 };
 
 /* Data used for displaying extra visuals while using the Boundary brush. */
 struct SculptBoundaryPreview {
-  blender::Vector<std::pair<blender::float3, blender::float3>> edges;
-  blender::float3 pivot_position;
-  blender::float3 initial_vert_position;
+  Vector<std::pair<float3, float3>> edges;
+  float3 pivot_position;
+  float3 initial_vert_position;
 };
 
 struct SculptFakeNeighbors {
@@ -354,7 +359,7 @@ struct SculptFakeNeighbors {
   float current_max_distance;
 
   /* Indexed by vertex, stores the vertex index of its fake neighbor if available. */
-  blender::Array<int> fake_neighbor_index;
+  Array<int> fake_neighbor_index;
 };
 
 struct SculptTopologyIslandCache {
@@ -362,69 +367,64 @@ struct SculptTopologyIslandCache {
    * An ID for the island containing each geometry vertex. Will be empty if there is only a single
    * island.
    */
-  blender::Array<uint8_t> vert_island_ids;
+  Array<uint8_t> vert_island_ids;
 };
 
 using ActiveVert = std::variant<std::monostate, int, BMVert *>;
 
 /* Helper return struct for associated data. */
 struct PersistentMultiresData {
-  blender::Span<blender::float3> positions;
-  blender::Span<blender::float3> normals;
-  blender::MutableSpan<float> displacements;
+  Span<float3> positions;
+  Span<float3> normals;
+  MutableSpan<float> displacements;
 };
 
-struct SculptSession : blender::NonCopyable, blender::NonMovable {
-  /* Mesh data (not copied) can come either directly from a Mesh, or from a MultiresDM */
-  struct { /* Special handling for multires meshes */
-    bool active = false;
-    MultiresModifierData *modifier = nullptr;
-    int level = 0;
-  } multires = {};
-
+struct SculptSession : NonCopyable, NonMovable {
+  /* The current active shapekey for the mesh. Only non-null for Type::Mesh */
   KeyBlock *shapekey_active = nullptr;
 
   /* Edges to adjacent faces. */
-  blender::Array<int> edge_to_face_offsets;
-  blender::Array<int> edge_to_face_indices;
-  blender::GroupedSpan<int> edge_to_face_map;
+  Array<int> edge_to_face_offsets;
+  Array<int> edge_to_face_indices;
+  GroupedSpan<int> edge_to_face_map;
 
   /* Vertices to adjacent edges. */
-  blender::Array<int> vert_to_edge_offsets;
-  blender::Array<int> vert_to_edge_indices;
-  blender::GroupedSpan<int> vert_to_edge_map;
+  Array<int> vert_to_edge_offsets;
+  Array<int> vert_to_edge_indices;
+  GroupedSpan<int> vert_to_edge_map;
 
   /* BMesh for dynamic topology sculpting */
   BMesh *bm = nullptr;
   /* Undo/redo log for dynamic topology sculpting */
   BMLog *bm_log = nullptr;
 
+  MultiresModifierData *multires_modifier = nullptr;
   /* Limit surface/grids. */
   SubdivCCG *subdiv_ccg = nullptr;
 
   /* BVH tree acceleration structure */
-  std::unique_ptr<blender::bke::pbvh::Tree> pbvh;
+  std::unique_ptr<bke::pbvh::Tree> pbvh;
 
   /* Object is deformed with some modifiers. */
   bool deform_modifiers_active = false;
   /* Coords of deformed mesh but without stroke displacement. */
-  blender::Array<blender::float3, 0> deform_cos;
+  Array<float3, 0> deform_cos;
   /* Crazy-space deformation matrices. */
-  blender::Array<blender::float3x3, 0> deform_imats;
+  Array<float3x3, 0> deform_imats;
 
   /**
    * Normals corresponding to the #deform_cos evaluated/deform positions. Stored as a #SharedCache
    * for consistency with mesh caches in #MeshRuntime::vert_normals_cache.
    */
-  blender::SharedCache<blender::Vector<blender::float3>> vert_normals_deform;
-  blender::SharedCache<blender::Vector<blender::float3>> face_normals_deform;
+  SharedCache<Vector<float3>> vert_normals_deform;
+  SharedCache<Vector<float3>> face_normals_deform;
 
   /* Pool for texture evaluations. */
   ImagePool *tex_pool = nullptr;
 
-  blender::ed::sculpt_paint::StrokeCache *cache = nullptr;
-  blender::ed::sculpt_paint::filter::Cache *filter_cache = nullptr;
-  blender::ed::sculpt_paint::expand::Cache *expand_cache = nullptr;
+  ed::sculpt_paint::StrokeCache *cache = nullptr;
+  ed::sculpt_paint::filter::Cache *filter_cache = nullptr;
+  ed::sculpt_paint::expand::Cache *expand_cache = nullptr;
 
   /* Cursor data and active vertex for tools */
   std::optional<int> active_face_index;
@@ -435,17 +435,17 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
    */
   bool draw_faded_cursor = false;
   float cursor_radius = 0.0f;
-  blender::float3 cursor_location;
-  blender::float3 cursor_normal;
-  std::optional<blender::float3> cursor_sampled_normal;
-  blender::float3 cursor_view_normal;
+  float3 cursor_location;
+  float3 cursor_normal;
+  std::optional<float3> cursor_sampled_normal;
+  float3 cursor_view_normal;
 
   /* TODO(jbakker): Replace rv3d and v3d with ViewContext */
   RegionView3D *rv3d = nullptr;
   View3D *v3d = nullptr;
 
   /* Dynamic mesh preview */
-  blender::Array<int> preview_verts;
+  Array<int> preview_verts;
 
   /* Pose Brush Preview */
   std::unique_ptr<SculptPoseIKChainPreview> pose_ik_chain_preview;
@@ -456,9 +456,9 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
   /* "Persistent" positions and normals for multires. (For mesh the
    * ".sculpt_persistent_co" attribute is used, etc.). */
   struct {
-    blender::Array<blender::float3> sculpt_persistent_co;
-    blender::Array<blender::float3> sculpt_persistent_no;
-    blender::Array<float> sculpt_persistent_disp;
+    Array<float3> sculpt_persistent_co;
+    Array<float3> sculpt_persistent_no;
+    Array<float> sculpt_persistent_disp;
 
     /* The stored state for the SubdivCCG at the time of attribute population, used to roughly
      * determine if the topology when accessed at a current point in time is equivalent to when
@@ -475,36 +475,19 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
   SculptFakeNeighbors fake_neighbors = {};
 
   /* Transform operator */
-  blender::float3 pivot_pos = {};
-  blender::float4 pivot_rot = {};
-  blender::float3 pivot_scale = {};
+  float3 pivot_pos = {};
+  float4 pivot_rot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  float3 pivot_scale = {};
 
-  blender::float3 init_pivot_pos = {};
-  blender::float4 init_pivot_rot = {};
-  blender::float3 init_pivot_scale = {};
+  float3 init_pivot_pos = {};
+  float4 init_pivot_rot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  float3 init_pivot_scale = {};
 
-  blender::float3 prev_pivot_pos = {};
-  blender::float4 prev_pivot_rot = {};
-  blender::float3 prev_pivot_scale = {};
+  float3 prev_pivot_pos = {};
+  float4 prev_pivot_rot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  float3 prev_pivot_scale = {};
 
-  struct {
-    struct {
-      /* Keep track of how much each vertex has been painted (non-airbrush only). */
-      float *alpha_weight;
-
-      /* Needed to continuously re-apply over the same weights (#BRUSH_ACCUMULATE disabled).
-       * Lazy initialize as needed (flag is set to 1 to tag it as uninitialized). */
-      blender::Array<MDeformVert> dvert_prev;
-    } wpaint;
-
-    /* TODO: identify sculpt-only fields */
-    // struct { ... } sculpt;
-  } mode = {};
   eObjectMode mode_type;
-
-  /* This flag prevents bke::pbvh::Tree from being freed when creating the vp_handle for
-   * texture paint. */
-  bool building_vp_handle = false;
 
   /**
    * ID data is older than sculpt-mode data.
@@ -523,8 +506,8 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
   /**
    * Last used painting canvas key.
    */
-  char *last_paint_canvas_key = nullptr;
-  blender::float3 last_normal;
+  std::optional<std::string> last_paint_canvas_key = {};
+  float3 last_normal;
 
   std::unique_ptr<SculptTopologyIslandCache> topology_island_cache;
 
@@ -569,7 +552,7 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
    *
    * \returns float3 at negative infinity if there is no currently active vertex
    */
-  blender::float3 active_vert_position(const Depsgraph &depsgraph, const Object &object) const;
+  float3 active_vert_position(const Depsgraph &depsgraph, const Object &object) const;
 
   void set_active_vert(ActiveVert vert);
   void clear_active_elements(bool persist_last_active);
@@ -586,7 +569,6 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
 
 void BKE_sculptsession_free(Object *ob);
 void BKE_sculptsession_free_deformMats(SculptSession *ss);
-void BKE_sculptsession_free_vwpaint_data(SculptSession *ss);
 void BKE_sculptsession_free_pbvh(Object &object);
 void BKE_sculptsession_bm_to_me(Object *ob);
 void BKE_sculptsession_bm_to_me_for_render(Object *object);
@@ -629,12 +611,12 @@ void BKE_sculpt_toolsettings_data_ensure(Main *bmain, Scene *scene);
 void BKE_sculpt_sync_face_visibility_to_grids(const Mesh &mesh, SubdivCCG &subdiv_ccg);
 
 /**
- * Test if blender::bke::pbvh::Tree can be used directly for drawing, which is faster than
+ * Test if bke::pbvh::Tree can be used directly for drawing, which is faster than
  * drawing the mesh and all updates that come with it.
  */
 bool BKE_sculptsession_use_pbvh_draw(const Object *ob, const RegionView3D *rv3d);
 
-namespace blender::bke::object {
+namespace bke::object {
 
 pbvh::Tree &pbvh_ensure(Depsgraph &depsgraph, Object &object);
 
@@ -647,7 +629,7 @@ pbvh::Tree &pbvh_ensure(Depsgraph &depsgraph, Object &object);
 pbvh::Tree *pbvh_get(Object &object);
 const pbvh::Tree *pbvh_get(const Object &object);
 
-}  // namespace blender::bke::object
+}  // namespace bke::object
 bool BKE_object_sculpt_use_dyntopo(const Object *object);
 
 /* paint_canvas.cc */
@@ -656,14 +638,15 @@ bool BKE_object_sculpt_use_dyntopo(const Object *object);
  * Create a key that can be used to compare with previous ones to identify changes.
  * The resulting 'string' is owned by the caller.
  */
-char *BKE_paint_canvas_key_get(PaintModeSettings *settings, Object *ob);
+std::string BKE_paint_canvas_key_get(PaintModeSettings *settings, Object *ob);
 
 bool BKE_paint_canvas_image_get(PaintModeSettings *settings,
                                 Object *ob,
                                 Image **r_image,
                                 ImageUser **r_image_user);
-std::optional<blender::StringRef> BKE_paint_canvas_uvmap_name_get(
-    const PaintModeSettings *settings, Object *ob);
-void BKE_sculpt_cavity_curves_ensure(Sculpt *sd);
+std::optional<StringRef> BKE_paint_canvas_uvmap_name_get(const PaintModeSettings *settings,
+                                                         Object *ob);
 CurveMapping *BKE_sculpt_default_cavity_curve();
 CurveMapping *BKE_paint_default_curve();
+
+}  // namespace blender

@@ -36,13 +36,13 @@
 
 #include "mesh_intern.hh"
 
-using blender::Vector;
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Delete Operator
  * \{ */
 
-namespace blender::ed::mesh {
+namespace ed::mesh {
 
 static char domain_to_htype(const bke::AttrDomain domain)
 {
@@ -132,11 +132,12 @@ static void bmesh_loop_layer_selected_values_set(BMEditMesh &em,
 
 static wmOperatorStatus mesh_set_attribute_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   Mesh *active_mesh = ED_mesh_context(C);
   AttributeOwner active_owner = AttributeOwner::from_id(&active_mesh->id);
@@ -155,7 +156,7 @@ static wmOperatorStatus mesh_set_attribute_exec(bContext *C, wmOperator *op)
 
   bool changed = false;
   for (Object *object : objects) {
-    Mesh *mesh = static_cast<Mesh *>(object->data);
+    Mesh *mesh = id_cast<Mesh *>(object->data);
     BMEditMesh *em = BKE_editmesh_from_object(object);
     BMesh *bm = em->bm;
     BMDataLayerLookup attr = BM_data_layer_lookup(*bm, name);
@@ -254,7 +255,7 @@ static void mesh_set_attribute_ui(bContext *C, wmOperator *op)
 
 }  // namespace set_attribute
 
-}  // namespace blender::ed::mesh
+}  // namespace ed::mesh
 
 void MESH_OT_attribute_set(wmOperatorType *ot)
 {
@@ -271,7 +272,9 @@ void MESH_OT_attribute_set(wmOperatorType *ot)
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  blender::ed::geometry::register_rna_properties_for_attribute_types(*ot->srna);
+  ed::geometry::register_rna_properties_for_attribute_types(*ot->srna);
 }
 
 /** \} */
+
+}  // namespace blender

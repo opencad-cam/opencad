@@ -2,7 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_numbers.hh"
+#include <numbers>
+
 #include "BLI_noise.hh"
 
 #include "BKE_texture.h"
@@ -15,27 +16,30 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_tex_gabor_cc {
+namespace blender {
+
+namespace nodes::node_shader_tex_gabor_cc {
 
 NODE_STORAGE_FUNCS(NodeTexGabor)
 
 static void sh_node_tex_gabor_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Vector>("Vector")
+  b.add_input<decl::Vector>("Vector"_ustr)
       .implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD)
       .description(
           "The coordinates at which Gabor noise will be evaluated. The Z component is ignored in "
           "the 2D case");
-  b.add_input<decl::Float>("Scale").default_value(5.0f).description(
-      "The scale of the Gabor noise");
-  b.add_input<decl::Float>("Frequency")
+  b.add_input<decl::Float>("Scale"_ustr)
+      .default_value(5.0f)
+      .description("The scale of the Gabor noise");
+  b.add_input<decl::Float>("Frequency"_ustr)
       .default_value(2.0f)
       .min(0.0f)
       .description(
           "The rate at which the Gabor noise changes across space. This is different from the "
           "Scale input in that it only scales perpendicular to the Gabor noise direction");
-  b.add_input<decl::Float>("Anisotropy")
+  b.add_input<decl::Float>("Anisotropy"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
@@ -43,20 +47,21 @@ static void sh_node_tex_gabor_declare(NodeDeclarationBuilder &b)
       .description(
           "The directionality of Gabor noise. 1 means the noise is completely directional, while "
           "0 means the noise is omnidirectional");
-  b.add_input<decl::Float>("Orientation", "Orientation 2D")
-      .default_value(math::numbers::pi / 4)
+  b.add_input<decl::Float>("Orientation"_ustr, "Orientation 2D"_ustr)
+      .default_value(std::numbers::pi / 4)
       .subtype(PROP_ANGLE)
       .description("The direction of the anisotropic Gabor noise");
-  b.add_input<decl::Vector>("Orientation", "Orientation 3D")
-      .default_value({math::numbers::sqrt2, math::numbers::sqrt2, 0.0f})
+  b.add_input<decl::Vector>("Orientation"_ustr, "Orientation 3D"_ustr)
+      .default_value({std::numbers::sqrt2, std::numbers::sqrt2, 0.0f})
       .subtype(PROP_DIRECTION)
       .description("The direction of the anisotropic Gabor noise");
-  b.add_output<decl::Float>("Value").description(
-      "The Gabor noise value with both random intensity and phase. This is equal to sine the "
-      "phase multiplied by the intensity");
-  b.add_output<decl::Float>("Phase").description(
-      "The phase of the Gabor noise, which has no random intensity");
-  b.add_output<decl::Float>("Intensity")
+  b.add_output<decl::Float>("Value"_ustr)
+      .description(
+          "The Gabor noise value with both random intensity and phase. This is equal to sine the "
+          "phase multiplied by the intensity");
+  b.add_output<decl::Float>("Phase"_ustr)
+      .description("The phase of the Gabor noise, which has no random intensity");
+  b.add_output<decl::Float>("Intensity"_ustr)
       .description("The intensity of the Gabor noise, which has no random phase");
 }
 
@@ -67,7 +72,7 @@ static void node_shader_buts_tex_gabor(ui::Layout &layout, bContext * /*C*/, Poi
 
 static void node_shader_init_tex_gabor(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeTexGabor *storage = MEM_new_for_free<NodeTexGabor>(__func__);
+  NodeTexGabor *storage = MEM_new<NodeTexGabor>(__func__);
   BKE_texture_mapping_default(&storage->base.tex_mapping, TEXMAP_TYPE_POINT);
   BKE_texture_colormapping_default(&storage->base.color_mapping);
 
@@ -199,15 +204,15 @@ static void build_multi_function(NodeMultiFunctionBuilder &builder)
   builder.construct_and_set_matching_fn<GaborNoiseFunction>(NodeGaborType(storage.type));
 }
 
-}  // namespace blender::nodes::node_shader_tex_gabor_cc
+}  // namespace nodes::node_shader_tex_gabor_cc
 
 void register_node_type_sh_tex_gabor()
 {
-  namespace file_ns = blender::nodes::node_shader_tex_gabor_cc;
+  namespace file_ns = nodes::node_shader_tex_gabor_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeTexGabor", SH_NODE_TEX_GABOR);
+  common_node_type_base(&ntype, "ShaderNodeTexGabor"_ustr, SH_NODE_TEX_GABOR);
   ntype.ui_name = "Gabor Texture";
   ntype.ui_description = "Generate Gabor noise";
   ntype.enum_name_legacy = "TEX_GABOR";
@@ -222,3 +227,5 @@ void register_node_type_sh_tex_gabor()
 
   node_register_type(ntype);
 }
+
+}  // namespace blender

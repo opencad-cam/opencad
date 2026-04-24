@@ -41,27 +41,29 @@
 
 #  include "ED_node.hh"
 
+namespace blender {
+
 static StructRNA *rna_Light_refine(PointerRNA *ptr)
 {
-  Light *la = (Light *)ptr->data;
+  Light *la = static_cast<Light *>(ptr->data);
 
   switch (la->type) {
     case LA_LOCAL:
-      return &RNA_PointLight;
+      return RNA_PointLight;
     case LA_SUN:
-      return &RNA_SunLight;
+      return RNA_SunLight;
     case LA_SPOT:
-      return &RNA_SpotLight;
+      return RNA_SpotLight;
     case LA_AREA:
-      return &RNA_AreaLight;
+      return RNA_AreaLight;
     default:
-      return &RNA_Light;
+      return RNA_Light;
   }
 }
 
 static void rna_Light_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  Light *la = (Light *)ptr->owner_id;
+  Light *la = id_cast<Light *>(ptr->owner_id);
 
   DEG_id_tag_update(&la->id, 0);
   WM_main_add_notifier(NC_LAMP | ND_LIGHTING, la);
@@ -69,7 +71,7 @@ static void rna_Light_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *pt
 
 static void rna_Light_draw_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  Light *la = (Light *)ptr->owner_id;
+  Light *la = id_cast<Light *>(ptr->owner_id);
 
   DEG_id_tag_update(&la->id, 0);
   WM_main_add_notifier(NC_LAMP | ND_LIGHTING_DRAW, la);
@@ -91,7 +93,7 @@ static void rna_Light_use_nodes_set(PointerRNA * /*ptr*/, bool /*new_value*/)
 
 static void rna_Light_temperature_color_get(PointerRNA *ptr, float *color)
 {
-  Light *la = (Light *)ptr->data;
+  Light *la = static_cast<Light *>(ptr->data);
 
   if (la->mode & LA_USE_TEMPERATURE) {
     float rgb[4];
@@ -108,11 +110,15 @@ static void rna_Light_temperature_color_get(PointerRNA *ptr, float *color)
 
 static float rna_Light_area(Light *light, const float matrix_world[16])
 {
-  blender::float4x4 mat(matrix_world);
+  float4x4 mat(matrix_world);
   return BKE_light_area(*light, mat);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 /* NOTE(@dingto): Don't define icons here,
  * so they don't show up in the Light UI (properties editor). */
@@ -598,5 +604,7 @@ void RNA_def_light(BlenderRNA *brna)
   rna_def_spot_light(brna);
   rna_def_sun_light(brna);
 }
+
+}  // namespace blender
 
 #endif

@@ -80,13 +80,10 @@ struct [[host_shared]] GPencilStrokeData {
   float2 viewport;
   float pixsize;
   float objscale;
-  float pixfactor;
-  int xraymode;
   int caps_start;
   int caps_end;
-  bool32_t keep_size;
   bool32_t fill_stroke;
-  float2 _pad;
+  float _pad;
 };
 
 struct [[host_shared]] GPUClipPlanes {
@@ -161,8 +158,9 @@ struct [[host_shared]] SeqStripDrawData {
   float _pad0;
   float _pad1;
 };
-BLI_STATIC_ASSERT(sizeof(SeqStripDrawData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
-                  "SeqStripDrawData UBO must not exceed minspec UBO size (16384)")
+/* clang-format off */ /* Keep one line. Avoid issues with shader error line. */
+BLI_STATIC_ASSERT(sizeof(SeqStripDrawData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384, "SeqStripDrawData UBO must not exceed minspec UBO size (16384)")
+/* clang-format on */
 
 /* VSE per-thumbnail data for timeline rendering. */
 struct [[host_shared]] SeqStripThumbData {
@@ -183,8 +181,9 @@ struct [[host_shared]] SeqStripThumbData {
   float v2;
   float4 tint_color;
 };
-BLI_STATIC_ASSERT(sizeof(SeqStripThumbData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
-                  "SeqStripThumbData UBO must not exceed minspec UBO size (16384)")
+/* clang-format off */ /* Keep one line. Avoid issues with shader error line. */
+BLI_STATIC_ASSERT(sizeof(SeqStripThumbData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384, "SeqStripThumbData UBO must not exceed minspec UBO size (16384)")
+/* clang-format on */
 
 /* VSE global data for timeline rendering. */
 struct [[host_shared]] SeqContextDrawData {

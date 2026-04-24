@@ -10,6 +10,8 @@
 
 #include "BKE_shader_fx.hh"
 
+namespace blender {
+
 /* ****************** Type structures for all effects ****************** */
 
 extern ShaderFxTypeInfo shaderfx_Type_None;
@@ -23,6 +25,8 @@ extern ShaderFxTypeInfo shaderfx_Type_Shadow;
 extern ShaderFxTypeInfo shaderfx_Type_Swirl;
 extern ShaderFxTypeInfo shaderfx_Type_Wave;
 
-/* FX_shaderfx_util.c */
+/* FX_shader_util.cc */
 
 void shaderfx_type_init(ShaderFxTypeInfo *types[]);
+
+}  // namespace blender

@@ -143,7 +143,7 @@ static void view_pan_init(bContext *C, wmOperator *op)
   BLI_assert(view_pan_poll(C));
 
   /* set custom-data for operator */
-  v2dViewPanData *vpd = MEM_callocN<v2dViewPanData>(__func__);
+  v2dViewPanData *vpd = MEM_new_zeroed<v2dViewPanData>(__func__);
   op->customdata = vpd;
 
   /* set pointers to owners */
@@ -211,7 +211,7 @@ static void view_pan_exit(wmOperator *op)
 {
   v2dViewPanData *vpd = static_cast<v2dViewPanData *>(op->customdata);
   vpd->v2d->flag &= ~V2D_IS_NAVIGATING;
-  MEM_freeN(vpd);
+  MEM_delete(vpd);
   op->customdata = nullptr;
 }
 
@@ -393,7 +393,7 @@ static wmOperatorStatus view_edge_pan_invoke(bContext *C,
                                              wmOperator *op,
                                              const wmEvent * /*event*/)
 {
-  op->customdata = MEM_callocN(sizeof(View2DEdgePanData), "View2DEdgePanData");
+  op->customdata = MEM_new_zeroed<View2DEdgePanData>("View2DEdgePanData");
   View2DEdgePanData *vpd = static_cast<View2DEdgePanData *>(op->customdata);
   view2d_edge_pan_operator_init(C, vpd, op);
 
@@ -413,7 +413,7 @@ static wmOperatorStatus view_edge_pan_modal(bContext *C, wmOperator *op, const w
   /* Exit if we release the mouse button, hit escape, or enter a different window. */
   if (event->val == KM_RELEASE || event->type == EVT_ESCKEY || source_win != target_win) {
     vpd->v2d->flag &= ~V2D_IS_NAVIGATING;
-    MEM_SAFE_FREE(vpd);
+    MEM_SAFE_DELETE(vpd);
     op->customdata = nullptr;
     return (OPERATOR_FINISHED | OPERATOR_PASS_THROUGH);
   }
@@ -429,7 +429,7 @@ static void view_edge_pan_cancel(bContext * /*C*/, wmOperator *op)
 {
   v2dViewPanData *vpd = static_cast<v2dViewPanData *>(op->customdata);
   vpd->v2d->flag &= ~V2D_IS_NAVIGATING;
-  MEM_SAFE_FREE(vpd);
+  MEM_SAFE_DELETE(vpd);
   op->customdata = nullptr;
 }
 
@@ -740,7 +740,7 @@ static void view_zoomdrag_init(bContext *C, wmOperator *op)
   BLI_assert(view_zoom_poll(C));
 
   /* set custom-data for operator */
-  v2dViewZoomData *vzd = MEM_callocN<v2dViewZoomData>(__func__);
+  v2dViewZoomData *vzd = MEM_new_zeroed<v2dViewZoomData>(__func__);
   op->customdata = vzd;
 
   /* set pointers to owners */
@@ -878,6 +878,47 @@ static void view_zoomstep_apply(bContext *C, wmOperator *op)
 /** \name View Zoom Operator (single step)
  * \{ */
 
+/**
+ * Default 2D zoom per scroll-wheel "step".
+ */
+static constexpr float view_zoomfac_default = 0.0375f;
+
+static void view_zoomstep_props_init(bContext *C, wmOperator *op, const float zoomfac_default)
+{
+  bool do_zoom_xy[2];
+  view_zoom_axis_lock_defaults(C, do_zoom_xy);
+
+  /* Set RNA-Props - zooming in by uniform factor. */
+  const char *props_zoomfac[2] = {"zoomfacx", "zoomfacy"};
+  for (int i = 0; i < 2; i++) {
+    PropertyRNA *prop = RNA_struct_find_property(op->ptr, props_zoomfac[i]);
+    /* If we can zoom on this value *and* the value is set (likely by the key-map),
+     * then respect the value the user set. */
+    if (do_zoom_xy[i] && RNA_property_is_set(op->ptr, prop)) {
+      continue;
+    }
+    RNA_property_float_set(op->ptr, prop, do_zoom_xy[i] ? zoomfac_default : 0.0f);
+  }
+}
+
+static void view_zoomstep_props_def(StructRNA *srna, const float zoomfac_default)
+{
+  const char *props_id[2] = {"zoomfacx", "zoomfacy"};
+  const char *props_name[2] = {"Zoom Factor X", "Zoom Factor Y"};
+  for (int i = 0; i < 2; i++) {
+    PropertyRNA *prop = RNA_def_float(srna,
+                                      props_id[i],
+                                      zoomfac_default,
+                                      -FLT_MAX,
+                                      FLT_MAX,
+                                      props_name[i],
+                                      "",
+                                      -FLT_MAX,
+                                      FLT_MAX);
+    RNA_def_property_flag(prop, PROP_HIDDEN);
+  }
+}
+
 /* Cleanup temp custom-data. */
 static void view_zoomstep_exit(bContext *C, wmOperator *op)
 {
@@ -889,7 +930,7 @@ static void view_zoomstep_exit(bContext *C, wmOperator *op)
 
   v2dViewZoomData *vzd = static_cast<v2dViewZoomData *>(op->customdata);
   vzd->v2d->flag &= ~V2D_IS_NAVIGATING;
-  MEM_SAFE_FREE(vzd);
+  MEM_SAFE_DELETE(vzd);
   op->customdata = nullptr;
 }
 
@@ -900,14 +941,8 @@ static wmOperatorStatus view_zoomin_exec(bContext *C, wmOperator *op)
     view_zoomdrag_init(C, op);
   }
 
-  bool do_zoom_xy[2];
-  view_zoom_axis_lock_defaults(C, do_zoom_xy);
-
-  /* set RNA-Props - zooming in by uniform factor */
-  RNA_float_set(op->ptr, "zoomfacx", do_zoom_xy[0] ? 0.0375f : 0.0f);
-  RNA_float_set(op->ptr, "zoomfacy", do_zoom_xy[1] ? 0.0375f : 0.0f);
-
-  /* apply movement, then we're done */
+  /* Apply movement, then we're done. */
+  view_zoomstep_props_init(C, op, view_zoomfac_default);
   view_zoomstep_apply(C, op);
 
   view_zoomstep_exit(C, op);
@@ -934,8 +969,6 @@ static wmOperatorStatus view_zoomin_invoke(bContext *C, wmOperator *op, const wm
 
 static void VIEW2D_OT_zoom_in(wmOperatorType *ot)
 {
-  PropertyRNA *prop;
-
   /* identifiers */
   ot->name = "Zoom In";
   ot->description = "Zoom in the view";
@@ -946,31 +979,18 @@ static void VIEW2D_OT_zoom_in(wmOperatorType *ot)
   ot->exec = view_zoomin_exec;
   ot->poll = view_zoom_poll;
 
-  /* rna - must keep these in sync with the other operators */
-  prop = RNA_def_float(
-      ot->srna, "zoomfacx", 0, -FLT_MAX, FLT_MAX, "Zoom Factor X", "", -FLT_MAX, FLT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN);
-  prop = RNA_def_float(
-      ot->srna, "zoomfacy", 0, -FLT_MAX, FLT_MAX, "Zoom Factor Y", "", -FLT_MAX, FLT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN);
+  view_zoomstep_props_def(ot->srna, view_zoomfac_default);
 }
 
 /* this operator only needs this single callback, where it calls the view_zoom_*() methods */
 static wmOperatorStatus view_zoomout_exec(bContext *C, wmOperator *op)
 {
-  bool do_zoom_xy[2];
-
   if (op->customdata == nullptr) { /* Might have been setup in _invoke() already. */
     view_zoomdrag_init(C, op);
   }
 
-  view_zoom_axis_lock_defaults(C, do_zoom_xy);
-
-  /* set RNA-Props - zooming in by uniform factor */
-  RNA_float_set(op->ptr, "zoomfacx", do_zoom_xy[0] ? -0.0375f : 0.0f);
-  RNA_float_set(op->ptr, "zoomfacy", do_zoom_xy[1] ? -0.0375f : 0.0f);
-
-  /* apply movement, then we're done */
+  /* Apply movement, then we're done. */
+  view_zoomstep_props_init(C, op, -view_zoomfac_default);
   view_zoomstep_apply(C, op);
 
   view_zoomstep_exit(C, op);
@@ -997,8 +1017,6 @@ static wmOperatorStatus view_zoomout_invoke(bContext *C, wmOperator *op, const w
 
 static void VIEW2D_OT_zoom_out(wmOperatorType *ot)
 {
-  PropertyRNA *prop;
-
   /* identifiers */
   ot->name = "Zoom Out";
   ot->description = "Zoom out the view";
@@ -1010,13 +1028,7 @@ static void VIEW2D_OT_zoom_out(wmOperatorType *ot)
 
   ot->poll = view_zoom_poll;
 
-  /* rna - must keep these in sync with the other operators */
-  prop = RNA_def_float(
-      ot->srna, "zoomfacx", 0, -FLT_MAX, FLT_MAX, "Zoom Factor X", "", -FLT_MAX, FLT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN);
-  prop = RNA_def_float(
-      ot->srna, "zoomfacy", 0, -FLT_MAX, FLT_MAX, "Zoom Factor Y", "", -FLT_MAX, FLT_MAX);
-  RNA_def_property_flag(prop, PROP_HIDDEN);
+  view_zoomstep_props_def(ot->srna, -view_zoomfac_default);
 }
 
 /** \} */
@@ -1125,7 +1137,7 @@ static void view_zoomdrag_exit(bContext *C, wmOperator *op)
       WM_event_timer_remove(CTX_wm_manager(C), CTX_wm_window(C), vzd->timer);
     }
 
-    MEM_freeN(vzd);
+    MEM_delete(vzd);
     op->customdata = nullptr;
   }
 }
@@ -1892,7 +1904,7 @@ static void scroller_activate_init(bContext *C,
   View2D *v2d = &region->v2d;
 
   /* set custom-data for operator */
-  v2dScrollerMove *vsm = MEM_callocN<v2dScrollerMove>(__func__);
+  v2dScrollerMove *vsm = MEM_new_zeroed<v2dScrollerMove>(__func__);
   op->customdata = vsm;
 
   /* set general data */
@@ -1978,7 +1990,7 @@ static void scroller_activate_exit(bContext *C, wmOperator *op)
     vsm->v2d->scroll_ui &= ~(V2D_SCROLL_H_ACTIVE | V2D_SCROLL_V_ACTIVE);
     vsm->v2d->flag &= ~V2D_IS_NAVIGATING;
 
-    MEM_freeN(vsm);
+    MEM_delete(vsm);
     op->customdata = nullptr;
 
     ED_region_tag_redraw_no_rebuild(CTX_wm_region(C));
@@ -2155,7 +2167,7 @@ static wmOperatorStatus scroller_activate_invoke(bContext *C, wmOperator *op, co
   if (in_scroller) {
     /* initialize customdata */
     scroller_activate_init(C, op, event, in_scroller);
-    v2dScrollerMove *vsm = (v2dScrollerMove *)op->customdata;
+    v2dScrollerMove *vsm = static_cast<v2dScrollerMove *>(op->customdata);
 
     /* Support for quick jump to location - GTK and QT do this on Linux. */
     if (event->type == MIDDLEMOUSE) {

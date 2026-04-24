@@ -8,19 +8,19 @@ namespace blender::nodes::node_geo_self_object_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Object>("Self Object");
+  b.add_output<decl::Object>("Self Object"_ustr);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  params.set_output("Self Object", const_cast<Object *>(params.self_object()));
+  params.set_output("Self Object"_ustr, const_cast<Object *>(params.self_object()));
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSelfObject", GEO_NODE_SELF_OBJECT);
+  geo_node_type_base(&ntype, "GeometryNodeSelfObject"_ustr, GEO_NODE_SELF_OBJECT);
   ntype.ui_name = "Self Object";
   ntype.ui_description =
       "Retrieve the object that contains the geometry nodes modifier currently being executed";
@@ -28,7 +28,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -20,19 +20,22 @@ namespace blender::nodes::node_geo_curve_to_mesh_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Curve")
+  b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
       .description("Curve to convert to a mesh using the given profile");
-  b.add_input<decl::Geometry>("Profile Curve")
+  b.add_input<decl::Geometry>("Profile Curve"_ustr)
       .only_realized_data()
       .supported_type(GeometryComponent::Type::Curve)
       .description("Curves that are swept along the main curve");
-  b.add_input<decl::Float>("Scale").default_value(1.0f).min(0.0f).field_on({0}).description(
-      "Scale of the profile at each point");
-  b.add_input<decl::Bool>("Fill Caps")
+  b.add_input<decl::Float>("Scale"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .field_on({0})
+      .description("Scale of the profile at each point");
+  b.add_input<decl::Bool>("Fill Caps"_ustr)
       .description(
           "If the profile spline is cyclic, fill the ends of the generated mesh with N-gons");
-  b.add_output<decl::Geometry>("Mesh").propagate_all();
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all();
 }
 
 static Mesh *curve_to_mesh(const bke::CurvesGeometry &curves,
@@ -88,19 +91,20 @@ static void grease_pencil_to_mesh(GeometrySet &geometry_set,
     return;
   }
 
-  bke::Instances *instances = new bke::Instances();
-  for (Mesh *mesh : mesh_by_layer) {
+  auto instances = std::make_unique<bke::Instances>(mesh_by_layer.size());
+  MutableSpan<int> handles = instances->reference_handles_for_write();
+  instances->transforms_for_write().fill(float4x4::identity());
+  for (const int i : mesh_by_layer.index_range()) {
+    Mesh *mesh = mesh_by_layer[i];
     if (!mesh) {
       /* Add an empty reference so the number of layers and instances match.
        * This makes it easy to reconstruct the layers afterwards and keep their attributes.
        * Although in this particular case we don't propagate the attributes. */
-      const int handle = instances->add_reference(bke::InstanceReference());
-      instances->add_instance(handle, float4x4::identity());
+      handles[i] = instances->add_reference(bke::InstanceReference());
       continue;
     }
     GeometrySet temp_set = GeometrySet::from_mesh(mesh);
-    const int handle = instances->add_reference(bke::InstanceReference{temp_set});
-    instances->add_instance(handle, float4x4::identity());
+    handles[i] = instances->add_reference(bke::InstanceReference{std::move(temp_set)});
   }
 
   bke::copy_attributes(geometry_set.get_grease_pencil()->attributes(),
@@ -111,7 +115,7 @@ static void grease_pencil_to_mesh(GeometrySet &geometry_set,
   InstancesComponent &dst_component = geometry_set.get_component_for_write<InstancesComponent>();
   GeometrySet new_instances = geometry::join_geometries(
       {GeometrySet::from_instances(dst_component.release()),
-       GeometrySet::from_instances(instances)},
+       GeometrySet::from_instances(std::move(instances))},
       attribute_filter);
   dst_component.replace(new_instances.get_component_for_write<InstancesComponent>().release());
   geometry_set.replace_grease_pencil(nullptr);
@@ -119,13 +123,13 @@ static void grease_pencil_to_mesh(GeometrySet &geometry_set,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet curve_set = params.extract_input<GeometrySet>("Curve");
-  GeometrySet profile_set = params.extract_input<GeometrySet>("Profile Curve");
-  const Field<float> scale_field = params.extract_input<Field<float>>("Scale");
-  const bool fill_caps = params.extract_input<bool>("Fill Caps");
+  GeometrySet curve_set = params.extract_input<GeometrySet>("Curve"_ustr);
+  GeometrySet profile_set = params.extract_input<GeometrySet>("Profile Curve"_ustr);
+  const Field<float> scale_field = params.extract_input<Field<float>>("Scale"_ustr);
+  const bool fill_caps = params.extract_input<bool>("Fill Caps"_ustr);
 
   bke::GeometryComponentEditData::remember_deformed_positions_if_necessary(curve_set);
-  const AttributeFilter &attribute_filter = params.get_attribute_filter("Mesh");
+  const AttributeFilter &attribute_filter = params.get_attribute_filter("Mesh"_ustr);
 
   geometry::foreach_real_geometry(curve_set, [&](GeometrySet &geometry_set) {
     if (geometry_set.has_curves()) {
@@ -135,7 +139,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       Mesh *mesh = curve_to_mesh(
           curves.geometry.wrap(), profile_set, context, scale_field, fill_caps, attribute_filter);
       if (mesh != nullptr) {
-        mesh->mat = static_cast<Material **>(MEM_dupallocN(curves.mat));
+        mesh->mat = MEM_dupalloc(curves.mat);
         mesh->totcol = curves.totcol;
       }
       geometry_set.replace_mesh(mesh);
@@ -148,14 +152,14 @@ static void node_geo_exec(GeoNodeExecParams params)
                             GeometryComponent::Type::Edit});
   });
 
-  params.set_output("Mesh", std::move(curve_set));
+  params.set_output("Mesh"_ustr, std::move(curve_set));
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeCurveToMesh", GEO_NODE_CURVE_TO_MESH);
+  geo_node_type_base(&ntype, "GeometryNodeCurveToMesh"_ustr, GEO_NODE_CURVE_TO_MESH);
   ntype.ui_name = "Curve to Mesh";
   ntype.ui_description =
       "Convert curves into a mesh, optionally with a custom profile shape defined by curves";
@@ -163,7 +167,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

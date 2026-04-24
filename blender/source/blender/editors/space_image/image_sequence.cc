@@ -23,13 +23,22 @@
 
 #include "ED_image.hh"
 
+namespace blender {
+
 /**
  * Get a list of frames from the list of image files matching the first file name sequence pattern.
  * The files and directory are read from standard file-select operator properties.
  *
  * The output is a list of frame ranges, each containing a list of frames with matching names.
+ *
+ * \param blendfile_path: Blend file path, used to expand the `directory`.
+ * \param root_path: When relative is enabled, the path will be made relative to this directory.
  */
-static void image_sequence_get_frame_ranges(wmOperator *op, ListBase *ranges, bool *r_was_relative)
+static void image_sequence_get_frame_ranges(StringRefNull blendfile_path,
+                                            StringRefNull root_path,
+                                            wmOperator *op,
+                                            ListBaseT<ImageFrameRange> *ranges,
+                                            bool *r_was_relative)
 {
   char dir[FILE_MAXDIR];
   const bool do_frame_range = RNA_boolean_get(op->ptr, "use_sequence_detection");
@@ -39,11 +48,19 @@ static void image_sequence_get_frame_ranges(wmOperator *op, ListBase *ranges, bo
   char base_head[FILE_MAX], base_tail[FILE_MAX];
 
   RNA_string_get(op->ptr, "directory", dir);
+  /* Make absolute so we can be sure a relative path is always `root_path` relative. */
+  BLI_path_abs(dir, blendfile_path.c_str());
+  /* Operators using `ED_image_filesel_detect_sequences` should have a `relative_path` option. */
+  BLI_assert(RNA_struct_find_property(op->ptr, "relative_path"));
+  if (RNA_boolean_get(op->ptr, "relative_path")) {
+    BLI_path_rel(dir, root_path.c_str());
+  }
+
   RNA_BEGIN (op->ptr, itemptr, "files") {
     char head[FILE_MAX], tail[FILE_MAX];
     ushort digits;
     char *filename = RNA_string_get_alloc(&itemptr, "name", nullptr, 0, nullptr);
-    ImageFrame *frame = MEM_callocN<ImageFrame>("image_frame");
+    ImageFrame *frame = MEM_new_zeroed<ImageFrame>("image_frame");
 
     /* use the first file in the list as base filename */
     frame->framenr = BLI_path_sequence_decode(
@@ -61,7 +78,7 @@ static void image_sequence_get_frame_ranges(wmOperator *op, ListBase *ranges, bo
     }
     else {
       /* start a new frame range */
-      range = MEM_callocN<ImageFrameRange>(__func__);
+      range = MEM_new_zeroed<ImageFrameRange>(__func__);
       BLI_path_join(range->filepath, sizeof(range->filepath), dir, filename);
       BLI_addtail(ranges, range);
 
@@ -72,7 +89,7 @@ static void image_sequence_get_frame_ranges(wmOperator *op, ListBase *ranges, bo
     }
 
     BLI_addtail(&range->frames, frame);
-    MEM_freeN(filename);
+    MEM_delete(filename);
   }
   RNA_END;
 
@@ -141,43 +158,49 @@ static void image_detect_frame_range(ImageFrameRange *range, const bool detect_u
   }
 }
 
-ListBase ED_image_filesel_detect_sequences(blender::StringRefNull blendfile_path,
-                                           blender::StringRefNull root_path,
-                                           wmOperator *op,
-                                           const bool detect_udim)
+ListBaseT<ImageFrameRange> ED_image_filesel_detect_sequences(StringRefNull blendfile_path,
+                                                             StringRefNull root_path,
+                                                             wmOperator *op,
+                                                             const bool detect_udim)
 {
-  ListBase ranges;
+  ListBaseT<ImageFrameRange> ranges;
   BLI_listbase_clear(&ranges);
 
   bool was_relative = false;
+  StringRefNull base_path = blendfile_path;
 
   /* File browser. */
   if (RNA_struct_property_is_set(op->ptr, "directory") &&
       RNA_struct_property_is_set(op->ptr, "files"))
   {
-    image_sequence_get_frame_ranges(op, &ranges, &was_relative);
+    image_sequence_get_frame_ranges(blendfile_path, root_path, op, &ranges, &was_relative);
+    /* The `root_path` will be used as the blend-file path, if it is relative. */
+    base_path = root_path;
   }
-  /* Filepath property for drag & drop etc. */
+  /* File-path property for drag & drop etc. */
   else {
     char filepath[FILE_MAX];
     RNA_string_get(op->ptr, "filepath", filepath);
 
-    ImageFrameRange *range = MEM_callocN<ImageFrameRange>(__func__);
+    ImageFrameRange *range = MEM_new_zeroed<ImageFrameRange>(__func__);
     BLI_addtail(&ranges, range);
 
     STRNCPY(range->filepath, filepath);
     was_relative = BLI_path_is_rel(filepath);
   }
 
-  LISTBASE_FOREACH (ImageFrameRange *, range, &ranges) {
+  for (ImageFrameRange &range : ranges) {
+    /* Expand the path if necessary so UDIM files can be resolved. */
     if (was_relative) {
-      BLI_path_abs(range->filepath, blendfile_path.c_str());
+      BLI_path_abs(range.filepath, base_path.c_str());
     }
-    image_detect_frame_range(range, detect_udim);
+    image_detect_frame_range(&range, detect_udim);
     if (was_relative) {
-      BLI_path_rel(range->filepath, root_path.c_str());
+      BLI_path_rel(range.filepath, root_path.c_str());
     }
   }
 
   return ranges;
 }
+
+}  // namespace blender

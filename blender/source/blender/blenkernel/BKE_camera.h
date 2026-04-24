@@ -6,6 +6,8 @@
 
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 /** \file
  * \ingroup bke
  * \brief Camera data-block and utility functions.
@@ -132,7 +134,8 @@ bool BKE_camera_view_frame_fit_to_coords(const struct Depsgraph *depsgraph,
 /**
  * Returns the camera to be used for render.
  */
-struct Object *BKE_camera_multiview_render(const struct Scene *scene,
+struct Object *BKE_camera_multiview_render(const Main &bmain,
+                                           const struct Scene *scene,
                                            struct Object *camera,
                                            const char *viewname);
 /**
@@ -178,3 +181,5 @@ struct CameraBGImage *BKE_camera_background_image_copy(const struct CameraBGImag
                                                        int flag);
 void BKE_camera_background_image_remove(struct Camera *cam, struct CameraBGImage *bgpic);
 void BKE_camera_background_image_clear(struct Camera *cam);
+
+}  // namespace blender

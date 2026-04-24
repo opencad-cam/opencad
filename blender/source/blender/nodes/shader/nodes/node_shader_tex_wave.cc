@@ -17,41 +17,49 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_tex_wave_cc {
+namespace blender {
+
+namespace nodes::node_shader_tex_wave_cc {
 
 static void sh_node_tex_wave_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Vector>("Vector").implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD);
-  b.add_input<decl::Float>("Scale").min(-1000.0f).max(1000.0f).default_value(5.0f).description(
-      "Overall texture scale");
-  b.add_input<decl::Float>("Distortion")
+  b.add_input<decl::Vector>("Vector"_ustr).implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD);
+  b.add_input<decl::Float>("Scale"_ustr)
+      .min(-1000.0f)
+      .max(1000.0f)
+      .default_value(5.0f)
+      .description("Overall texture scale");
+  b.add_input<decl::Float>("Distortion"_ustr)
       .min(-1000.0f)
       .max(1000.0f)
       .default_value(0.0f)
       .description("Amount of distortion of the wave");
-  b.add_input<decl::Float>("Detail").min(0.0f).max(15.0f).default_value(2.0f).description(
-      "Amount of distortion noise detail");
-  b.add_input<decl::Float>("Detail Scale")
+  b.add_input<decl::Float>("Detail"_ustr)
+      .min(0.0f)
+      .max(15.0f)
+      .default_value(2.0f)
+      .description("Amount of distortion noise detail");
+  b.add_input<decl::Float>("Detail Scale"_ustr)
       .min(-1000.0f)
       .max(1000.0f)
       .default_value(1.0f)
       .description("Scale of distortion noise");
-  b.add_input<decl::Float>("Detail Roughness")
+  b.add_input<decl::Float>("Detail Roughness"_ustr)
       .min(0.0f)
       .max(1.0f)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .description("Blend between a smoother noise pattern, and rougher with sharper peaks");
-  b.add_input<decl::Float>("Phase Offset")
+  b.add_input<decl::Float>("Phase Offset"_ustr)
       .min(-1000.0f)
       .max(1000.0f)
       .default_value(0.0f)
       .description(
           "Position of the wave along the Bands Direction.\n"
           "This can be used as an input for more control over the distortion");
-  b.add_output<decl::Color>("Color").no_muted_links();
-  b.add_output<decl::Float>("Factor", "Fac").no_muted_links();
+  b.add_output<decl::Color>("Color"_ustr).no_muted_links();
+  b.add_output<decl::Float>("Factor"_ustr, "Fac"_ustr).no_muted_links();
 }
 
 static void node_shader_buts_tex_wave(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -70,7 +78,7 @@ static void node_shader_buts_tex_wave(ui::Layout &layout, bContext * /*C*/, Poin
 
 static void node_shader_init_tex_wave(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeTexWave *tex = MEM_new_for_free<NodeTexWave>(__func__);
+  NodeTexWave *tex = MEM_new<NodeTexWave>(__func__);
   BKE_texture_mapping_default(&tex->base.tex_mapping, TEXMAP_TYPE_POINT);
   BKE_texture_colormapping_default(&tex->base.color_mapping);
   tex->wave_type = SHD_WAVE_BANDS;
@@ -89,7 +97,7 @@ static int node_shader_gpu_tex_wave(GPUMaterial *mat,
   node_shader_gpu_default_tex_coord(mat, node, &in[0].link);
   node_shader_gpu_tex_mapping(mat, node, in, out);
 
-  NodeTexWave *tex = (NodeTexWave *)node->storage;
+  NodeTexWave *tex = static_cast<NodeTexWave *>(node->storage);
   float wave_type = tex->wave_type;
   float bands_direction = tex->bands_direction;
   float rings_direction = tex->rings_direction;
@@ -222,7 +230,7 @@ class WaveFunction : public mf::MultiFunction {
       r_fac[i] = val;
     });
     if (!r_color.is_empty()) {
-      mask.foreach_index([&](const int64_t i) {
+      mask.foreach_index_optimized<int64_t>([&](const int64_t i) {
         r_color[i] = ColorGeometry4f(r_fac[i], r_fac[i], r_fac[i], 1.0f);
       });
     }
@@ -232,7 +240,7 @@ class WaveFunction : public mf::MultiFunction {
 static void sh_node_wave_tex_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   const bNode &node = builder.node();
-  NodeTexWave *tex = (NodeTexWave *)node.storage;
+  NodeTexWave *tex = static_cast<NodeTexWave *>(node.storage);
   builder.construct_and_set_matching_fn<WaveFunction>(
       tex->wave_type, tex->bands_direction, tex->rings_direction, tex->wave_profile);
 }
@@ -327,29 +335,31 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_tex_wave_cc
+}  // namespace nodes::node_shader_tex_wave_cc
 
 void register_node_type_sh_tex_wave()
 {
-  namespace file_ns = blender::nodes::node_shader_tex_wave_cc;
+  namespace file_ns = nodes::node_shader_tex_wave_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeTexWave", SH_NODE_TEX_WAVE);
+  common_node_type_base(&ntype, "ShaderNodeTexWave"_ustr, SH_NODE_TEX_WAVE);
   ntype.ui_name = "Wave Texture";
   ntype.ui_description = "Generate procedural bands or rings with noise";
   ntype.enum_name_legacy = "TEX_WAVE";
   ntype.nclass = NODE_CLASS_TEXTURE;
   ntype.declare = file_ns::sh_node_tex_wave_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_tex_wave;
-  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Middle);
+  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
   ntype.initfunc = file_ns::node_shader_init_tex_wave;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeTexWave", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_tex_wave;
   ntype.build_multi_function = file_ns::sh_node_wave_tex_build_multi_function;
   ntype.materialx_fn = file_ns::node_shader_materialx;
-  blender::bke::node_type_size(ntype, 160, 140, NODE_DEFAULT_MAX_WIDTH);
+  bke::node_type_size(ntype, 160, 140, NODE_DEFAULT_MAX_WIDTH);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

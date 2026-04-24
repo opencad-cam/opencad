@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "usd_writer_light.hh"
 #include "usd_attribute_utils.hh"
+#include "usd_colorspace_utils.hh"
 #include "usd_hierarchy_iterator.hh"
 
 #include <pxr/usd/usdLux/diskLight.h>
@@ -32,7 +33,7 @@ void USDLightWriter::do_write(HierarchyContext &context)
   const pxr::SdfPath &usd_path = usd_export_context_.usd_path;
   pxr::UsdTimeCode time = get_export_time_code();
 
-  const Light *light = static_cast<const Light *>(context.object->data);
+  const Light *light = id_cast<const Light *>(context.object->data);
   pxr::UsdLuxLightAPI usd_light_api;
 
   switch (light->type) {
@@ -176,6 +177,7 @@ void USDLightWriter::do_write(HierarchyContext &context)
   pxr::UsdPrim prim = usd_light_api.GetPrim();
   add_to_prim_map(prim.GetPath(), &light->id);
   write_id_properties(prim, light->id, time);
+  colorspace_apply_to_prim(prim);
 
   /* Only a subset of light types are "boundable". */
   if (auto boundable = pxr::UsdGeomBoundable(prim)) {

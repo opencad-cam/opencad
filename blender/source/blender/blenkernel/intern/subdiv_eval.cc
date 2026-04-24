@@ -9,6 +9,7 @@
 #include "BKE_attribute.hh"
 #include "BKE_subdiv_eval.hh"
 
+#include "BLI_array_utils.hh"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 #include "BLI_task.h"
@@ -93,24 +94,18 @@ bool eval_begin(Subdiv *subdiv,
 
 static void set_coarse_positions(Subdiv *subdiv,
                                  const Span<float3> positions,
-                                 const bke::LooseVertCache &verts_no_face)
+                                 const IndexMask &verts_no_face)
 {
   OpenSubdiv_Evaluator *evaluator = subdiv->evaluator;
-  if (verts_no_face.count == 0) {
+  if (verts_no_face.is_empty()) {
     evaluator->eval_output->setCoarsePositions(
         reinterpret_cast<const float *>(positions.data()), 0, positions.size());
     return;
   }
-  Array<float3> used_vert_positions(positions.size() - verts_no_face.count);
-  const BitSpan bits = verts_no_face.is_loose_bits;
-  int used_vert_count = 0;
-  for (const int vert : positions.index_range()) {
-    if (bits[vert]) {
-      continue;
-    }
-    used_vert_positions[used_vert_count] = positions[vert];
-    used_vert_count++;
-  }
+  Array<float3> used_vert_positions(positions.size() - verts_no_face.size());
+  IndexMaskMemory memory;
+  const IndexMask verts = verts_no_face.complement(positions.index_range(), memory);
+  array_utils::gather(positions, verts, used_vert_positions.as_mutable_span());
   evaluator->eval_output->setCoarsePositions(
       reinterpret_cast<const float *>(used_vert_positions.data()), 0, used_vert_positions.size());
 }
@@ -155,7 +150,7 @@ static void set_face_varying_data_from_uv(Subdiv *subdiv,
 
   const int num_fvar_values = topology_refiner->base_level().GetNumFVarValues(layer_index);
   /* Use a temporary buffer so we do not upload UVs one at a time to the GPU. */
-  float (*buffer)[2] = MEM_malloc_arrayN<float[2]>(size_t(num_fvar_values), __func__);
+  float (*buffer)[2] = MEM_new_array_uninitialized<float[2]>(size_t(num_fvar_values), __func__);
 
   FaceVaryingDataFromUVContext ctx;
   ctx.topology_refiner = topology_refiner;
@@ -174,7 +169,7 @@ static void set_face_varying_data_from_uv(Subdiv *subdiv,
 
   evaluator->eval_output->setFaceVaryingData(layer_index, &buffer[0][0], 0, num_fvar_values);
 
-  MEM_freeN(buffer);
+  MEM_delete(buffer);
 }
 
 static void set_vert_data_from_orco(Subdiv *subdiv, const Mesh *mesh)
@@ -185,7 +180,7 @@ static void set_vert_data_from_orco(Subdiv *subdiv, const Mesh *mesh)
       CustomData_get_layer(&mesh->vert_data, CD_CLOTH_ORCO));
 
   if (orco || cloth_orco) {
-    blender::opensubdiv::TopologyRefinerImpl *topology_refiner = subdiv->topology_refiner;
+    opensubdiv::TopologyRefinerImpl *topology_refiner = subdiv->topology_refiner;
     OpenSubdiv_Evaluator *evaluator = subdiv->evaluator;
     const int num_verts = topology_refiner->base_level().GetNumVertices();
 

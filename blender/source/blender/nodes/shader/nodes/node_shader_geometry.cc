@@ -4,19 +4,21 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_geometry_cc {
+namespace blender {
+
+namespace nodes::node_shader_geometry_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("Position");
-  b.add_output<decl::Vector>("Normal");
-  b.add_output<decl::Vector>("Tangent");
-  b.add_output<decl::Vector>("True Normal");
-  b.add_output<decl::Vector>("Incoming");
-  b.add_output<decl::Vector>("Parametric");
-  b.add_output<decl::Float>("Backfacing");
-  b.add_output<decl::Float>("Pointiness");
-  b.add_output<decl::Float>("Random Per Island");
+  b.add_output<decl::Vector>("Position"_ustr);
+  b.add_output<decl::Vector>("Normal"_ustr);
+  b.add_output<decl::Vector>("Tangent"_ustr);
+  b.add_output<decl::Vector>("True Normal"_ustr);
+  b.add_output<decl::Vector>("Incoming"_ustr);
+  b.add_output<decl::Vector>("Parametric"_ustr);
+  b.add_output<decl::Float>("Backfacing"_ustr);
+  b.add_output<decl::Float>("Pointiness"_ustr);
+  b.add_output<decl::Float>("Random Per Island"_ustr);
 }
 
 static int node_shader_gpu_geometry(GPUMaterial *mat,
@@ -36,8 +38,7 @@ static int node_shader_gpu_geometry(GPUMaterial *mat,
 
   const bool success = GPU_stack_link(mat, node, "node_geometry", in, out, orco_link);
 
-  int i;
-  LISTBASE_FOREACH_INDEX (bNodeSocket *, sock, &node->outputs, i) {
+  for (const auto [i, sock] : node->outputs.enumerate()) {
     node_shader_gpu_bump_tex_coord(mat, node, &out[i].link);
     /* Normalize some vectors after dFdx/dFdy offsets.
      * This is the case for interpolated, non linear functions.
@@ -82,16 +83,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_geometry_cc
+}  // namespace nodes::node_shader_geometry_cc
 
 /* node type definition */
 void register_node_type_sh_geometry()
 {
-  namespace file_ns = blender::nodes::node_shader_geometry_cc;
+  namespace file_ns = nodes::node_shader_geometry_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeNewGeometry", SH_NODE_NEW_GEOMETRY);
+  sh_node_type_base(&ntype, "ShaderNodeNewGeometry"_ustr, SH_NODE_NEW_GEOMETRY);
   ntype.ui_name = "Geometry";
   ntype.ui_description = "Retrieve geometric information about the current shading point";
   ntype.enum_name_legacy = "NEW_GEOMETRY";
@@ -100,5 +101,7 @@ void register_node_type_sh_geometry()
   ntype.gpu_fn = file_ns::node_shader_gpu_geometry;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -6,7 +6,8 @@ set(INC
   ..
 )
 
-set(INC_SYS )
+set(INC_SYS
+)
 
 if(WITH_CYCLES_DEVICE_OPTIX OR WITH_CYCLES_DEVICE_CUDA)
   if(NOT WITH_CUDA_DYNLOAD)
@@ -142,31 +143,37 @@ set(SRC
 )
 
 set(LIB
-  cycles_kernel
-  cycles_util
+  PUBLIC cycles_kernel
+  PUBLIC cycles_util
+  PRIVATE bf::dependencies::optional::openimagedenoise
+  PRIVATE bf::dependencies::optional::osl
 )
 
 if(WITH_CYCLES_DEVICE_OPTIX OR WITH_CYCLES_DEVICE_CUDA)
   if(WITH_CUDA_DYNLOAD)
     list(APPEND LIB
-      extern_cuew
+      PRIVATE extern_cuew
     )
   else()
     list(APPEND LIB
-      ${CUDA_CUDA_LIBRARY}
+      PRIVATE ${CUDA_CUDA_LIBRARY}
     )
   endif()
 endif()
 
 if(WITH_CYCLES_DEVICE_HIP AND WITH_HIP_DYNLOAD)
   list(APPEND LIB
-    extern_hipew
+    PRIVATE extern_hipew
   )
+endif()
+
+if(WITH_CYCLES_DEVICE_HIPRT)
+  list(APPEND LIB ${HIPRT_LIBRARIES})
 endif()
 
 if(WITH_CYCLES_DEVICE_METAL)
   list(APPEND LIB
-    ${METAL_LIBRARY}
+    PRIVATE ${METAL_LIBRARY}
   )
   list(APPEND SRC
     ${SRC_METAL}
@@ -174,21 +181,18 @@ if(WITH_CYCLES_DEVICE_METAL)
 endif()
 
 if(WITH_CYCLES_DEVICE_ONEAPI)
-  if(WITH_CYCLES_ONEAPI_HOST_TASK_EXECUTION)
-    add_definitions(-DWITH_ONEAPI_SYCL_HOST_TASK)
-  endif()
   if(WITH_CYCLES_ONEAPI_BINARIES)
     set(cycles_kernel_oneapi_lib_suffix "_aot")
   else()
     set(cycles_kernel_oneapi_lib_suffix "_jit")
   endif()
   if(WIN32)
-    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/cycles_kernel_oneapi${cycles_kernel_oneapi_lib_suffix}.lib)
+    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/device/oneapi/cycles_kernel_oneapi${cycles_kernel_oneapi_lib_suffix}.lib)
   else()
-    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/libcycles_kernel_oneapi${cycles_kernel_oneapi_lib_suffix}.so)
+    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/device/oneapi/libcycles_kernel_oneapi${cycles_kernel_oneapi_lib_suffix}.so)
   endif()
   list(APPEND LIB
-    ${cycles_kernel_oneapi_lib}
+    PRIVATE ${cycles_kernel_oneapi_lib}
     ${SYCL_LIBRARIES}
   )
   list(APPEND SRC
@@ -211,7 +215,7 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
           sycl::ext::oneapi::experimental::unmap_external_linear_memory(nullptr, sycl_queue);
       }
   " SYCL_UNMAP_EXTERNAL_LINEAR_MEMORY_SUPPORTED)
-  if (SYCL_UNMAP_EXTERNAL_LINEAR_MEMORY_SUPPORTED)
+  if(SYCL_UNMAP_EXTERNAL_LINEAR_MEMORY_SUPPORTED)
     foreach(FILE ${SRC_ONEAPI})
       set_source_files_properties(
           ${FILE} PROPERTIES COMPILE_DEFINITIONS "SYCL_LINEAR_MEMORY_INTEROP_AVAILABLE"
@@ -225,19 +229,6 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
   unset(CMAKE_REQUIRED_INCLUDES)
   unset(CMAKE_REQUIRED_LIBRARIES)
 endif()
-
-if(WITH_OPENIMAGEDENOISE)
-  list(APPEND LIB
-    ${OPENIMAGEDENOISE_LIBRARIES}
-  )
-endif()
-
-if(WITH_CYCLES_OSL)
-  list(APPEND LIB
-    ${OSL_LIBRARIES}
-  )
-endif()
-
 
 include_directories(${INC})
 include_directories(SYSTEM ${INC_SYS})

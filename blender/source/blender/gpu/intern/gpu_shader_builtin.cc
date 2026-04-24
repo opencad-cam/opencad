@@ -6,6 +6,7 @@
  * \ingroup gpu
  */
 
+#include "GPU_shader_builtin.hh"
 #include "BKE_global.hh"
 #include "BLI_utildefines.h"
 
@@ -14,11 +15,13 @@
 
 #include "gpu_shader_private.hh"
 
-struct BuiltinShader : blender::gpu::StaticShader {
+namespace blender {
+
+struct BuiltinShader : gpu::StaticShader {
   /* WORKAROUND: This is needed for the polyline workaround default initialization. */
   bool init = false;
 
-  BuiltinShader(std::string info_name) : blender::gpu::StaticShader(info_name) {}
+  BuiltinShader(std::string info_name) : gpu::StaticShader(info_name) {}
 };
 
 /* Cache of built-in shaders (each is created on first use). */
@@ -123,6 +126,35 @@ static const char *builtin_shader_create_info_name(GPUBuiltinShader shader)
       return "gpu_shader_index_2d_array_lines";
     case GPU_SHADER_INDEXBUF_TRIS:
       return "gpu_shader_index_2d_array_tris";
+
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8:
+      return "gpu_shader_2D_update_mipmaps_unorm_8";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_unorm_8_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8:
+      return "gpu_shader_2D_update_mipmaps_unorm_8_8_8_8";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_unorm_8_8_8_8_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16_16_16_16";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_16_16_16_16_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32_32_32_32";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_sfloat_32_32_32_32_layered";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8:
+      return "gpu_shader_2D_update_mipmaps_srgba_8_8_8_8";
+    case GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8_LAYERED:
+      return "gpu_shader_2D_update_mipmaps_srgba_8_8_8_8_layered";
     default:
       BLI_assert_unreachable();
       return "";
@@ -152,8 +184,8 @@ static const char *builtin_shader_create_info_name_clipped(GPUBuiltinShader shad
   }
 }
 
-blender::gpu::Shader *GPU_shader_get_builtin_shader_with_config(GPUBuiltinShader shader,
-                                                                GPUShaderConfig sh_cfg)
+gpu::Shader *GPU_shader_get_builtin_shader_with_config(GPUBuiltinShader shader,
+                                                       GPUShaderConfig sh_cfg)
 {
   BLI_assert(shader < GPU_SHADER_BUILTIN_LEN);
 
@@ -175,7 +207,7 @@ blender::gpu::Shader *GPU_shader_get_builtin_shader_with_config(GPUBuiltinShader
     else if (sh_cfg == GPU_SHADER_CFG_CLIPPED) {
       /* In rare cases geometry shaders calculate clipping themselves. */
       const char *info_name_clipped = builtin_shader_create_info_name_clipped(shader);
-      if (!blender::StringRefNull(info_name_clipped).is_empty()) {
+      if (!StringRefNull(info_name_clipped).is_empty()) {
         *sh_p = MEM_new<BuiltinShader>(__func__, info_name_clipped);
       }
     }
@@ -192,7 +224,7 @@ blender::gpu::Shader *GPU_shader_get_builtin_shader_with_config(GPUBuiltinShader
              GPU_SHADER_3D_POLYLINE_FLAT_COLOR,
              GPU_SHADER_3D_POLYLINE_SMOOTH_COLOR))
     {
-      blender::gpu::Shader *sh = (*sh_p)->get();
+      gpu::Shader *sh = (*sh_p)->get();
       /* Set a default value for `lineSmooth`.
        * Ideally this value should be set by the caller. */
       GPU_shader_bind(sh);
@@ -227,7 +259,7 @@ static void gpu_shader_warm_builtin_shader_async(GPUBuiltinShader shader, GPUSha
     else if (sh_cfg == GPU_SHADER_CFG_CLIPPED) {
       /* In rare cases geometry shaders calculate clipping themselves. */
       const char *info_name_clipped = builtin_shader_create_info_name_clipped(shader);
-      if (!blender::StringRefNull(info_name_clipped).is_empty()) {
+      if (!StringRefNull(info_name_clipped).is_empty()) {
         *sh_p = MEM_new<BuiltinShader>(__func__, info_name_clipped);
       }
     }
@@ -238,7 +270,7 @@ static void gpu_shader_warm_builtin_shader_async(GPUBuiltinShader shader, GPUSha
   (*sh_p)->ensure_compile_async();
 }
 
-blender::gpu::Shader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
+gpu::Shader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 {
   return GPU_shader_get_builtin_shader_with_config(shader, GPU_SHADER_CFG_DEFAULT);
 }
@@ -289,3 +321,5 @@ void GPU_shader_free_builtin_shaders()
     }
   }
 }
+
+}  // namespace blender

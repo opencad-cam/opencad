@@ -22,9 +22,12 @@
 #include "BLI_math_vector.h"
 #include "BLI_string_utf8.h"
 
+#include "BLT_translation.hh"
+
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_report.hh"
+#include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_unit.hh"
 
@@ -42,6 +45,8 @@
 
 #include "eyedropper_intern.hh"
 #include "interface_intern.hh"
+
+#include "ANIM_keyframing.hh"
 
 namespace blender::ui {
 
@@ -158,7 +163,7 @@ static int depthdropper_init(bContext *C, wmOperator *op)
       MEM_delete(ddr);
       return false;
     }
-    PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, &RNA_Context, C);
+    PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, RNA_Context, C);
     if (!depthdropper_get_path(&ctx_ptr, op, prop_data_path.c_str(), &ddr->ptr, &ddr->prop)) {
       MEM_delete(ddr);
       return false;
@@ -175,9 +180,8 @@ static int depthdropper_init(bContext *C, wmOperator *op)
         if (v3d->camera && v3d->camera->data &&
             BKE_id_is_editable(CTX_data_main(C), static_cast<const ID *>(v3d->camera->data)))
         {
-          Camera *camera = (Camera *)v3d->camera->data;
-          ddr->ptr = RNA_pointer_create_discrete(
-              &camera->id, &RNA_CameraDOFSettings, &camera->dof);
+          Camera *camera = id_cast<Camera *>(v3d->camera->data);
+          ddr->ptr = RNA_pointer_create_discrete(&camera->id, RNA_CameraDOFSettings, &camera->dof);
           ddr->prop = RNA_struct_find_property(&ddr->ptr, "focus_distance");
           ddr->is_undo = true;
         }
@@ -213,7 +217,7 @@ static void depthdropper_exit(bContext *C, wmOperator *op)
   WM_cursor_modal_restore(CTX_wm_window(C));
 
   if (op->customdata) {
-    DepthDropper *ddr = (DepthDropper *)op->customdata;
+    DepthDropper *ddr = static_cast<DepthDropper *>(op->customdata);
 
     if (ddr->art) {
       ED_region_draw_cb_exit(ddr->art, ddr->draw_handle_pixel);
@@ -289,7 +293,7 @@ static void depthdropper_depth_sample_pt(bContext *C,
                                    false);
         }
         else {
-          STRNCPY_UTF8(ddr->name, "Nothing under cursor");
+          STRNCPY_UTF8(ddr->name, RPT_("Nothing under cursor"));
         }
       }
     }
@@ -305,6 +309,10 @@ static void depthdropper_depth_set(bContext *C, DepthDropper *ddr, const float d
   RNA_property_float_set(&ddr->ptr, ddr->prop, depth);
   ddr->is_set = true;
   RNA_property_update(C, &ddr->ptr, ddr->prop);
+  Scene *scene = CTX_data_scene(C);
+  const bool only_when_keyed = animrig::is_keying_flag(scene, AUTOKEY_FLAG_INSERTAVAILABLE);
+  animrig::autokeyframe_property(
+      C, scene, &ddr->ptr, ddr->prop, 0, BKE_scene_frame_get(scene), only_when_keyed);
 }
 
 /* set sample from accumulated values */

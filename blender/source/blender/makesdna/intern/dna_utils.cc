@@ -24,6 +24,8 @@
 
 #include "dna_utils.h"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Struct Member Evaluation
  * \{ */
@@ -262,7 +264,7 @@ void DNA_alias_maps(enum eDNA_RenameDir version_dir, GHash **r_type_map, GHash *
     GHash *member_map = BLI_ghash_new_ex(
         strhash_pair_p, strhash_pair_cmp, __func__, ARRAY_SIZE(member_data));
     for (int i = 0; i < ARRAY_SIZE(member_data); i++) {
-      const char **str_pair = MEM_malloc_arrayN<const char *>(2, __func__);
+      const char **str_pair = MEM_new_array_uninitialized<const char *>(2, __func__);
       str_pair[0] = static_cast<const char *>(
           BLI_ghash_lookup_default(type_map_local, member_data[i][0], (void *)member_data[i][0]));
       str_pair[1] = member_data[i][elem_key];
@@ -348,3 +350,5 @@ void _DNA_internal_swap(void *a, void *b, const size_t size)
 }
 
 /** \} */
+
+}  // namespace blender

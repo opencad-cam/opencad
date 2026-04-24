@@ -19,7 +19,9 @@
 
 #include "UI_interface_c.hh"  // IWYU pragma: export
 
-namespace blender::nodes::geo_eval_log {
+namespace blender {
+
+namespace nodes::eval_log {
 struct GeometryAttributeInfo;
 }
 
@@ -31,14 +33,11 @@ struct uiList;
 struct wmDrag;
 struct wmEvent;
 
-namespace blender::ui {
+namespace ui {
 class AbstractView;
 class AbstractViewItem;
 struct Layout;
 struct SearchItems;
-}  // namespace blender::ui
-
-namespace blender::ui {
 
 void button_func_set(Button *but, std::function<void(bContext &)> func);
 void button_func_pushed_state_set(Button *but, std::function<bool(const Button &)> func);
@@ -89,7 +88,7 @@ void template_breadcrumbs(Layout &layout, Span<ContextPathItem> context_path);
 
 void attribute_search_add_items(StringRef str,
                                 bool can_create_attribute,
-                                Span<const nodes::geo_eval_log::GeometryAttributeInfo *> infos,
+                                Span<const nodes::eval_log::GeometryAttributeInfo *> infos,
                                 SearchItems *items,
                                 bool is_first);
 void grease_pencil_layer_search_add_items(StringRef str,
@@ -201,10 +200,10 @@ bool drop_target_apply_drop(bContext &C,
                             const ARegion &region,
                             const wmEvent &event,
                             const DropTargetInterface &drop_target,
-                            const ListBase &drags);
+                            const ListBaseT<wmDrag> &drags);
 /**
  * Call #DropTargetInterface::drop_tooltip() and return the result as newly allocated C string
- * (unless the result is empty, returns null then). Needs freeing with MEM_freeN().
+ * (unless the result is empty, returns null then). Needs freeing with MEM_delete().
  */
 std::string drop_target_tooltip(const ARegion &region,
                                 const DropTargetInterface &drop_target,
@@ -230,7 +229,7 @@ enum eUIListFilterResult {
 
 /**
  * Function object for UI list item filtering that does the default name comparison with '*'
- * wildcards. Create an instance of this once and pass it to #list_filter_and_sort_items(), do
+ * wildcards. Create an instance of this once and pass it to #uilist_filter_and_sort_items(), do
  * NOT create an instance for every item, this would be costly.
  */
 class uiListNameFilter {
@@ -267,12 +266,12 @@ using uiListItemGetNameFn = FunctionRef<std::string(const PointerRNA &itemptr, i
  * \param get_name_fn: In some cases the name cannot be retrieved via RNA. This function can be set
  *                     to provide the name still.
  */
-void list_filter_and_sort_items(uiList *ui_list,
-                                const bContext *C,
-                                uiListItemFilterFn item_filter_fn,
-                                PointerRNA *dataptr,
-                                const char *propname,
-                                uiListItemGetNameFn get_name_fn = nullptr);
+void uilist_filter_and_sort_items(uiList *ui_list,
+                                  const bContext *C,
+                                  uiListItemFilterFn item_filter_fn,
+                                  PointerRNA *dataptr,
+                                  const char *propname,
+                                  uiListItemGetNameFn get_name_fn = nullptr);
 
 /**
  * Override this for all available view types.
@@ -288,4 +287,5 @@ AbstractTreeView *block_add_view(Block &block,
 
 void alert(bContext *C, StringRef title, StringRef message, AlertIcon icon, bool compact);
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

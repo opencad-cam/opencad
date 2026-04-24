@@ -4,11 +4,13 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_output_light_cc {
+namespace blender {
+
+namespace nodes::node_shader_output_light_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Shader>("Surface");
+  b.add_input<decl::Shader>("Surface"_ustr);
 }
 
 static int node_shader_gpu_output_light(GPUMaterial *mat,
@@ -27,16 +29,16 @@ static int node_shader_gpu_output_light(GPUMaterial *mat,
   return true;
 }
 
-}  // namespace blender::nodes::node_shader_output_light_cc
+}  // namespace nodes::node_shader_output_light_cc
 
 /* node type definition */
 void register_node_type_sh_output_light()
 {
-  namespace file_ns = blender::nodes::node_shader_output_light_cc;
+  namespace file_ns = nodes::node_shader_output_light_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeOutputLight", SH_NODE_OUTPUT_LIGHT);
+  sh_node_type_base(&ntype, "ShaderNodeOutputLight"_ustr, SH_NODE_OUTPUT_LIGHT);
   ntype.ui_name = "Light Output";
   ntype.ui_description = "Output light information to a light object";
   ntype.enum_name_legacy = "OUTPUT_LIGHT";
@@ -47,5 +49,7 @@ void register_node_type_sh_output_light()
 
   ntype.no_muting = true;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

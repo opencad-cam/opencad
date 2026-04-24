@@ -226,8 +226,8 @@ ccl_device float volume_shader_phase_eval(const ccl_private ShaderData *sd,
   return phase_pdf;
 }
 
-ccl_device float volume_shader_phase_eval(KernelGlobals kg,
-                                          IntegratorState state,
+ccl_device float volume_shader_phase_eval(ccl_attr_maybe_unused KernelGlobals kg,
+                                          ccl_attr_maybe_unused IntegratorState state,
                                           const ccl_private ShaderData *sd,
                                           const ccl_private ShaderVolumePhases *phases,
                                           const float3 wo,
@@ -368,7 +368,7 @@ ccl_device_inline void volume_shader_motion_blur(KernelGlobals kg,
   }
 
   const AttributeDescriptor v_desc = find_attribute(kg, sd, ATTR_STD_VOLUME_VELOCITY);
-  kernel_assert(v_desc.offset != ATTR_STD_NOT_FOUND);
+  kernel_assert(is_attribute_found(v_desc));
 
   const float3 P = sd->P;
   const float velocity_scale = kernel_data_fetch(objects, sd->object).velocity_scale;
@@ -513,7 +513,7 @@ ccl_device_inline void volume_shader_eval(KernelGlobals kg,
    * for all volumes in the stack into a single array of closures */
   sd->num_closure = 0;
   sd->num_closure_left = max_closures;
-  sd->flag = SD_IS_VOLUME_SHADER_EVAL;
+  sd->flag = SD_IS_VOLUME_SHADER_EVAL | (sd->flag & SD_CACHE_MISS);
   sd->object_flag = 0;
 
   for (int i = 0;; i++) {

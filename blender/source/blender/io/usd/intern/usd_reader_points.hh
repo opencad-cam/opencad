@@ -4,14 +4,17 @@
 #pragma once
 
 #include "usd.hh"
+#include "usd_api_modifier.hh"
 #include "usd_reader_geom.hh"
 
 #include <pxr/usd/usdGeom/points.h>
 
+namespace blender {
+
 struct Main;
 struct PointCloud;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /*
  * Read UsdGeomPoints primitives as Blender point clouds.
@@ -53,4 +56,5 @@ class USDPointsReader : public USDGeomReader {
   bool is_animated() const;
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

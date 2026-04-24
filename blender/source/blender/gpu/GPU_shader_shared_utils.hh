@@ -140,20 +140,6 @@ template<typename T> struct union_t {
 
 /* To be used on struct. Means the layout is to be used with uniform or storage buffers. */
 #    define host_shared
-/* To be used on struct with host_shared. Bypass layout checks when syntax doesn't permit it (macro
- * usage, unions etc...). */
-#    define unchecked
 
-#  endif
-
-/* For assert support. */
-#  if defined(GPU_VERTEX_SHADER)
-#    define GPU_THREAD uint3(gl_VertexID, gl_InstanceID, 0)
-#  elif defined(GPU_FRAGMENT_SHADER)
-#    define GPU_THREAD uint3(gl_FragCoord.x, gl_FragCoord.y, 0)
-#  elif defined(GPU_COMPUTE_SHADER)
-#    define GPU_THREAD gl_GlobalInvocationID
-#  else
-#    define GPU_THREAD error_not_in_a_shader_question_mark
 #  endif
 #endif

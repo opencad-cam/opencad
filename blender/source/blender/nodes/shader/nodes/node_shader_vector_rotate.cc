@@ -20,7 +20,9 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_vector_rotate_cc {
+namespace blender {
+
+namespace nodes::node_shader_vector_rotate_cc {
 
 static void sh_node_vector_rotate_declare(NodeDeclarationBuilder &b)
 {
@@ -28,19 +30,19 @@ static void sh_node_vector_rotate_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_default_layout();
-  b.add_input<decl::Vector>("Vector").min(0.0f).max(1.0f).hide_value();
-  b.add_output<decl::Vector>("Vector").align_with_previous();
-  b.add_input<decl::Vector>("Center").description("Point to rotate around");
-  b.add_input<decl::Vector>("Axis")
+  b.add_input<decl::Vector>("Vector"_ustr).min(0.0f).max(1.0f).hide_value();
+  b.add_output<decl::Vector>("Vector"_ustr).align_with_previous();
+  b.add_input<decl::Vector>("Center"_ustr).description("Point to rotate around");
+  b.add_input<decl::Vector>("Axis"_ustr)
       .min(-1.0f)
       .max(1.0f)
       .default_value({0.0f, 0.0f, 1.0f})
       .make_available([](bNode &node) { node.custom1 = NODE_VECTOR_ROTATE_TYPE_AXIS; })
       .description("Axis to rotate around");
-  b.add_input<decl::Float>("Angle")
+  b.add_input<decl::Float>("Angle"_ustr)
       .subtype(PROP_ANGLE)
       .description("Angle to rotate the input vector by");
-  b.add_input<decl::Vector>("Rotation")
+  b.add_input<decl::Vector>("Rotation"_ustr)
       .subtype(PROP_EULER)
       .make_available([](bNode &node) { node.custom1 = NODE_VECTOR_ROTATE_TYPE_EULER_XYZ; })
       .description(
@@ -263,15 +265,15 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_vector_rotate_cc
+}  // namespace nodes::node_shader_vector_rotate_cc
 
 void register_node_type_sh_vector_rotate()
 {
-  namespace file_ns = blender::nodes::node_shader_vector_rotate_cc;
+  namespace file_ns = nodes::node_shader_vector_rotate_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeVectorRotate", SH_NODE_VECTOR_ROTATE);
+  common_node_type_base(&ntype, "ShaderNodeVectorRotate"_ustr, SH_NODE_VECTOR_ROTATE);
   ntype.ui_name = "Vector Rotate";
   ntype.ui_description = "Rotate a vector around a pivot point (center)";
   ntype.enum_name_legacy = "VECTOR_ROTATE";
@@ -283,5 +285,7 @@ void register_node_type_sh_vector_rotate()
   ntype.build_multi_function = file_ns::sh_node_vector_rotate_build_multi_function;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

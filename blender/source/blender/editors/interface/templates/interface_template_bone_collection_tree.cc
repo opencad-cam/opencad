@@ -84,7 +84,7 @@ class BoneCollectionDragController : public AbstractViewItemDragController {
 
   std::optional<eWM_DragDataType> get_drag_type() const override;
   void *create_drag_data() const override;
-  void on_drag_start(bContext &C) override;
+  void on_drag_start(bContext &C, AbstractViewItem &item) override;
 };
 
 class BoneCollectionDropTarget : public TreeViewItemDropTarget {
@@ -272,7 +272,7 @@ class BoneCollectionItem : public AbstractTreeViewItem {
 
   std::optional<bool> should_be_active() const override
   {
-    return armature_.runtime.active_collection_index == bcoll_index_;
+    return armature_.runtime->active_collection_index == bcoll_index_;
   }
 
   void on_activate(bContext &C) override
@@ -280,7 +280,7 @@ class BoneCollectionItem : public AbstractTreeViewItem {
     /* Let RNA handle the property change. This makes sure all the notifiers and DEG
      * update calls are properly called. */
     PointerRNA bcolls_ptr = RNA_pointer_create_discrete(
-        &armature_.id, &RNA_BoneCollections, &armature_);
+        &armature_.id, RNA_BoneCollections, &armature_);
     PropertyRNA *prop = RNA_struct_find_property(&bcolls_ptr, "active_index");
 
     RNA_property_int_set(&bcolls_ptr, prop, bcoll_index_);
@@ -313,7 +313,7 @@ class BoneCollectionItem : public AbstractTreeViewItem {
     /* Let RNA handle the property change. This makes sure all the notifiers and DEG
      * update calls are properly called. */
     PointerRNA bcoll_ptr = RNA_pointer_create_discrete(
-        &armature_.id, &RNA_BoneCollection, &bone_collection_);
+        &armature_.id, RNA_BoneCollection, &bone_collection_);
     PropertyRNA *prop = RNA_struct_find_property(&bcoll_ptr, "is_expanded");
 
     RNA_property_boolean_set(&bcoll_ptr, prop, is_expanded);
@@ -373,7 +373,7 @@ class BoneCollectionItem : public AbstractTreeViewItem {
   /** RNA pointer to the BoneCollection. */
   PointerRNA rna_pointer()
   {
-    return RNA_pointer_create_discrete(&armature_.id, &RNA_BoneCollection, &bone_collection_);
+    return RNA_pointer_create_discrete(&armature_.id, RNA_BoneCollection, &bone_collection_);
   }
 };
 
@@ -413,13 +413,13 @@ void BoneCollectionTreeView::build_bcolls_with_selected_bones()
 
   /* Armature Edit mode. */
   if (armature_.edbo) {
-    LISTBASE_FOREACH (EditBone *, ebone, armature_.edbo) {
-      if ((ebone->flag & BONE_SELECTED) == 0) {
+    for (EditBone &ebone : *armature_.edbo) {
+      if ((ebone.flag & BONE_SELECTED) == 0) {
         continue;
       }
 
-      LISTBASE_FOREACH (BoneCollectionReference *, ref, &ebone->bone_collections) {
-        bcolls_with_selected_bones_.add(ref->bcoll);
+      for (BoneCollectionReference &ref : ebone.bone_collections) {
+        bcolls_with_selected_bones_.add(ref.bcoll);
       }
     }
     return;
@@ -431,8 +431,8 @@ void BoneCollectionTreeView::build_bcolls_with_selected_bones()
       return;
     }
 
-    LISTBASE_FOREACH (const BoneCollectionReference *, ref, &bone->runtime.collections) {
-      bcolls_with_selected_bones_.add(ref->bcoll);
+    for (const BoneCollectionReference &ref : bone->runtime.collections) {
+      bcolls_with_selected_bones_.add(ref.bcoll);
     }
   });
 }
@@ -451,12 +451,12 @@ std::optional<eWM_DragDataType> BoneCollectionDragController::get_drag_type() co
 
 void *BoneCollectionDragController::create_drag_data() const
 {
-  ArmatureBoneCollection *drag_data = MEM_callocN<ArmatureBoneCollection>(__func__);
+  ArmatureBoneCollection *drag_data = MEM_new_zeroed<ArmatureBoneCollection>(__func__);
   *drag_data = drag_arm_bcoll_;
   return drag_data;
 }
 
-void BoneCollectionDragController::on_drag_start(bContext & /*C*/)
+void BoneCollectionDragController::on_drag_start(bContext & /*C*/, AbstractViewItem & /*item*/)
 {
   ANIM_armature_bonecoll_active_index_set(drag_arm_bcoll_.armature, drag_arm_bcoll_.bcoll_index);
 }

@@ -30,7 +30,9 @@
 #undef GPU_SHADER_INTERFACE_END
 #undef GPU_SHADER_CREATE_END
 
-namespace blender::gpu::shader {
+namespace blender {
+
+namespace gpu::shader {
 
 using CreateInfoDictionary = Map<StringRef, ShaderCreateInfo *>;
 using InterfaceDictionary = Map<StringRef, StageInterfaceInfo *>;
@@ -94,7 +96,7 @@ bool ShaderCreateInfo::is_vulkan_compatible() const
   return true;
 }
 
-std::string ShaderCreateInfo::buffer_typename(StringRefNull type_name) const
+std::string ShaderCreateInfo::buffer_typename(StringRefNull type_name, bool uniform_buffer) const
 {
   if (bool(this->builtins_ & BuiltinBits::NO_BUFFER_TYPE_LINTING) || type_name.startswith("int") ||
       type_name.startswith("uint") || type_name.startswith("float") ||
@@ -102,7 +104,7 @@ std::string ShaderCreateInfo::buffer_typename(StringRefNull type_name) const
   {
     return type_name;
   }
-  return type_name + "_host_shared_";
+  return type_name + "_host_shared_" + (uniform_buffer ? "uniform_" : "");
 }
 
 /** \} */
@@ -429,6 +431,74 @@ std::string ShaderCreateInfo::check_error() const
     }
   }
 
+  /* Check same bind-points usage. */
+  Set<int> images, samplers, ubos, ssbos;
+
+  auto register_resource = [&](const Resource &res) -> bool {
+    switch (res.bind_type) {
+      case Resource::BindType::UNIFORM_BUFFER:
+        return ubos.add(res.slot);
+      case Resource::BindType::STORAGE_BUFFER:
+        return ssbos.add(res.slot);
+      case Resource::BindType::SAMPLER:
+        return samplers.add(res.slot);
+      case Resource::BindType::IMAGE:
+        return images.add(res.slot);
+      default:
+        return false;
+    }
+  };
+
+  auto print_error_msg = [&](const Resource &res, const Vector<Resource> &resources) {
+    auto print_resource_name = [&](const Resource &res) {
+      switch (res.bind_type) {
+        case Resource::BindType::UNIFORM_BUFFER:
+          error += "Uniform Buffer " + res.uniformbuf.name;
+          break;
+        case Resource::BindType::STORAGE_BUFFER:
+          error += "Storage Buffer " + res.storagebuf.name;
+          break;
+        case Resource::BindType::SAMPLER:
+          error += "Sampler " + res.sampler.name;
+          break;
+        case Resource::BindType::IMAGE:
+          error += "Image " + res.image.name;
+          break;
+        default:
+          error += "Unknown Type";
+          break;
+      }
+    };
+
+    for (const Resource &_res : resources) {
+      if (&res != &_res && res.bind_type == _res.bind_type && res.slot == _res.slot) {
+        error += name_ + ": Validation failed : Overlapping ";
+        print_resource_name(res);
+        error += " and ";
+        print_resource_name(_res);
+        error += " at binding location " + std::to_string(res.slot) + "\n";
+      }
+    }
+  };
+
+  for (const auto &res : batch_resources_) {
+    if (register_resource(res) == false) {
+      print_error_msg(res, resources_get_all_());
+    }
+  }
+
+  for (const auto &res : pass_resources_) {
+    if (register_resource(res) == false) {
+      print_error_msg(res, resources_get_all_());
+    }
+  }
+
+  for (const auto &res : geometry_resources_) {
+    if (register_resource(res) == false) {
+      print_error_msg(res, resources_get_all_());
+    }
+  }
+
   return error;
 }
 
@@ -552,7 +622,7 @@ void ShaderCreateInfo::validate_vertex_attributes(const ShaderCreateInfo *other_
   }
 }
 
-}  // namespace blender::gpu::shader
+}  // namespace gpu::shader
 
 using namespace blender::gpu::shader;
 
@@ -621,7 +691,7 @@ void gpu_shader_create_info_init()
     }
 
 #if GPU_SHADER_PRINTF_ENABLE
-    const bool is_material_shader = blender::StringRefNull(info->name_).startswith("eevee_surf_");
+    const bool is_material_shader = StringRefNull(info->name_).startswith("eevee_surf_");
     if (flag_is_set(info->builtins_, BuiltinBits::USE_PRINTF) ||
         (gpu_shader_dependency_force_gpu_print_injection() && is_material_shader))
     {
@@ -663,7 +733,6 @@ void gpu_shader_create_info_exit()
 
 bool gpu_shader_create_info_compile_all(const char *name_starts_with_filter)
 {
-  using namespace blender;
   using namespace blender::gpu;
   int success = 0;
   int skipped_filter = 0;
@@ -697,7 +766,7 @@ bool gpu_shader_create_info_compile_all(const char *name_starts_with_filter)
   GPU_shader_compiler_wait_for_all();
 
   for (AsyncCompilationHandle handle : handles) {
-    if (blender::gpu::Shader *result = GPU_shader_async_compilation_finalize(handle)) {
+    if (gpu::Shader *result = GPU_shader_async_compilation_finalize(handle)) {
       success++;
 #if 0 /* TODO(fclem): This is too verbose for now. Make it a cmake option. */
         /* Test if any resource is optimized out and print a warning if that's the case. */
@@ -763,3 +832,5 @@ const GPUShaderCreateInfo *gpu_shader_create_info_get(const char *info_name)
   ShaderCreateInfo *info = g_create_infos->lookup(info_name);
   return reinterpret_cast<const GPUShaderCreateInfo *>(info);
 }
+
+}  // namespace blender

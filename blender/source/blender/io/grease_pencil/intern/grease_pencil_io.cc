@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_bounds.hh"
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
@@ -93,15 +93,13 @@ Object *GreasePencilImporter::create_object(const StringRefNull name)
                                      context_.v3d->local_view_uid :
                                      ushort(0);
 
-  Object *ob_gpencil = blender::ed::object::add_type(
+  Object *ob_gpencil = ed::object::add_type(
       &context_.C, OB_GREASE_PENCIL, name.c_str(), cur_loc, rot, false, local_view_bits);
 
   return ob_gpencil;
 }
 
-int GreasePencilImporter::create_material(const StringRefNull name,
-                                          const bool stroke,
-                                          const bool fill)
+int GreasePencilImporter::create_material(const StringRefNull name)
 {
   const ColorGeometry4f default_stroke_color = {0.0f, 0.0f, 0.0f, 1.0f};
   const ColorGeometry4f default_fill_color = {0.5f, 0.5f, 0.5f, 1.0f};
@@ -113,17 +111,9 @@ int GreasePencilImporter::create_material(const StringRefNull name,
     Material *mat_gp = BKE_grease_pencil_object_material_new(
         bmain, object_, name.c_str(), &new_idx);
     MaterialGPencilStyle *gp_style = mat_gp->gp_style;
-    gp_style->flag &= ~GP_MATERIAL_STROKE_SHOW;
-    gp_style->flag &= ~GP_MATERIAL_FILL_SHOW;
 
     copy_v4_v4(gp_style->stroke_rgba, default_stroke_color);
     copy_v4_v4(gp_style->fill_rgba, default_fill_color);
-    if (stroke) {
-      gp_style->flag |= GP_MATERIAL_STROKE_SHOW;
-    }
-    if (fill) {
-      gp_style->flag |= GP_MATERIAL_FILL_SHOW;
-    }
     mat_index = object_->totcol - 1;
   }
 
@@ -147,7 +137,7 @@ std::optional<Bounds<float2>> GreasePencilExporter::compute_screen_space_drawing
   std::optional<Bounds<float2>> drawing_bounds = std::nullopt;
 
   BLI_assert(object.type == OB_GREASE_PENCIL);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
 
   const Layer &layer = *grease_pencil.layers()[layer_index];
   const float4x4 layer_to_world = layer.to_world_space(object);
@@ -159,22 +149,24 @@ std::optional<Bounds<float2>> GreasePencilExporter::compute_screen_space_drawing
   const IndexMask visible_strokes = ed::greasepencil::retrieve_visible_strokes(
       object, drawing, memory);
 
-  visible_strokes.foreach_index(GrainSize(512), [&](const int curve_i) {
-    const IndexRange points = strokes.points_by_curve()[curve_i];
+  visible_strokes.foreach_index(
+      [&](const int curve_i) {
+        const IndexRange points = strokes.points_by_curve()[curve_i];
 
-    for (const int point_i : points) {
-      const float2 screen_co = this->project_to_screen(layer_to_world, positions[point_i]);
+        for (const int point_i : points) {
+          const float2 screen_co = this->project_to_screen(layer_to_world, positions[point_i]);
 
-      if (screen_co.x != V2D_IS_CLIPPED) {
-        const float3 world_pos = math::transform_point(layer_to_world, positions[point_i]);
-        const float pixels = radii[point_i] / ED_view3d_pixel_size(&rv3d, world_pos);
+          if (screen_co.x != V2D_IS_CLIPPED) {
+            const float3 world_pos = math::transform_point(layer_to_world, positions[point_i]);
+            const float pixels = radii[point_i] / ED_view3d_pixel_size(&rv3d, world_pos);
 
-        std::optional<Bounds<float2>> point_bounds = Bounds<float2>(screen_co);
-        point_bounds->pad(pixels);
-        drawing_bounds = bounds::merge(drawing_bounds, point_bounds);
-      }
-    }
-  });
+            std::optional<Bounds<float2>> point_bounds = Bounds<float2>(screen_co);
+            point_bounds->pad(pixels);
+            drawing_bounds = bounds::merge(drawing_bounds, point_bounds);
+          }
+        }
+      },
+      exec_mode::grain_size(512));
 
   return drawing_bounds;
 }
@@ -195,7 +187,7 @@ std::optional<Bounds<float2>> GreasePencilExporter::compute_objects_bounds(
 
   for (const ObjectInfo &info : objects) {
     Object *object_eval = DEG_get_evaluated(&depsgraph, info.object);
-    const GreasePencil &grease_pencil_eval = *static_cast<GreasePencil *>(object_eval->data);
+    const GreasePencil &grease_pencil_eval = *id_cast<GreasePencil *>(object_eval->data);
 
     for (const int layer_index : grease_pencil_eval.layers().index_range()) {
       const Layer &layer = *grease_pencil_eval.layers()[layer_index];
@@ -317,11 +309,12 @@ Vector<GreasePencilExporter::ObjectInfo> GreasePencilExporter::retrieve_objects(
 {
   using SelectMode = ExportParams::SelectMode;
 
+  const Main *bmain = CTX_data_main(&context_.C);
   Scene &scene = *CTX_data_scene(&context_.C);
   ViewLayer *view_layer = CTX_data_view_layer(&context_.C);
   const float3 camera_z_axis = float3(context_.rv3d->viewinv[2]);
 
-  BKE_view_layer_synced_ensure(&scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, &scene, view_layer);
 
   Vector<ObjectInfo> objects;
   auto add_object = [&](Object *object) {
@@ -343,33 +336,63 @@ Vector<GreasePencilExporter::ObjectInfo> GreasePencilExporter::retrieve_objects(
       add_object(params_.object);
       break;
     case SelectMode::Selected:
-      LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-        if (base->flag & BASE_SELECTED) {
-          add_object(base->object);
+      for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+        if (base.flag & BASE_SELECTED) {
+          add_object(base.object);
         }
       }
       break;
     case SelectMode::Visible:
-      LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-        if ((base->flag & BASE_ENABLED_RENDER) != 0) {
-          add_object(base->object);
+      for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+        if ((base.flag & BASE_ENABLED_RENDER) != 0) {
+          add_object(base.object);
         }
       }
       break;
   }
 
   /* Sort list of objects from point of view. */
-  std::sort(objects.begin(), objects.end(), [](const ObjectInfo &info1, const ObjectInfo &info2) {
+  std::ranges::sort(objects, [](const ObjectInfo &info1, const ObjectInfo &info2) {
     return info1.depth < info2.depth;
   });
 
   return objects;
 }
 
-void GreasePencilExporter::foreach_stroke_in_layer(const Object &object,
-                                                   const bke::greasepencil::Layer &layer,
-                                                   const bke::greasepencil::Drawing &drawing,
-                                                   WriteStrokeFn stroke_fn)
+static float get_miter_limit_angle(const VArray<float> miter_angles,
+                                   const IndexRange points,
+                                   const bool is_cyclic)
+{
+  /* Because the SVG file format only supports `linejoin` type per stroke. We use priority
+   * system to decide what type to use.
+   * The order from lowest to highest is `Round`, `Bevel` then `Miter` */
+  float miter_limit_angle = GP_STROKE_MITER_ANGLE_ROUND;
+
+  /* Don't check the ends unless cyclical. */
+  for (const int point_i : points.drop_back(is_cyclic ? 0 : 1).drop_front(is_cyclic ? 0 : 1)) {
+    const float point_miter_angle = miter_angles[point_i];
+
+    /* Miter should take priority over Round. */
+    if (point_miter_angle <= GP_STROKE_MITER_ANGLE_ROUND) {
+      continue;
+    }
+
+    /* This point's limit should replace the round type. */
+    if (miter_limit_angle <= GP_STROKE_MITER_ANGLE_ROUND) {
+      miter_limit_angle = point_miter_angle;
+    }
+
+    /* Sharp corners (Lower angles) should take priority. */
+    miter_limit_angle = math::min(miter_limit_angle, point_miter_angle);
+  }
+
+  return miter_limit_angle;
+}
+
+void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
+                                                  const bke::greasepencil::Layer &layer,
+                                                  const bke::greasepencil::Drawing &drawing,
+                                                  WriteShapeFn shape_fn)
 {
   using bke::greasepencil::Drawing;
 
@@ -389,11 +412,18 @@ void GreasePencilExporter::foreach_stroke_in_layer(const Object &object,
       "start_cap", bke::AttrDomain::Curve, GP_STROKE_CAP_TYPE_ROUND);
   const VArray<int8_t> end_caps = *attributes.lookup_or_default<int8_t>(
       "end_cap", bke::AttrDomain::Curve, 0);
+  const VArray<bool> hide_stroke = *attributes.lookup_or_default<bool>(
+      "hide_stroke", bke::AttrDomain::Curve, false);
+  const VArray<int> fill_ids = *attributes.lookup_or_default<int>(
+      "fill_id", bke::AttrDomain::Curve, 0);
+  const VArray<float> miter_angles = *attributes.lookup_or_default<float>(
+      "miter_angle", bke::AttrDomain::Point, GP_STROKE_MITER_ANGLE_ROUND);
   /* Point attributes. */
   const Span<float3> positions = curves.positions();
   const Span<float3> positions_left = *curves.handle_positions_left();
   const Span<float3> positions_right = *curves.handle_positions_right();
   const VArray<int8_t> types = curves.curve_types();
+  const std::optional<GroupedSpan<int>> fills = drawing.fills();
   const VArraySpan<float> radii = drawing.radii();
   const VArraySpan<float> opacities = drawing.opacities();
   const VArraySpan<ColorGeometry4f> vertex_colors = drawing.vertex_colors();
@@ -401,14 +431,42 @@ void GreasePencilExporter::foreach_stroke_in_layer(const Object &object,
   Array<float3> world_positions(positions.size());
   math::transform_points(positions, layer_to_world, world_positions);
 
-  for (const int i_curve : curves.curves_range()) {
-    const IndexRange points = points_by_curve[i_curve];
-    const int8_t type = types[i_curve];
-    if (points.size() < 2) {
-      continue;
-    }
+  /* Fills are made of multiple curves. Keep track of which curve is part of which fill. */
+  Array<int> fill_index_by_curves(curves.curves_num(), -1);
+  /* Keep track of which curve is the first in a fill (e.g. the same index is used for each curve
+   * in the same fill). */
+  Array<int> first_curves(curves.curves_num());
+  array_utils::fill_index_range<int>(first_curves);
 
-    const bool is_cyclic = cyclic[i_curve];
+  int fill_index = 0;
+  for (const int i_curve : curves.curves_range()) {
+    const bool is_filled = fill_ids[i_curve] != 0;
+    const bool active_filled = is_filled && (fill_index_by_curves[i_curve] == -1);
+
+    /* Keep track of already rendered fills. */
+    if (active_filled) {
+      const Span<int> fill = (*fills)[fill_index];
+      const int first_curve = fill.first();
+      for (const int pos : fill.index_range()) {
+        const int i_curve = fill[pos];
+        fill_index_by_curves[i_curve] = fill_index;
+        first_curves[i_curve] = first_curve;
+      }
+
+      fill_index++;
+    }
+  }
+
+  /* Iterate over all the curves and render the strokes (if shown). For fills, make sure that they
+   * are rendered when the first curve of the fill is encountered and don't re-render the same fill
+   * multiple times. */
+  for (const int i_curve : curves.curves_range()) {
+    /* Will be `-1` if not a fill. */
+    const int fill_index = fill_index_by_curves[i_curve];
+
+    const bool is_filled = fill_index != -1;
+    const bool active_filled = is_filled && (first_curves[i_curve] == i_curve);
+
     const int material_index = material_indices[i_curve];
     const Material *material = [&]() {
       const Material *material = BKE_object_material_get(const_cast<Object *>(&object),
@@ -424,28 +482,33 @@ void GreasePencilExporter::foreach_stroke_in_layer(const Object &object,
     if (material->gp_style->flag & GP_MATERIAL_HIDE) {
       continue;
     }
-    const bool is_stroke_material = (material->gp_style->flag & GP_MATERIAL_STROKE_SHOW);
-    const bool is_fill_material = (material->gp_style->flag & GP_MATERIAL_FILL_SHOW);
 
     /* Fill. */
-    if (is_fill_material && params_.export_fill_materials) {
+    if (active_filled && params_.export_fill_materials) {
+      const Span<int> fill = (*fills)[fill_index];
+
       const ColorGeometry4f material_fill_color = ColorGeometry4f(material->gp_style->fill_rgba);
       const ColorGeometry4f fill_color = math::interpolate(
           material_fill_color, fill_colors[i_curve], fill_colors[i_curve].a);
-      stroke_fn(positions.slice(points),
-                positions_left.slice_safe(points),
-                positions_right.slice_safe(points),
-                is_cyclic,
-                type,
-                fill_color,
-                layer.opacity,
-                std::nullopt,
-                false,
-                false);
+      shape_fn(positions,
+               positions_left,
+               positions_right,
+               points_by_curve,
+               fill,
+               cyclic,
+               types,
+               fill_color,
+               layer.opacity,
+               std::nullopt,
+               std::nullopt,
+               false,
+               false);
     }
 
     /* Stroke. */
-    if (is_stroke_material && params_.export_stroke_materials) {
+    if (!hide_stroke[i_curve] && params_.export_stroke_materials) {
+      const IndexRange points = points_by_curve[i_curve];
+
       const ColorGeometry4f stroke_color = compute_average_stroke_color(
           *material, vertex_colors.slice(points));
       const float stroke_opacity = compute_average_stroke_opacity(opacities.slice(points)) *
@@ -457,21 +520,27 @@ void GreasePencilExporter::foreach_stroke_in_layer(const Object &object,
                                                          radii.slice(points)) :
                                                      std::nullopt;
       if (uniform_width) {
+        const bool is_cyclic = cyclic[i_curve];
         const GreasePencilStrokeCapType start_cap = GreasePencilStrokeCapType(start_caps[i_curve]);
         const GreasePencilStrokeCapType end_cap = GreasePencilStrokeCapType(end_caps[i_curve]);
         const bool round_cap = start_cap == GP_STROKE_CAP_TYPE_ROUND ||
                                end_cap == GP_STROKE_CAP_TYPE_ROUND;
 
-        stroke_fn(positions.slice(points),
-                  positions_left.slice_safe(points),
-                  positions_right.slice_safe(points),
-                  is_cyclic,
-                  type,
-                  stroke_color,
-                  stroke_opacity,
-                  uniform_width,
-                  round_cap,
-                  false);
+        const float miter_limit_angle = get_miter_limit_angle(miter_angles, points, is_cyclic);
+
+        shape_fn(positions,
+                 positions_left,
+                 positions_right,
+                 points_by_curve,
+                 {i_curve},
+                 cyclic,
+                 types,
+                 stroke_color,
+                 stroke_opacity,
+                 uniform_width,
+                 miter_limit_angle,
+                 round_cap,
+                 false);
       }
       else {
         const IndexMask single_curve_mask = IndexRange::from_single(i_curve);
@@ -496,24 +565,29 @@ void GreasePencilExporter::foreach_stroke_in_layer(const Object &object,
         }
 
         const OffsetIndices outline_points_by_curve = outline.points_by_curve();
+        const VArray<bool> outline_cyclic = outline.cyclic();
         const Span<float3> outline_positions = outline.positions();
-        const Span<float3> outline_positions_left = *curves.handle_positions_left();
-        const Span<float3> outline_positions_right = *curves.handle_positions_right();
+        const Span<float3> outline_positions_left = *outline.handle_positions_left();
+        const Span<float3> outline_positions_right = *outline.handle_positions_right();
+        const VArray<int8_t> outline_types = outline.curve_types();
 
-        for (const int i_outline_curve : outline.curves_range()) {
-          const IndexRange outline_points = outline_points_by_curve[i_outline_curve];
-          /* Use stroke color to fill the outline. */
-          stroke_fn(outline_positions.slice(outline_points),
-                    outline_positions_left.slice_safe(outline_points),
-                    outline_positions_right.slice_safe(outline_points),
-                    true,
-                    type,
-                    stroke_color,
-                    stroke_opacity,
-                    std::nullopt,
-                    false,
-                    true);
-        }
+        Array<int> outline_shape(outline.curves_num());
+        array_utils::fill_index_range<int>(outline_shape.as_mutable_span());
+
+        /* Use stroke color to fill the outline. */
+        shape_fn(outline_positions,
+                 outline_positions_left,
+                 outline_positions_right,
+                 outline_points_by_curve,
+                 outline_shape.as_span(),
+                 outline_cyclic,
+                 outline_types,
+                 stroke_color,
+                 stroke_opacity,
+                 std::nullopt,
+                 std::nullopt,
+                 false,
+                 true);
       }
     }
   }

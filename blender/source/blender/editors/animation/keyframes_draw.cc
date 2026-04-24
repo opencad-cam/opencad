@@ -38,7 +38,7 @@
 
 #include "ANIM_action.hh"
 
-using namespace blender;
+namespace blender {
 
 /* *************************** Keyframe Drawing *************************** */
 
@@ -290,11 +290,13 @@ static void draw_keylist_block_standard(const DrawKeylistUIData *ctx,
                                         const ActKeyColumn *ab,
                                         float ypos)
 {
+  /* The bar needs to be an odd number of pixels high for proper alignment. */
+  const int height = int(0.45f * (ctx->icon_size)) * 2 - 1;
   rctf box;
   box.xmin = ab->cfra;
   box.xmax = ab->next->cfra;
-  box.ymin = ypos - ctx->half_icon_size;
-  box.ymax = ypos + ctx->half_icon_size;
+  box.ymin = round(ypos - (float(height) * 0.5f));
+  box.ymax = box.ymin + height;
 
   ui::draw_roundbox_4fv(&box, true, 3.0f, (ab->block.sel) ? ctx->sel_color : ctx->unsel_color);
 }
@@ -463,7 +465,7 @@ struct ChannelListElement {
   MaskLayer *masklay;
 };
 
-static void build_channel_keylist(ChannelListElement *elem, blender::float2 range)
+static void build_channel_keylist(ChannelListElement *elem, float2 range)
 {
   switch (elem->type) {
     case ChannelType::SUMMARY: {
@@ -582,41 +584,41 @@ static void prepare_channel_for_drawing(ChannelListElement *elem)
 
 /** List of channels that are actually drawn because they are in view. */
 struct ChannelDrawList {
-  ListBase /*ChannelListElement*/ channels;
+  ListBaseT<ChannelListElement> channels;
 };
 
 ChannelDrawList *ED_channel_draw_list_create()
 {
-  return MEM_callocN<ChannelDrawList>(__func__);
+  return MEM_new_zeroed<ChannelDrawList>(__func__);
 }
 
-static void channel_list_build_keylists(ChannelDrawList *channel_list, blender::float2 range)
+static void channel_list_build_keylists(ChannelDrawList *channel_list, float2 range)
 {
-  LISTBASE_FOREACH (ChannelListElement *, elem, &channel_list->channels) {
-    build_channel_keylist(elem, range);
-    prepare_channel_for_drawing(elem);
+  for (ChannelListElement &elem : channel_list->channels) {
+    build_channel_keylist(&elem, range);
+    prepare_channel_for_drawing(&elem);
   }
 }
 
 static void channel_list_draw_blocks(ChannelDrawList *channel_list, View2D *v2d)
 {
-  LISTBASE_FOREACH (ChannelListElement *, elem, &channel_list->channels) {
-    draw_channel_blocks(elem, v2d);
+  for (ChannelListElement &elem : channel_list->channels) {
+    draw_channel_blocks(&elem, v2d);
   }
 }
 
-static int channel_visible_key_len(const View2D *v2d, const ListBase * /*ActKeyColumn*/ keys)
+static int channel_visible_key_len(const View2D *v2d, const ListBaseT<ActKeyColumn> *keys)
 {
   /* count keys */
   uint len = 0;
 
-  LISTBASE_FOREACH (ActKeyColumn *, ak, keys) {
+  for (ActKeyColumn &ak : *keys) {
     /* Optimization: if keyframe doesn't appear within 5 units (screenspace)
      * in visible area, don't draw.
      * This might give some improvements,
      * since we current have to flip between view/region matrices.
      */
-    if (draw_keylist_is_visible_key(v2d, ak)) {
+    if (draw_keylist_is_visible_key(v2d, &ak)) {
       len++;
     }
   }
@@ -626,8 +628,8 @@ static int channel_visible_key_len(const View2D *v2d, const ListBase * /*ActKeyC
 static int channel_list_visible_key_len(const ChannelDrawList *channel_list, const View2D *v2d)
 {
   uint len = 0;
-  LISTBASE_FOREACH (ChannelListElement *, elem, &channel_list->channels) {
-    const ListBase *keys = ED_keylist_listbase(elem->keylist);
+  for (ChannelListElement &elem : channel_list->channels) {
+    const ListBaseT<ActKeyColumn> *keys = ED_keylist_listbase(elem.keylist);
     len += channel_visible_key_len(v2d, keys);
   }
   return len;
@@ -645,16 +647,13 @@ static void channel_list_draw_keys(ChannelDrawList *channel_list, View2D *v2d)
   GPUVertFormat *format = immVertexFormat();
   KeyframeShaderBindings sh_bindings;
 
-  sh_bindings.pos_id = GPU_vertformat_attr_add(
-      format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
-  sh_bindings.size_id = GPU_vertformat_attr_add(
-      format, "size", blender::gpu::VertAttrType::SFLOAT_32);
+  sh_bindings.pos_id = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  sh_bindings.size_id = GPU_vertformat_attr_add(format, "size", gpu::VertAttrType::SFLOAT_32);
   sh_bindings.color_id = GPU_vertformat_attr_add(
-      format, "color", blender::gpu::VertAttrType::UNORM_8_8_8_8);
+      format, "color", gpu::VertAttrType::UNORM_8_8_8_8);
   sh_bindings.outline_color_id = GPU_vertformat_attr_add(
-      format, "outlineColor", blender::gpu::VertAttrType::UNORM_8_8_8_8);
-  sh_bindings.flags_id = GPU_vertformat_attr_add(
-      format, "flags", blender::gpu::VertAttrType::UINT_32);
+      format, "outlineColor", gpu::VertAttrType::UNORM_8_8_8_8);
+  sh_bindings.flags_id = GPU_vertformat_attr_add(format, "flags", gpu::VertAttrType::UINT_32);
 
   GPU_program_point_size(true);
   immBindBuiltinProgram(GPU_SHADER_KEYFRAME_SHAPE);
@@ -662,8 +661,8 @@ static void channel_list_draw_keys(ChannelDrawList *channel_list, View2D *v2d)
   immUniform2f("ViewportSize", BLI_rcti_size_x(&v2d->mask) + 1, BLI_rcti_size_y(&v2d->mask) + 1);
   immBegin(GPU_PRIM_POINTS, visible_key_len);
 
-  LISTBASE_FOREACH (ChannelListElement *, elem, &channel_list->channels) {
-    draw_channel_keys(elem, v2d, &sh_bindings);
+  for (ChannelListElement &elem : channel_list->channels) {
+    draw_channel_keys(&elem, v2d, &sh_bindings);
   }
 
   immEnd();
@@ -687,11 +686,11 @@ void ED_channel_list_flush(ChannelDrawList *channel_list, View2D *v2d)
 
 void ED_channel_list_free(ChannelDrawList *channel_list)
 {
-  LISTBASE_FOREACH (ChannelListElement *, elem, &channel_list->channels) {
-    ED_keylist_free(elem->keylist);
+  for (ChannelListElement &elem : channel_list->channels) {
+    ED_keylist_free(elem.keylist);
   }
   BLI_freelistN(&channel_list->channels);
-  MEM_freeN(channel_list);
+  MEM_delete(channel_list);
 }
 
 static ChannelListElement *channel_list_add_element(ChannelDrawList *channel_list,
@@ -700,7 +699,7 @@ static ChannelListElement *channel_list_add_element(ChannelDrawList *channel_lis
                                                     float yscale_fac,
                                                     eSAction_Flag saction_flag)
 {
-  ChannelListElement *draw_elem = MEM_callocN<ChannelListElement>(__func__);
+  ChannelListElement *draw_elem = MEM_new_zeroed<ChannelListElement>(__func__);
   BLI_addtail(&channel_list->channels, draw_elem);
   draw_elem->type = elem_type;
   draw_elem->keylist = ED_keylist_create();
@@ -925,3 +924,5 @@ void ED_add_mask_layer_channel(ChannelDrawList *channel_list,
   draw_elem->masklay = masklay;
   draw_elem->channel_locked = locked;
 }
+
+}  // namespace blender

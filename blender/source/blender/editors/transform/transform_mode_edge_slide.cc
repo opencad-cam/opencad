@@ -6,6 +6,8 @@
  * \ingroup edtransform
  */
 
+#include <algorithm>
+
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
@@ -277,9 +279,9 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
   float *loop_maxdist = nullptr;
 
   if (use_calc_direction) {
-    loop_dir = MEM_calloc_arrayN<float2>(loop_nr, "sv loop_dir");
-    loop_maxdist = MEM_malloc_arrayN<float>(loop_nr, "sv loop_maxdist");
-    copy_vn_fl(loop_maxdist, loop_nr, FLT_MAX);
+    loop_dir = MEM_new_array_zeroed<float2>(loop_nr, "sv loop_dir");
+    loop_maxdist = MEM_new_array_uninitialized<float>(loop_nr, "sv loop_maxdist");
+    std::fill_n(loop_maxdist, loop_nr, FLT_MAX);
   }
 
   for (int i : sld->sv.index_range()) {
@@ -326,8 +328,8 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
       }
     }
 
-    MEM_freeN(loop_dir);
-    MEM_freeN(loop_maxdist);
+    MEM_delete(loop_dir);
+    MEM_delete(loop_maxdist);
   }
 
   edge_slide_data_init_mval(&t->mouse, sld, mval_dir);
@@ -471,8 +473,7 @@ static void drawEdgeSlide(TransInfo *t)
     GPU_matrix_mul(TRANS_DATA_CONTAINER_FIRST_OK(t)->obedit->object_to_world().ptr());
   }
 
-  uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -887,7 +888,7 @@ static void initEdgeSlide_ex(TransInfo *t,
   t->mode = TFM_EDGE_SLIDE;
 
   {
-    EdgeSlideParams *slp = MEM_callocN<EdgeSlideParams>(__func__);
+    EdgeSlideParams *slp = MEM_new_zeroed<EdgeSlideParams>(__func__);
     slp->op = op;
     slp->use_even = use_even;
     slp->flipped = flipped;

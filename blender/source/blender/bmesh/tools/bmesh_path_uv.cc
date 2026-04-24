@@ -10,6 +10,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include <algorithm>
+
 #include "BLI_heap_simple.h"
 #include "BLI_linklist.h"
 #include "BLI_math_geom.h"
@@ -19,6 +21,8 @@
 #include "bmesh_path_uv.hh" /* own include */
 #include "intern/bmesh_query.hh"
 #include "intern/bmesh_query_uv.hh"
+
+namespace blender {
 
 #define COST_INIT_MAX FLT_MAX
 
@@ -140,10 +144,10 @@ LinkNode *BM_mesh_calc_path_uv_vert(BMesh *bm,
 
   /* Allocate. */
   totloop = bm->totloop;
-  loops_prev = MEM_calloc_arrayN<BMLoop *>(totloop, __func__);
-  cost = MEM_malloc_arrayN<float>(totloop, __func__);
+  loops_prev = MEM_new_array_zeroed<BMLoop *>(totloop, __func__);
+  cost = MEM_new_array_uninitialized<float>(totloop, __func__);
 
-  copy_vn_fl(cost, totloop, COST_INIT_MAX);
+  std::fill_n(cost, totloop, COST_INIT_MAX);
 
   /* Regular dijkstra shortest path, but over UV loops instead of vertices. */
   heap = BLI_heapsimple_new();
@@ -171,8 +175,8 @@ LinkNode *BM_mesh_calc_path_uv_vert(BMesh *bm,
     } while ((l = loops_prev[BM_elem_index_get(l)]));
   }
 
-  MEM_freeN(loops_prev);
-  MEM_freeN(cost);
+  MEM_delete(loops_prev);
+  MEM_delete(cost);
   BLI_heapsimple_free(heap, nullptr);
 
   return path;
@@ -344,10 +348,10 @@ LinkNode *BM_mesh_calc_path_uv_edge(BMesh *bm,
   bm->elem_index_dirty &= ~BM_LOOP;
 
   totloop = bm->totloop;
-  loops_prev = MEM_calloc_arrayN<BMLoop *>(totloop, __func__);
-  cost = MEM_malloc_arrayN<float>(totloop, __func__);
+  loops_prev = MEM_new_array_zeroed<BMLoop *>(totloop, __func__);
+  cost = MEM_new_array_uninitialized<float>(totloop, __func__);
 
-  copy_vn_fl(cost, totloop, COST_INIT_MAX);
+  std::fill_n(cost, totloop, COST_INIT_MAX);
 
   /* Regular dijkstra shortest path, but over UV loops/edges instead of vertices. */
   heap = BLI_heapsimple_new();
@@ -374,8 +378,8 @@ LinkNode *BM_mesh_calc_path_uv_edge(BMesh *bm,
     } while ((l = loops_prev[BM_elem_index_get(l)]));
   }
 
-  MEM_freeN(loops_prev);
-  MEM_freeN(cost);
+  MEM_delete(loops_prev);
+  MEM_delete(cost);
   BLI_heapsimple_free(heap, nullptr);
 
   return path;
@@ -572,10 +576,10 @@ LinkNode *BM_mesh_calc_path_uv_face(BMesh *bm,
 
   /* Allocate. */
   totface = bm->totface;
-  faces_prev = MEM_calloc_arrayN<BMFace *>(totface, __func__);
-  cost = MEM_malloc_arrayN<float>(totface, __func__);
+  faces_prev = MEM_new_array_zeroed<BMFace *>(totface, __func__);
+  cost = MEM_new_array_uninitialized<float>(totface, __func__);
 
-  copy_vn_fl(cost, totface, COST_INIT_MAX);
+  std::fill_n(cost, totface, COST_INIT_MAX);
 
   /* Regular dijkstra shortest path, but over UV faces instead of vertices. */
   heap = BLI_heapsimple_new();
@@ -603,11 +607,13 @@ LinkNode *BM_mesh_calc_path_uv_face(BMesh *bm,
     } while ((f = faces_prev[BM_elem_index_get(f)]));
   }
 
-  MEM_freeN(faces_prev);
-  MEM_freeN(cost);
+  MEM_delete(faces_prev);
+  MEM_delete(cost);
   BLI_heapsimple_free(heap, nullptr);
 
   return path;
 }
 
 /** \} */
+
+}  // namespace blender

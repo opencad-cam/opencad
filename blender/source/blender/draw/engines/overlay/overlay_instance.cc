@@ -23,7 +23,7 @@ void Instance::init()
   /* TODO(fclem): Remove DRW global usage. */
   const DRWContext *ctx = DRW_context_get();
   /* Was needed by `object_wire_theme_id()` when doing the port. Not sure if needed nowadays. */
-  BKE_view_layer_synced_ensure(ctx->scene, ctx->view_layer);
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(ctx->depsgraph), ctx->scene, ctx->view_layer);
 
   clipping_enabled_ = RV3D_CLIPPING_ENABLED(ctx->v3d, ctx->rv3d);
 
@@ -67,7 +67,7 @@ void Instance::init()
     state.xray_flag_enabled = SHADING_XRAY_FLAG_ENABLED(state.v3d->shading) &&
                               !state.is_depth_only_drawing;
     state.vignette_enabled = ctx->mode == DRWContext::VIEWPORT_XR &&
-                             state.v3d->vignette_aperture < M_SQRT1_2;
+                             state.v3d->xr_vignette_aperture < M_SQRT1_2;
 
     const bool viewport_uses_workbench = state.v3d->shading.type <= OB_SOLID ||
                                          BKE_scene_uses_blender_workbench(state.scene);
@@ -108,7 +108,8 @@ void Instance::init()
                               ctx->object_pose != nullptr;
   }
   else if (state.is_space_image()) {
-    SpaceImage *space_image = (SpaceImage *)state.space_data;
+    SpaceImage *space_image = reinterpret_cast<SpaceImage *>(
+        const_cast<SpaceLink *>(state.space_data));
 
     state.clear_in_front = false;
     state.use_in_front = false;
@@ -363,7 +364,8 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
   /* Emphasize division lines lighter instead of darker, if background is darker than grid. */
   const bool is_bg_darker = reduce_add(gb.colors.grid.xyz()) + 0.12f >
                             reduce_add(gb.colors.background.xyz());
-  ui::theme::get_color_shade_4fv(TH_GRID, (is_bg_darker) ? 30 : -10, gb.colors.grid_emphasis);
+  ui::theme::get_color_shade_4fv(
+      state.rv3d ? TH_GRID_MAJOR : TH_GRID, is_bg_darker ? 20 : -10, gb.colors.grid_emphasis);
 
   /* Grid Axis */
   ui::theme::get_color_blend_shade_4fv(TH_GRID, TH_AXIS_X, 0.85f, -20, gb.colors.grid_axis_x);
@@ -815,7 +817,7 @@ void Instance::draw_v2d(Manager &manager, View &view)
   regular.mesh_uvs.draw_on_render(resources.render_fb, manager, view);
 
   GPU_framebuffer_bind(resources.overlay_output_color_only_fb);
-  GPU_framebuffer_clear_color(resources.overlay_output_color_only_fb, float4(0.0));
+  GPU_framebuffer_clear_color(resources.overlay_output_color_only_fb, double4(0.0));
 
   background.draw_output(resources.overlay_output_color_only_fb, manager, view);
   grid.draw_line(resources.overlay_output_fb, manager, view);
@@ -826,7 +828,7 @@ void Instance::draw_v2d(Manager &manager, View &view)
 
 void Instance::draw_v3d(Manager &manager, View &view)
 {
-  float4 clear_color(0.0f);
+  double4 clear_color(0.0f);
 
   auto draw = [&](OverlayLayer &layer, Framebuffer &framebuffer) {
     /* TODO(fclem): Depth aware outlines (see #130751). */
@@ -1038,7 +1040,9 @@ bool Instance::object_is_particle_edit_mode(const ObjectRef &ob_ref)
 
 bool Instance::object_is_sculpt_mode(const Object *object)
 {
-  if (object->sculpt && (object->sculpt->mode_type == OB_MODE_SCULPT)) {
+  if (object->runtime->sculpt_session &&
+      (object->runtime->sculpt_session->mode_type == OB_MODE_SCULPT))
+  {
     return object == state.object_active;
   }
   return false;

@@ -11,11 +11,15 @@
 
 #include "DEG_depsgraph.hh"
 
+#include "ED_sequencer.hh"
+
 #include "WM_api.hh"
 
 #include "view3d_intern.hh"
 
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Camera Operator
@@ -35,11 +39,12 @@ static wmOperatorStatus view_camera_exec(bContext *C, wmOperator *op)
   ED_view3d_smooth_view_force_finish(C, v3d, region);
 
   if ((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ANY_TRANSFORM) == 0) {
+    const Main *bmain = CTX_data_main(C);
     ViewLayer *view_layer = CTX_data_view_layer(C);
     Scene *scene = CTX_data_scene(C);
 
     if (rv3d->persp != RV3D_CAMOB) {
-      BKE_view_layer_synced_ensure(scene, view_layer);
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
       Object *ob = BKE_view_layer_active_object_get(view_layer);
 
       if (!rv3d->smooth_timer) {
@@ -67,7 +72,7 @@ static wmOperatorStatus view_camera_exec(bContext *C, wmOperator *op)
       }
 
       if (v3d->camera == nullptr) {
-        v3d->camera = BKE_view_layer_camera_find(scene, view_layer);
+        v3d->camera = BKE_view_layer_camera_find(*bmain, scene, view_layer);
       }
 
       /* couldn't find any useful camera, bail out */
@@ -110,6 +115,16 @@ static wmOperatorStatus view_camera_exec(bContext *C, wmOperator *op)
     }
   }
 
+  if (v3d) {
+    const WorkSpace *workspace = CTX_wm_workspace(C);
+    const wmWindow *win = CTX_wm_window(C);
+    const Scene *active_scene = WM_window_get_active_scene(win);
+
+    if (workspace && active_scene) {
+      blender::ed::vse::sync_vse_camera_for_view3d(workspace, active_scene, v3d);
+    }
+  }
+
   return OPERATOR_FINISHED;
 }
 
@@ -129,3 +144,5 @@ void VIEW3D_OT_view_camera(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

@@ -15,15 +15,16 @@
 
 #include "BLI_enum_flags.hh"
 
-#ifdef __cplusplus
-namespace blender::bke {
+namespace blender {
+
+namespace bke {
 class CurvesGeometry;
 class CurvesGeometryRuntime;
-}  // namespace blender::bke
-using CurvesGeometryRuntimeHandle = blender::bke::CurvesGeometryRuntime;
-#else
-struct CurvesGeometryRuntimeHandle;
-#endif
+}  // namespace bke
+
+namespace draw {
+struct CurvesBatchCache;
+}
 
 enum CurveType {
   /**
@@ -165,7 +166,7 @@ struct CurvesGeometry {
   /**
    * Runtime data for curves, stored as a pointer to allow defining this as a C++ class.
    */
-  CurvesGeometryRuntimeHandle *runtime = nullptr;
+  bke::CurvesGeometryRuntime *runtime = nullptr;
 
   /**
    * Knot values for NURBS curves with NURBS_KNOT_MODE_CUSTOM mode.
@@ -180,8 +181,8 @@ struct CurvesGeometry {
   char _pad[4] = {};
 
 #ifdef __cplusplus
-  blender::bke::CurvesGeometry &wrap();
-  const blender::bke::CurvesGeometry &wrap() const;
+  bke::CurvesGeometry &wrap();
+  const bke::CurvesGeometry &wrap() const;
 #endif
 };
 
@@ -243,8 +244,10 @@ struct Curves {
   char _pad2[4] = {};
 
   /* Draw cache to store data used for viewport drawing. */
-  void *batch_cache = nullptr;
+  draw::CurvesBatchCache *batch_cache = nullptr;
 };
 
 /* Only one material supported currently. */
 #define CURVES_MATERIAL_NR 1
+
+}  // namespace blender

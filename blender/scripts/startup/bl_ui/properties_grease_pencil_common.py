@@ -6,6 +6,11 @@ import bpy
 from bpy.types import (
     Menu,
     UIList,
+    GreasePencil,
+    GreasePencilLayerGroup,
+    GreasePencilLayer,
+    GreasePencilTreeNode,
+    UILayout
 )
 from bpy.app.translations import (
     contexts as i18n_contexts,
@@ -192,11 +197,49 @@ class GreasePencilBrushFalloff:
                 )
 
 
+def draw_node(node: GreasePencilTreeNode, layout: UILayout, grease_pencil: GreasePencil):
+    if isinstance(node, GreasePencilLayerGroup):
+        layout.context_pointer_set("active_gpencil_layer_group", node)
+        layout.menu("GREASE_PENCIL_MT_layer_group", text=node.name)
+    elif isinstance(node, GreasePencilLayer):
+        if node == grease_pencil.layers.active:
+            icon = "GREASEPENCIL"
+        else:
+            icon = "NONE"
+
+        layout.operator("grease_pencil.move_to_layer", text=node.name, icon=icon).target_layer_name = node.name
+
+
+def draw_node_for_search(node: GreasePencilTreeNode, layout: UILayout, grease_pencil: GreasePencil):
+    if isinstance(node, GreasePencilLayerGroup):
+        op = layout.operator("grease_pencil.move_to_layer", text=f"Add New Layer to {node.name}", icon='ADD')
+        op.add_new_layer = True
+        op.target_group_name = node.name
+
+        for child in reversed(node.children):
+            draw_node_for_search(child, layout, grease_pencil)
+
+    elif isinstance(node, GreasePencilLayer):
+        if node == grease_pencil.layers.active:
+            icon = "GREASEPENCIL"
+        else:
+            icon = "NONE"
+
+        layout.operator("grease_pencil.move_to_layer", text=node.name, icon=icon).target_layer_name = node.name
+
+
 class GREASE_PENCIL_MT_move_to_layer(Menu):
     bl_label = "Move to Layer"
 
     def draw(self, context):
         layout = self.layout
+
+        if layout.operator_context == 'EXEC_REGION_WIN':
+            layout.operator_context = 'INVOKE_REGION_WIN'
+            layout.operator("WM_OT_search_single_menu", text="Search...",
+                            icon='VIEWZOOM').menu_idname = "GREASE_PENCIL_MT_move_to_layer_SEARCH"
+            layout.separator()
+
         layout.operator_context = 'INVOKE_REGION_WIN'
         grease_pencil = context.active_object.data
 
@@ -207,13 +250,46 @@ class GREASE_PENCIL_MT_move_to_layer(Menu):
 
         layout.separator()
 
-        for i in range(len(grease_pencil.layers) - 1, -1, -1):
-            layer = grease_pencil.layers[i]
-            if layer == grease_pencil.layers.active:
-                icon = 'GREASEPENCIL'
-            else:
-                icon = 'NONE'
-            layout.operator("grease_pencil.move_to_layer", text=layer.name, icon=icon).target_layer_name = layer.name
+        for node in reversed(grease_pencil.root_nodes):
+            draw_node(node, layout, grease_pencil)
+
+
+class GREASE_PENCIL_MT_layer_group(Menu):
+    bl_label = "Layer Group"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator_context = 'INVOKE_REGION_WIN'
+
+        op = layout.operator("grease_pencil.move_to_layer", text="New Layer", icon='ADD')
+        op.add_new_layer = True
+
+        layout.separator()
+
+        target_group = getattr(context, "active_gpencil_layer_group", None)
+        if not target_group or not isinstance(target_group, GreasePencilLayerGroup):
+            return
+        op.target_group_name = target_group.name
+
+        grease_pencil = context.active_object.data
+
+        for child in reversed(target_group.children):
+            draw_node(child, layout, grease_pencil)
+
+
+class GREASE_PENCIL_MT_move_to_layer_SEARCH(Menu):
+    bl_label = "Move to Layer"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator_context = 'INVOKE_REGION_WIN'
+
+        grease_pencil = context.active_object.data
+
+        for node in reversed(grease_pencil.root_nodes):
+            draw_node_for_search(node, layout, grease_pencil)
 
 
 class GREASE_PENCIL_MT_layer_active(Menu):
@@ -473,7 +549,7 @@ class GreasePencilMaterialsPanel:
                     row.operator("grease_pencil.stroke_material_set", text="Assign")
                     row.operator("grease_pencil.material_select", text="Select").deselect = False
                     row.operator("grease_pencil.material_select", text="Deselect").deselect = True
-        # stroke color
+
             ma = None
             if is_view3d and brush is not None:
                 gp_settings = brush.gpencil_settings
@@ -489,9 +565,9 @@ class GreasePencilMaterialsPanel:
             if is_view3d and ma is not None and ma.grease_pencil is not None:
                 gpcolor = ma.grease_pencil
                 col = layout.column(align=True)
-                if gpcolor.show_stroke and gpcolor.stroke_style == 'SOLID':
+                if gpcolor.stroke_style == 'SOLID':
                     col.prop(gpcolor, "color", text="Stroke Color")
-                if gpcolor.show_fill and gpcolor.fill_style == 'SOLID':
+                if gpcolor.fill_style == 'SOLID':
                     col.prop(gpcolor, "fill_color", text="Fill Color")
 
         else:
@@ -594,6 +670,8 @@ classes = (
     GPENCIL_UL_annotation_layer,
 
     GREASE_PENCIL_MT_move_to_layer,
+    GREASE_PENCIL_MT_move_to_layer_SEARCH,
+    GREASE_PENCIL_MT_layer_group,
     GREASE_PENCIL_MT_layer_active,
 
     GREASE_PENCIL_MT_snap,

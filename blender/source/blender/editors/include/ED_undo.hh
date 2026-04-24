@@ -10,10 +10,12 @@
 
 #include "BLI_sys_types.h"
 #include "BLI_vector.hh"
+struct CLG_LogRef;
+namespace blender {
 
 struct Base;
-struct CLG_LogRef;
 struct ID;
+struct Main;
 struct MemFile;
 struct PointerRNA;
 struct Object;
@@ -25,7 +27,7 @@ struct wmOperator;
 struct wmOperatorType;
 struct wmWindowManager;
 
-/* undo.c */
+/* ed_undo.cc */
 
 /**
  * Run from the main event loop, basic checks that undo is left in a correct state.
@@ -105,10 +107,12 @@ void ED_undo_object_editmode_restore_helper(Scene *scene,
                                             uint object_array_len,
                                             uint object_array_stride);
 
-blender::Vector<Object *> ED_undo_editmode_objects_from_view_layer(const Scene *scene,
-                                                                   ViewLayer *view_layer);
-blender::Vector<Base *> ED_undo_editmode_bases_from_view_layer(const Scene *scene,
-                                                               ViewLayer *view_layer);
+Vector<Object *> ED_undo_editmode_objects_from_view_layer(const Main &bmain,
+                                                          const Scene *scene,
+                                                          ViewLayer *view_layer);
+Vector<Base *> ED_undo_editmode_bases_from_view_layer(const Main &bmain,
+                                                      const Scene *scene,
+                                                      ViewLayer *view_layer);
 
 /**
  * Ideally we won't access the stack directly,
@@ -121,8 +125,12 @@ UndoStack *ED_undo_stack_get();
 
 /* Helpers. */
 
-void ED_undo_object_set_active_or_warn(
-    Scene *scene, ViewLayer *view_layer, Object *ob, const char *info, CLG_LogRef *log);
+void ED_undo_object_set_active_or_warn(const Main &bmain,
+                                       Scene *scene,
+                                       ViewLayer *view_layer,
+                                       Object *ob,
+                                       const char *info,
+                                       CLG_LogRef *log);
 
 /* `undo_system_types.cc` */
 
@@ -158,3 +166,5 @@ void ED_undosys_stack_memfile_id_changed_tag(UndoStack *ustack, ID *id);
  * \return Total memory usage in bytes, or 0 if no undo stack is available.
  */
 size_t ED_undosys_total_memory_calc(UndoStack *ustack);
+
+}  // namespace blender

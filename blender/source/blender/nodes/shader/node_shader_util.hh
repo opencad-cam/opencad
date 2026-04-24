@@ -28,10 +28,11 @@
 #ifdef WITH_MATERIALX
 #  include "materialx/node_parser.h"  // IWYU pragma: export
 #else
-#  define NODE_SHADER_MATERIALX_BEGIN \
-    blender::bke::NodeMaterialXFunction node_shader_materialx = nullptr;
+#  define NODE_SHADER_MATERIALX_BEGIN bke::NodeMaterialXFunction node_shader_materialx = nullptr;
 #  define NODE_SHADER_MATERIALX_END
 #endif
+
+namespace blender {
 
 struct bContext;
 struct bNodeExecContext;
@@ -40,17 +41,17 @@ struct GPUNodeLink;
 struct GPUNodeStack;
 struct GPUMaterial;
 
-bool sh_node_poll_default(const blender::bke::bNodeType *ntype,
+bool sh_node_poll_default(const bke::bNodeType *ntype,
                           const bNodeTree *ntree,
                           const char **r_disabled_hint);
-void sh_node_type_base(blender::bke::bNodeType *ntype,
-                       std::string idname,
+void sh_node_type_base(bke::bNodeType *ntype,
+                       UString idname,
                        std::optional<int16_t> legacy_type = std::nullopt);
-void sh_geo_node_type_base(blender::bke::bNodeType *ntype,
-                           std::string idname,
+void sh_geo_node_type_base(bke::bNodeType *ntype,
+                           UString idname,
                            std::optional<int16_t> legacy_type = std::nullopt);
-void common_node_type_base(blender::bke::bNodeType *ntype,
-                           std::string idname,
+void common_node_type_base(bke::bNodeType *ntype,
+                           UString idname,
                            std::optional<int16_t> legacy_type = std::nullopt);
 bool line_style_shader_nodes_poll(const bContext *C);
 bool world_shader_nodes_poll(const bContext *C);
@@ -89,6 +90,8 @@ void ntreeExecGPUNodes(bNodeTreeExec *exec,
 
 void get_XYZ_to_RGB_for_gpu(XYZ_to_RGB *data);
 
-bool node_socket_not_zero(const GPUNodeStack &socket);
-bool node_socket_not_white(const GPUNodeStack &socket);
-bool node_socket_not_black(const GPUNodeStack &socket);
+/* Link search callback that ignores the "Weight" socket in shader nodes.
+ * These sockets are never available and must be ignored to avoid invalid link operations. */
+void search_link_ops_for_shader_bsdf_node(nodes::GatherLinkSearchOpParams &params);
+
+}  // namespace blender

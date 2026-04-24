@@ -81,10 +81,10 @@ enum eShaderType {
   HIZ_UPDATE_LAYER,
   HIZ_DEBUG,
 
-  HORIZON_DENOISE,
-  HORIZON_RESOLVE,
-  HORIZON_SCAN,
-  HORIZON_SETUP,
+  FAST_GI_DENOISE,
+  FAST_GI_RESOLVE,
+  FAST_GI_SCAN,
+  FAST_GI_SETUP,
 
   LIGHT_CULLING_DEBUG,
   LIGHT_CULLING_SELECT,
@@ -140,6 +140,7 @@ enum eShaderType {
   SHADOW_TILEMAP_RENDERMAP,
   SHADOW_TILEMAP_INIT,
   SHADOW_TILEMAP_TAG_UPDATE,
+  SHADOW_TILEMAP_TAG_UPDATE_PROPAGATE,
   SHADOW_TILEMAP_TAG_USAGE_OPAQUE,
   SHADOW_TILEMAP_TAG_USAGE_SURFELS,
   SHADOW_TILEMAP_TAG_USAGE_TRANSPARENT,
@@ -183,7 +184,7 @@ enum ShaderGroups : uint32_t {
   DEFERRED_PLANAR_SHADERS = 1 << 2,
   DEPTH_OF_FIELD_SHADERS = 1 << 3,
   HIZ_SHADERS = 1 << 4,
-  HORIZON_SCAN_SHADERS = 1 << 5,
+  FAST_GI_SHADERS = 1 << 5,
   LIGHT_CULLING_SHADERS = 1 << 6,
   IRRADIANCE_BAKE_SHADERS = 1 << 7,
   SPHERE_PROBE_SHADERS = 1 << 8,
@@ -278,13 +279,13 @@ class ShaderModule {
                                bool use_lightprobe_eval);
 
   gpu::Shader *static_shader_get(eShaderType shader_type);
-  GPUMaterial *material_shader_get(::Material *blender_mat,
+  GPUMaterial *material_shader_get(blender::Material *blender_mat,
                                    bNodeTree *nodetree,
                                    eMaterialPipeline pipeline_type,
                                    eMaterialGeometry geometry_type,
                                    bool deferred_compilation,
-                                   ::Material *default_mat);
-  GPUMaterial *world_shader_get(::World *blender_world,
+                                   blender::Material *default_mat);
+  GPUMaterial *world_shader_get(blender::World *blender_world,
                                 bNodeTree *nodetree,
                                 eMaterialPipeline pipeline_type,
                                 bool deferred_compilation);

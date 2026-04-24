@@ -25,6 +25,8 @@
 
 #include "BLT_translation.hh"
 
+namespace blender {
+
 using Alembic::Abc::FloatArraySamplePtr;
 using Alembic::Abc::Int32ArraySamplePtr;
 using Alembic::Abc::P3fArraySamplePtr;
@@ -40,7 +42,7 @@ using Alembic::AbcGeom::IInt16Property;
 using Alembic::AbcGeom::ISampleSelector;
 using Alembic::AbcGeom::kWrapExisting;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 static int16_t get_curve_resolution(const ICurvesSchema &schema,
                                     const Alembic::Abc::ISampleSelector &sample_sel)
 {
@@ -351,10 +353,9 @@ static std::optional<PreprocessedSampleData> preprocess_sample(StringRefNull iob
   return data;
 }
 
-AbcCurveReader::AbcCurveReader(const Alembic::Abc::IObject &object, ImportSettings &settings)
-    : AbcObjectReader(object, settings)
+AbcCurveReader::AbcCurveReader(const AbcReaderConstructorArgs &args) : AbcObjectReader(args)
 {
-  ICurves abc_curves(object, kWrapExisting);
+  ICurves abc_curves(m_iobject, kWrapExisting);
   m_curves_schema = abc_curves.getSchema();
 
   get_min_max_time(m_iobject, m_curves_schema, m_min_time, m_max_time);
@@ -390,7 +391,7 @@ void AbcCurveReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSele
   Curves *curves = BKE_curves_add(bmain, m_data_name.c_str());
 
   m_object = BKE_object_add_only_object(bmain, OB_CURVES, m_object_name.c_str());
-  m_object->data = curves;
+  m_object->data = id_cast<ID *>(curves);
 
   read_curves_sample(curves, false, m_curves_schema, sample_sel);
 
@@ -559,15 +560,14 @@ void AbcCurveReader::read_curves_sample(Curves *curves_id,
 
 void AbcCurveReader::read_geometry(bke::GeometrySet &geometry_set,
                                    const Alembic::Abc::ISampleSelector &sample_sel,
-                                   int read_flag,
-                                   const char * /*velocity_name*/,
-                                   const float /*velocity_scale*/,
+                                   const AbcReadGeometryParams &read_params,
                                    const char ** /*r_err_str*/)
 {
   Curves *curves = geometry_set.get_curves_for_write();
 
-  bool use_interpolation = read_flag & MOD_MESHSEQ_INTERPOLATE_VERTICES;
+  bool use_interpolation = read_params.read_flag & MOD_MESHSEQ_INTERPOLATE_VERTICES;
   read_curves_sample(curves, use_interpolation, m_curves_schema, sample_sel);
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

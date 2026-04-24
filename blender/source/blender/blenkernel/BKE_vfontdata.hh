@@ -14,7 +14,12 @@
 
 #include "BLI_map.hh"
 
+#include "DNA_vec_types.h"
+
+namespace blender {
+
 struct GHash;
+struct Nurb;
 struct PackedFile;
 struct VFont;
 
@@ -47,15 +52,17 @@ struct VFontData {
    * This is done to differentiate characters known not to exist from
    * characters that have not yet been loaded.
    */
-  blender::Map<uint, struct VChar *> *characters;
+  Map<uint, struct VChar *> *characters;
   char name[128];
 
   VFontData_Metrics metrics;
 };
 
 struct VChar {
-  ListBase nurbsbase;
+  ListBaseT<Nurb> nurbsbase;
   float width;
+  /** Glyph bounding box from FreeType metrics (scaled to VFont units). */
+  rctf bounds;
 };
 
 /**
@@ -74,3 +81,5 @@ VFontData *BKE_vfontdata_copy(const VFontData *vfont_src, int flag);
 
 VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, unsigned int character);
 VChar *BKE_vfontdata_char_copy(const VChar *vchar_src);
+
+}  // namespace blender

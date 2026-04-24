@@ -72,6 +72,10 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 {
   auto *mmd = reinterpret_cast<GreasePencilHookModifierData *>(md);
   if (mmd->object != nullptr) {
+    if (mmd->subtarget[0]) {
+      DEG_add_bone_relation(
+          ctx->node, mmd->object, mmd->subtarget, DEG_OB_COMP_BONE, "Hook Modifier");
+    }
     DEG_add_object_relation(ctx->node, mmd->object, DEG_OB_COMP_TRANSFORM, "Hook Modifier");
   }
   DEG_add_object_relation(ctx->node, ctx->object, DEG_OB_COMP_TRANSFORM, "Hook Modifier");
@@ -83,7 +87,7 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 
   modifier::greasepencil::foreach_influence_ID_link(&mmd->influence, ob, walk, user_data);
 
-  walk(user_data, ob, (ID **)&mmd->object, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&mmd->object), IDWALK_CB_NOP);
 }
 
 static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const ModifierData *md)
@@ -177,7 +181,7 @@ static void deform_drawing(const ModifierData &md,
   const float3 cent = use_uniform ? math::transform_point(mat_uniform, float3(mmd.cent)) :
                                     float3(mmd.cent);
 
-  float4x4 dmat;
+  float4x4 dmat = mmd.object->object_to_world();
   /* Get world-space matrix of target, corrected for the space the verts are in. */
   if (mmd.subtarget[0]) {
     bPoseChannel *pchan = BKE_pose_channel_find_name(mmd.object->pose, mmd.subtarget);
@@ -186,47 +190,45 @@ static void deform_drawing(const ModifierData &md,
       dmat = mmd.object->object_to_world() * float4x4(pchan->pose_mat);
     }
   }
-  else {
-    /* Just object target. */
-    dmat = mmd.object->object_to_world();
-  }
   float4x4 use_mat = ob.world_to_object() * dmat * float4x4(mmd.parentinv);
 
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
   MutableSpan<float3> positions = curves.positions_for_write();
 
-  strokes.foreach_index(blender::GrainSize(128), [&](const int stroke) {
-    const IndexRange points_range = points_by_curve[stroke].index_range();
-    for (const int point_i : points_range) {
-      const int point = point_i + points_by_curve[stroke].first();
-      const float weight = input_weights[point];
-      if (weight < 0.0f) {
-        continue;
-      }
+  strokes.foreach_index(
+      [&](const int stroke) {
+        const IndexRange points_range = points_by_curve[stroke].index_range();
+        for (const int point_i : points_range) {
+          const int point = point_i + points_by_curve[stroke].first();
+          const float weight = input_weights[point];
+          if (weight < 0.0f) {
+            continue;
+          }
 
-      float fac;
-      if (use_falloff) {
-        float len_sq;
-        if (use_uniform) {
-          const float3 co_uniform = math::transform_point(mat_uniform, positions[point]);
-          len_sq = math::distance(cent, co_uniform);
-        }
-        else {
-          len_sq = math::distance(cent, positions[point]);
-        }
-        fac = hook_falloff(
-            falloff, falloff_type, falloff_sq, fac_orig, mmd.influence.custom_curve, len_sq);
-      }
-      else {
-        fac = fac_orig;
-      }
+          float fac;
+          if (use_falloff) {
+            float len_sq;
+            if (use_uniform) {
+              const float3 co_uniform = math::transform_point(mat_uniform, positions[point]);
+              len_sq = math::distance(cent, co_uniform);
+            }
+            else {
+              len_sq = math::distance(cent, positions[point]);
+            }
+            fac = hook_falloff(
+                falloff, falloff_type, falloff_sq, fac_orig, mmd.influence.custom_curve, len_sq);
+          }
+          else {
+            fac = fac_orig;
+          }
 
-      if (fac != 0.0f) {
-        const float3 co_tmp = math::transform_point(use_mat, positions[point]);
-        positions[point] = math::interpolate(positions[point], co_tmp, fac * weight);
-      }
-    }
-  });
+          if (fac != 0.0f) {
+            const float3 co_tmp = math::transform_point(use_mat, positions[point]);
+            positions[point] = math::interpolate(positions[point], co_tmp, fac * weight);
+          }
+        }
+      },
+      exec_mode::grain_size(128));
 
   drawing.tag_positions_changed();
 }
@@ -312,8 +314,6 @@ static void panel_register(ARegionType *region_type)
   modifier_panel_register(region_type, eModifierType_GreasePencilHook, panel_draw);
 }
 
-}  // namespace blender
-
 ModifierTypeInfo modifierType_GreasePencilHook = {
     /*idname*/ "GreasePencilHookModifier",
     /*name*/ N_("Hook"),
@@ -326,26 +326,28 @@ ModifierTypeInfo modifierType_GreasePencilHook = {
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_SupportsMapping,
     /*icon*/ ICON_HOOK,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
-    /*is_disabled*/ blender::is_disabled,
-    /*update_depsgraph*/ blender::update_depsgraph,
+    /*free_data*/ free_data,
+    /*is_disabled*/ is_disabled,
+    /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

@@ -75,23 +75,20 @@ void OBJECT_OT_volume_add(wmOperatorType *ot)
 static wmOperatorStatus volume_import_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  const bool is_relative_path = RNA_boolean_get(op->ptr, "relative_path");
   bool imported = false;
 
   const char *blendfile_path = BKE_main_blendfile_path(bmain);
-  ListBase ranges = ED_image_filesel_detect_sequences(blendfile_path, blendfile_path, op, false);
-  LISTBASE_FOREACH (ImageFrameRange *, range, &ranges) {
+  ListBaseT<ImageFrameRange> ranges = ED_image_filesel_detect_sequences(
+      blendfile_path, blendfile_path, op, false);
+  for (ImageFrameRange &range : ranges) {
     char filename[FILE_MAX];
-    BLI_path_split_file_part(range->filepath, filename, sizeof(filename));
+    BLI_path_split_file_part(range.filepath, filename, sizeof(filename));
     BLI_path_extension_strip(filename);
 
     Object *object = object_volume_add(C, op, filename);
-    Volume *volume = (Volume *)object->data;
+    Volume *volume = id_cast<Volume *>(object->data);
 
-    STRNCPY(volume->filepath, range->filepath);
-    if (is_relative_path) {
-      BLI_path_rel(volume->filepath, BKE_main_blendfile_path(bmain));
-    }
+    STRNCPY(volume->filepath, range.filepath);
 
     if (!BKE_volume_load(volume, bmain)) {
       BKE_reportf(op->reports,
@@ -115,10 +112,10 @@ static wmOperatorStatus volume_import_exec(bContext *C, wmOperator *op)
 
     /* Set sequence parameters after trying to load the first frame, for file validation we want
      * to use a consistent frame rather than whatever corresponds to the current scene frame. */
-    volume->is_sequence = (range->length > 1);
-    volume->frame_duration = (volume->is_sequence) ? range->length : 0;
+    volume->is_sequence = (range.length > 1);
+    volume->frame_duration = (volume->is_sequence) ? range.length : 0;
     volume->frame_start = 1;
-    volume->frame_offset = (volume->is_sequence) ? range->offset - 1 : 0;
+    volume->frame_offset = (volume->is_sequence) ? range.offset - 1 : 0;
 
     if (BKE_volume_is_y_up(volume)) {
       object->rot[0] += M_PI_2;
@@ -128,7 +125,7 @@ static wmOperatorStatus volume_import_exec(bContext *C, wmOperator *op)
 
     imported = true;
 
-    BLI_freelistN(&range->frames);
+    BLI_freelistN(&range.frames);
   }
   BLI_freelistN(&ranges);
 

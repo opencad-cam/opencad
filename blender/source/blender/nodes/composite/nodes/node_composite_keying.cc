@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_color.h"
 #include "BLI_math_vector_types.hh"
 
@@ -25,37 +21,40 @@
 
 namespace blender::nodes::node_composite_keying_cc {
 
-static void cmp_node_keying_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_output<decl::Float>("Matte").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Edges")
+  b.add_output<decl::Float>("Matte"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Edges"_ustr)
       .structure_type(StructureType::Dynamic)
       .translation_context(BLT_I18NCONTEXT_ID_IMAGE);
 
-  b.add_input<decl::Color>("Key Color")
+  b.add_input<decl::Color>("Key Color"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
 
-  PanelDeclarationBuilder &preprocess_panel = b.add_panel("Preprocess").default_closed(true);
-  preprocess_panel.add_input<decl::Int>("Blur Size", "Preprocess Blur Size")
+  PanelDeclarationBuilder &preprocess_panel = b.add_panel("Preprocess"_ustr).default_closed(true);
+  preprocess_panel.add_input<decl::Int>("Blur Size"_ustr, "Preprocess Blur Size"_ustr)
       .default_value(0)
       .min(0)
       .description(
           "Blur the color of the input image in YCC color space before keying while leaving the "
           "luminance intact using a Gaussian blur of the given size");
 
-  PanelDeclarationBuilder &key_panel = b.add_panel("Key").default_closed(true).translation_context(
-      BLT_I18NCONTEXT_ID_NODETREE);
-  key_panel.add_input<decl::Float>("Balance", "Key Balance")
+  PanelDeclarationBuilder &key_panel = b.add_panel("Key"_ustr)
+                                           .default_closed(true)
+                                           .translation_context(BLT_I18NCONTEXT_ID_NODETREE);
+  key_panel.add_input<decl::Float>("Balance"_ustr, "Key Balance"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -65,8 +64,8 @@ static void cmp_node_keying_declare(NodeDeclarationBuilder &b)
           "against. 0 means the latter channel of the two is used, while 1 means the former of "
           "the two is used");
 
-  PanelDeclarationBuilder &tweak_panel = b.add_panel("Tweak").default_closed(true);
-  tweak_panel.add_input<decl::Float>("Black Level")
+  PanelDeclarationBuilder &tweak_panel = b.add_panel("Tweak"_ustr).default_closed(true);
+  tweak_panel.add_input<decl::Float>("Black Level"_ustr)
       .default_value(0.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -74,7 +73,7 @@ static void cmp_node_keying_declare(NodeDeclarationBuilder &b)
       .description(
           "The matte gets remapped such matte values lower than the black level become black. "
           "Pixels at the identified edges are excluded from the remapping to preserve details");
-  tweak_panel.add_input<decl::Float>("White Level")
+  tweak_panel.add_input<decl::Float>("White Level"_ustr)
       .default_value(1.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -83,17 +82,17 @@ static void cmp_node_keying_declare(NodeDeclarationBuilder &b)
           "The matte gets remapped such matte values higher than the white level become white. "
           "Pixels at the identified edges are excluded from the remapping to preserve details");
 
-  PanelDeclarationBuilder &edges_panel =
-      tweak_panel.add_panel("Edges").default_closed(true).translation_context(
-          BLT_I18NCONTEXT_ID_IMAGE);
-  edges_panel.add_input<decl::Int>("Size", "Edge Search Size")
+  PanelDeclarationBuilder &edges_panel = tweak_panel.add_panel("Edges"_ustr)
+                                             .default_closed(true)
+                                             .translation_context(BLT_I18NCONTEXT_ID_IMAGE);
+  edges_panel.add_input<decl::Int>("Size"_ustr, "Edge Search Size"_ustr)
       .default_value(3)
       .min(0)
       .description(
           "Size of the search window used to identify edges. Higher search size corresponds to "
           "less noisy and higher quality edges, not necessarily bigger edges. Edge tolerance can "
           "be used to expend the size of the edges");
-  edges_panel.add_input<decl::Float>("Tolerance", "Edge Tolerance")
+  edges_panel.add_input<decl::Float>("Tolerance"_ustr, "Edge Tolerance"_ustr)
       .default_value(0.1f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -102,15 +101,15 @@ static void cmp_node_keying_declare(NodeDeclarationBuilder &b)
           "Pixels are considered part of the edges if more than 10% of the neighbouring pixels "
           "have matte values that differ from the pixel's matte value by this tolerance");
 
-  PanelDeclarationBuilder &mask_panel = b.add_panel("Mask").default_closed(true);
-  mask_panel.add_input<decl::Float>("Garbage Matte")
+  PanelDeclarationBuilder &mask_panel = b.add_panel("Mask"_ustr).default_closed(true);
+  mask_panel.add_input<decl::Float>("Garbage Matte"_ustr)
       .default_value(0.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
       .max(1.0f)
       .structure_type(StructureType::Dynamic)
       .description("Areas in the garbage matte mask are excluded from the matte");
-  mask_panel.add_input<decl::Float>("Core Matte")
+  mask_panel.add_input<decl::Float>("Core Matte"_ustr)
       .default_value(0.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -118,36 +117,37 @@ static void cmp_node_keying_declare(NodeDeclarationBuilder &b)
       .structure_type(StructureType::Dynamic)
       .description("Areas in the core matte mask are included in the matte");
 
-  PanelDeclarationBuilder &postprocess_panel = b.add_panel("Postprocess").default_closed(true);
-  postprocess_panel.add_input<decl::Int>("Blur Size", "Postprocess Blur Size")
+  PanelDeclarationBuilder &postprocess_panel =
+      b.add_panel("Postprocess"_ustr).default_closed(true);
+  postprocess_panel.add_input<decl::Int>("Blur Size"_ustr, "Postprocess Blur Size"_ustr)
       .default_value(0)
       .min(0)
       .description("Blur the computed matte using a Gaussian blur of the given size");
-  postprocess_panel.add_input<decl::Int>("Dilate Size", "Postprocess Dilate Size")
+  postprocess_panel.add_input<decl::Int>("Dilate Size"_ustr, "Postprocess Dilate Size"_ustr)
       .default_value(0)
       .description(
           "Dilate or erode the computed matte using a circular structuring element of the "
           "specified size. Negative sizes means erosion while positive means dilation");
-  postprocess_panel.add_input<decl::Int>("Feather Size", "Postprocess Feather Size")
+  postprocess_panel.add_input<decl::Int>("Feather Size"_ustr, "Postprocess Feather Size"_ustr)
       .default_value(0)
       .description(
           "Dilate or erode the computed matte using an inverse distance operation evaluated at "
           "the given falloff of the specified size. Negative sizes means erosion while positive "
           "means dilation");
-  postprocess_panel.add_input<decl::Menu>("Feather Falloff")
+  postprocess_panel.add_input<decl::Menu>("Feather Falloff"_ustr)
       .default_value(PROP_SMOOTH)
       .static_items(rna_enum_proportional_falloff_curve_only_items)
       .optional_label()
       .translation_context(BLT_I18NCONTEXT_ID_CURVE_LEGACY);
 
-  PanelDeclarationBuilder &despill_panel = b.add_panel("Despill").default_closed(true);
-  despill_panel.add_input<decl::Float>("Strength", "Despill Strength")
+  PanelDeclarationBuilder &despill_panel = b.add_panel("Despill"_ustr).default_closed(true);
+  despill_panel.add_input<decl::Float>("Strength"_ustr, "Despill Strength"_ustr)
       .default_value(1.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
       .max(1.0f)
       .description("Specifies the strength of the despill");
-  despill_panel.add_input<decl::Float>("Balance", "Despill Balance")
+  despill_panel.add_input<decl::Float>("Balance"_ustr, "Despill Balance"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -158,10 +158,10 @@ static void cmp_node_keying_declare(NodeDeclarationBuilder &b)
           "of the two is used, while 1 means the former of the two is used");
 }
 
-static void node_composit_init_keying(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
   /* Unused, only kept for forward compatibility. */
-  NodeKeyingData *data = MEM_new_for_free<NodeKeyingData>(__func__);
+  NodeKeyingData *data = MEM_new<NodeKeyingData>(__func__);
   node->storage = data;
 }
 
@@ -175,18 +175,11 @@ class KeyingOperation : public NodeOperation {
   {
     const Result &input_image = get_input("Image");
     Result &output_image = get_result("Image");
-    Result &output_matte = get_result("Matte");
-    Result &output_edges = get_result("Edges");
     if (input_image.is_single_value()) {
       if (output_image.should_compute()) {
         output_image.share_data(input_image);
       }
-      if (output_matte.should_compute()) {
-        output_matte.allocate_invalid();
-      }
-      if (output_edges.should_compute()) {
-        output_edges.allocate_invalid();
-      }
+      this->allocate_default_remaining_outputs();
       return;
     }
 
@@ -199,6 +192,7 @@ class KeyingOperation : public NodeOperation {
     Result tweaked_matte = compute_tweaked_matte(matte);
     matte.release();
 
+    Result &output_matte = this->get_result("Matte");
     if (output_image.should_compute() || output_matte.should_compute()) {
       Result blurred_matte = compute_blurred_matte(tweaked_matte);
       tweaked_matte.release();
@@ -214,11 +208,10 @@ class KeyingOperation : public NodeOperation {
       }
 
       if (output_matte.should_compute()) {
-        output_matte.steal_data(feathered_matte);
+        output_matte.share_data(feathered_matte);
       }
-      else {
-        feathered_matte.release();
-      }
+
+      feathered_matte.release();
     }
     else {
       tweaked_matte.release();
@@ -241,7 +234,7 @@ class KeyingOperation : public NodeOperation {
 
     Result blurred_chroma = context().create_result(ResultType::Color);
     symmetric_separable_blur(
-        context(), chroma, blurred_chroma, float2(blur_size) / 2, R_FILTER_BOX);
+        context(), chroma, blurred_chroma, float2(blur_size) / 2, math::FilterKernel::Box);
     chroma.release();
 
     Result blurred_input = replace_input_chroma(blurred_chroma);
@@ -661,7 +654,7 @@ class KeyingOperation : public NodeOperation {
 
     Result blurred_matte = context().create_result(ResultType::Float);
     symmetric_separable_blur(
-        context(), input_matte, blurred_matte, float2(blur_size) / 2, R_FILTER_BOX);
+        context(), input_matte, blurred_matte, float2(blur_size) / 2, math::FilterKernel::Box);
 
     return blurred_matte;
   }
@@ -811,33 +804,31 @@ class KeyingOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new KeyingOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_keying_cc
-
-static void register_node_type_cmp_keying()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_keying_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeKeying", CMP_NODE_KEYING);
+  cmp_node_type_base(&ntype, "CompositorNodeKeying"_ustr, CMP_NODE_KEYING);
   ntype.ui_name = "Keying";
   ntype.ui_description =
       "Perform both chroma keying (to remove the backdrop) and despill (to correct color cast "
       "from the backdrop)";
   ntype.enum_name_legacy = "KEYING";
   ntype.nclass = NODE_CLASS_MATTE;
-  ntype.declare = file_ns::cmp_node_keying_declare;
-  ntype.initfunc = file_ns::node_composit_init_keying;
-  blender::bke::node_type_storage(
+  ntype.declare = node_declare;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(
       ntype, "NodeKeyingData", node_free_standard_storage, node_copy_standard_storage);
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
-  blender::bke::node_type_size(ntype, 155, 140, NODE_DEFAULT_MAX_WIDTH);
+  ntype.get_compositor_operation = get_compositor_operation;
+  bke::node_type_size(ntype, 155, 140, NODE_DEFAULT_MAX_WIDTH);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_keying)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_keying_cc

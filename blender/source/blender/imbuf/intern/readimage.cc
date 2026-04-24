@@ -33,6 +33,8 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_colormanagement_intern.hh"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"image.read"};
 
 static void imb_handle_colorspace_and_alpha(ImBuf *ibuf,
@@ -76,7 +78,7 @@ static void imb_handle_colorspace_and_alpha(ImBuf *ibuf,
   }
 
   if (r_colorspace) {
-    if (ibuf->byte_buffer.data != nullptr && ibuf->float_buffer.data == nullptr) {
+    if (ibuf->byte_data() != nullptr && ibuf->float_data() == nullptr) {
       /* byte buffer is never internally converted to some standard space,
        * store pointer to its color space descriptor instead
        */
@@ -98,7 +100,7 @@ static void imb_handle_colorspace_and_alpha(ImBuf *ibuf,
   }
   else {
     if (alpha_flags & IB_alphamode_premul) {
-      if (ibuf->byte_buffer.data) {
+      if (ibuf->byte_data()) {
         IMB_unpremultiply_alpha(ibuf);
       }
       else {
@@ -106,7 +108,7 @@ static void imb_handle_colorspace_and_alpha(ImBuf *ibuf,
       }
     }
     else {
-      if (ibuf->float_buffer.data) {
+      if (ibuf->float_data()) {
         IMB_premultiply_alpha(ibuf);
       }
       else {
@@ -115,7 +117,14 @@ static void imb_handle_colorspace_and_alpha(ImBuf *ibuf,
     }
   }
 
-  colormanage_imbuf_make_linear(ibuf, new_colorspace, ColorManagedFileOutput::Image);
+  if (flags & IB_no_colorspace_convert) {
+    if (ibuf->float_data() != nullptr) {
+      ibuf->float_buffer.colorspace = colormanage_colorspace_get_named(new_colorspace);
+    }
+  }
+  else {
+    colormanage_imbuf_make_linear(ibuf, new_colorspace, ColorManagedFileOutput::Image);
+  }
 }
 
 ImBuf *IMB_load_image_from_memory(const uchar *mem,
@@ -203,7 +212,7 @@ ImBuf *IMB_load_image_from_filepath(const char *filepath,
   ibuf = IMB_load_image_from_file_descriptor(file, flags, filepath, r_colorspace);
 
   if (ibuf) {
-    STRNCPY(ibuf->filepath, filepath);
+    ibuf->filepath = filepath;
   }
 
   close(file);
@@ -265,3 +274,5 @@ ImBuf *IMB_thumb_load_image(const char *filepath,
 
   return ibuf;
 }
+
+}  // namespace blender

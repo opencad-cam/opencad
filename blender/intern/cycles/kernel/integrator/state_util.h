@@ -8,6 +8,8 @@
 
 #include "kernel/integrator/state.h"
 
+#include "kernel/sample/lcg.h"
+
 #include "kernel/util/differential.h"
 
 CCL_NAMESPACE_BEGIN
@@ -101,7 +103,7 @@ ccl_device_forceinline void integrator_state_write_shadow_ray_self(
   /* There is a bit of implicit knowledge about the way how the kernels are invoked and what the
    * state is actually storing. Special logic here is needed because the intersect_shadow kernel
    * might be called multiple times. This happens when the total number of intersections by the
-   * ray (shadow_path.num_hits) exceeds INTEGRATOR_SHADOW_ISECT_SIZE.
+   * ray (shadow_path.packed_num_hits) exceeds INTEGRATOR_SHADOW_ISECT_SIZE.
    *
    * Writing of the shadow_ray.self to the state happens only during the shadow ray setup, and
    * the shadow_isect array gets overwritten by the intersect_shadow kernel. It is important to
@@ -471,69 +473,69 @@ ccl_device_inline IntegratorState integrator_state_shadow_catcher_split(KernelGl
   return to_state;
 }
 
-#ifndef __KERNEL_GPU__
-ccl_device_inline int integrator_state_bounce(ConstIntegratorState state, const int /*unused*/)
+ccl_device_inline int integrator_state_bounce(ConstIntegratorState state,
+                                              const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, path, bounce);
 }
 
 ccl_device_inline int integrator_state_bounce(ConstIntegratorShadowState state,
-                                              const int /*unused*/)
+                                              const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, shadow_path, bounce);
 }
 
 ccl_device_inline int integrator_state_diffuse_bounce(ConstIntegratorState state,
-                                                      const int /*unused*/)
+                                                      const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, path, diffuse_bounce);
 }
 
 ccl_device_inline int integrator_state_diffuse_bounce(ConstIntegratorShadowState state,
-                                                      const int /*unused*/)
+                                                      const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, shadow_path, diffuse_bounce);
 }
 
 ccl_device_inline int integrator_state_glossy_bounce(ConstIntegratorState state,
-                                                     const int /*unused*/)
+                                                     const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, path, glossy_bounce);
 }
 
 ccl_device_inline int integrator_state_glossy_bounce(ConstIntegratorShadowState state,
-                                                     const int /*unused*/)
+                                                     const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, shadow_path, glossy_bounce);
 }
 
 ccl_device_inline int integrator_state_transmission_bounce(ConstIntegratorState state,
-                                                           const int /*unused*/)
+                                                           const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, path, transmission_bounce);
 }
 
 ccl_device_inline int integrator_state_transmission_bounce(ConstIntegratorShadowState state,
-                                                           const int /*unused*/)
+                                                           const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, shadow_path, transmission_bounce);
 }
 
 ccl_device_inline int integrator_state_transparent_bounce(ConstIntegratorState state,
-                                                          const int /*unused*/)
+                                                          const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, path, transparent_bounce);
 }
 
 ccl_device_inline int integrator_state_transparent_bounce(ConstIntegratorShadowState state,
-                                                          const int /*unused*/)
+                                                          const uint32_t /*path_flag*/)
 {
   return INTEGRATOR_STATE(state, shadow_path, transparent_bounce);
 }
 
 ccl_device_inline int integrator_state_portal_bounce(KernelGlobals kg,
                                                      ConstIntegratorState state,
-                                                     const int /*unused*/)
+                                                     const uint32_t /*path_flag*/)
 {
   return (kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL) ?
              INTEGRATOR_STATE(state, path, portal_bounce) :
@@ -542,61 +544,33 @@ ccl_device_inline int integrator_state_portal_bounce(KernelGlobals kg,
 
 ccl_device_inline int integrator_state_portal_bounce(KernelGlobals kg,
                                                      ConstIntegratorShadowState state,
-                                                     const int /*unused*/)
+                                                     const uint32_t /*path_flag*/)
 {
   return (kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL) ?
              INTEGRATOR_STATE(state, shadow_path, portal_bounce) :
              0;
 }
 
-#else
-ccl_device_inline int integrator_state_bounce(ConstIntegratorShadowState state,
-                                              const uint32_t path_flag)
+ccl_device_inline uint integrator_state_lcg_init(ConstIntegratorShadowState state, const uint hash)
 {
-  return (path_flag & PATH_RAY_SHADOW) ? INTEGRATOR_STATE(state, shadow_path, bounce) :
-                                         INTEGRATOR_STATE(state, path, bounce);
+  return lcg_state_init(INTEGRATOR_STATE(state, shadow_path, rng_pixel),
+                        INTEGRATOR_STATE(state, shadow_path, rng_offset),
+                        INTEGRATOR_STATE(state, shadow_path, sample),
+                        hash);
 }
 
-ccl_device_inline int integrator_state_diffuse_bounce(ConstIntegratorShadowState state,
-                                                      const uint32_t path_flag)
+ccl_device_inline uint integrator_state_lcg_init(ConstIntegratorState state, const uint hash)
 {
-  return (path_flag & PATH_RAY_SHADOW) ? INTEGRATOR_STATE(state, shadow_path, diffuse_bounce) :
-                                         INTEGRATOR_STATE(state, path, diffuse_bounce);
+  return lcg_state_init(INTEGRATOR_STATE(state, path, rng_pixel),
+                        INTEGRATOR_STATE(state, path, rng_offset),
+                        INTEGRATOR_STATE(state, path, sample),
+                        hash);
 }
 
-ccl_device_inline int integrator_state_glossy_bounce(ConstIntegratorShadowState state,
-                                                     const uint32_t path_flag)
+ccl_device_inline uint integrator_state_lcg_init(ConstIntegratorBakeState /*state*/,
+                                                 const uint /*hash*/)
 {
-  return (path_flag & PATH_RAY_SHADOW) ? INTEGRATOR_STATE(state, shadow_path, glossy_bounce) :
-                                         INTEGRATOR_STATE(state, path, glossy_bounce);
+  return 0;
 }
-
-ccl_device_inline int integrator_state_transmission_bounce(ConstIntegratorShadowState state,
-                                                           const uint32_t path_flag)
-{
-  return (path_flag & PATH_RAY_SHADOW) ?
-             INTEGRATOR_STATE(state, shadow_path, transmission_bounce) :
-             INTEGRATOR_STATE(state, path, transmission_bounce);
-}
-
-ccl_device_inline int integrator_state_transparent_bounce(ConstIntegratorShadowState state,
-                                                          const uint32_t path_flag)
-{
-  return (path_flag & PATH_RAY_SHADOW) ? INTEGRATOR_STATE(state, shadow_path, transparent_bounce) :
-                                         INTEGRATOR_STATE(state, path, transparent_bounce);
-}
-
-ccl_device_inline int integrator_state_portal_bounce(KernelGlobals kg,
-                                                     ConstIntegratorShadowState state,
-                                                     const uint32_t path_flag)
-{
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL) == 0) {
-    return 0;
-  }
-  return (path_flag & PATH_RAY_SHADOW) ? INTEGRATOR_STATE(state, shadow_path, portal_bounce) :
-                                         INTEGRATOR_STATE(state, path, portal_bounce);
-}
-
-#endif
 
 CCL_NAMESPACE_END

@@ -17,8 +17,11 @@ bl_info = {
     "category": "System",
 }
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 if "bpy" in locals():
-    # This doesn't need to be inline because sub-modules aren't important into the global name-space.
+    # This doesn't need to be inline because sub-modules aren't imported into the global name-space.
     # The check for `bpy` ensures this is always assigned before use.
     # pylint: disable-next=used-before-assignment
     _local_module_reload()
@@ -32,6 +35,20 @@ from bpy.props import (
     CollectionProperty,
     StringProperty,
 )
+
+
+# Only import submodules here when necessary for type checking.
+# At runtime, the module is imported only when it's actually used.
+if TYPE_CHECKING:
+    from _bpy_internal.assets.remote_library_listing import listing_downloader
+
+    type _RemoteAssetListingDownloader = listing_downloader.RemoteAssetListingDownloader
+else:
+    type _RemoteAssetListingDownloader = object
+
+
+# Auto-refresh remote asset libraries once per day.
+REMOTE_ASSET_LIBS_AUTOSYNC_PERIOD_SEC = 3600 * 24
 
 
 # -----------------------------------------------------------------------------
@@ -129,13 +146,12 @@ def manifest_compatible_with_wheel_data_or_error(
             python_versions_test = python_versions_from_wheels(wheels_rel)
         except Exception as ex:
             # This should only ever happen for invalid wheels.
-            python_versions_test = "Error extracting Python version from wheels: {:s} from \"{:s}\"".format(
-                str(ex),
-                pkg_manifest_filepath,
-            )
+            # Contextual information is included when the error is printed,
+            # so there is no need to add a prefix with additional context.
+            python_versions_test = str(ex)
 
         if isinstance(python_versions_test, str):
-            print("Error parsing wheel versions: {:s} from \"{:s}\"".format(
+            print("Error extracting Python version from wheels: {:s} from \"{:s}\"".format(
                 python_versions_test,
                 pkg_manifest_filepath,
             ))
@@ -353,7 +369,7 @@ def repos_to_notify():
 
         # WARNING: this could be a more expensive check, use a "reasonable" guess.
         # This is technically incorrect because knowing if a repository has any installed
-        # packages requires reading it's meta-data and comparing it with the directory contents.
+        # packages requires reading its meta-data and comparing it with the directory contents.
         # Chances are - if the directory contains *any* directories containing a package manifest
         # this means it has packages installed.
         #
@@ -404,10 +420,133 @@ def repos_to_notify():
 
 
 # -----------------------------------------------------------------------------
+# Remote Asset Libraries
+
+_downloaders: list[_RemoteAssetListingDownloader] = []
+
+
+# Called directly from C++ code.
+def remote_asset_library_sync(
+    asset_library_url: str,
+    asset_library_local_path: Path,
+    only_if_older_than_sec=0,
+) -> None:
+    """Download the remote asset library listing."""
+
+    # Ignore in background mode, as that should trigger these updates explicitly.
+    if bpy.app.background:
+        return
+
+    # Only download remote libraries.
+    if not asset_library_url:
+        return
+
+    # Only download over HTTP.
+    supported_schemas = ("http://", "https://")
+    if not any(asset_library_url.startswith(schema) for schema in supported_schemas):
+        print("  skipping {!r}, can only handle {!s}".format(asset_library_url, ", ".join(supported_schemas)))
+        return
+
+    # Refuse to download if online access is turned off.
+    if not bpy.app.online_access:
+        print("  skipping {!r}, online access is not allowed,".format(asset_library_url))
+        return
+
+    from _bpy_internal.assets.remote_library_listing import listing_downloader
+
+    # Check if the download should happen at all.
+    if only_if_older_than_sec and listing_downloader.is_more_recent_than(
+            asset_library_local_path, only_if_older_than_sec):
+        return
+
+    # Only actually start downloading if no other Blender is already syncing
+    # this asset library.
+    from _bpy_internal.assets.remote_library_listing import sync_mutex
+    if not sync_mutex.mutex_lock(asset_library_local_path):
+        print("  skipping {!r}, another Blender is already syncing this asset library,".format(asset_library_url))
+        return
+
+    # Communicate to the asset system that we started loading a library. It will let asset browsers
+    # and other UIs displaying this library indicate that loading is ongoing then, until finished.
+    bpy.types.WindowManager.asset_library_status_begin_loading(asset_library_url)
+
+    # Create the downloader and start downloading.
+    downloader = listing_downloader.RemoteAssetListingDownloader(
+        asset_library_url,
+        asset_library_local_path,
+        on_update_callback=_remote_asset_library_sync_update,
+        on_done_callback=_remote_asset_library_sync_done,
+        on_metafiles_done_callback=_remote_asset_library_sync_metafiles_done,
+        on_page_done_callback=_remote_asset_library_sync_new_page_done,
+    )
+    downloader.download_and_process()
+
+    # Just to keep the Python object referenced:
+    _downloaders.append(downloader)
+
+
+def _remote_asset_library_sync_done(downloader: _RemoteAssetListingDownloader) -> None:
+    """
+    Called when the downloading of the remote asset listing is done.
+
+    Here "done" does not imply "successful", as cancellations, network errors,
+    or other issues can cause things to abort. In that case, this function is
+    still called.
+    """
+    from _bpy_internal.assets.remote_library_listing import sync_mutex
+    from _bpy_internal.assets.remote_library_listing.listing_downloader import DownloadStatus
+    from bpy.types import WindowManager
+
+    try:
+        _downloaders.remove(downloader)
+
+        match downloader.status:
+            case DownloadStatus.LOADING:
+                print("Unexpected: `on_done_callback` called while downloader status is loading")
+            case DownloadStatus.FINISHED_SUCCESSFULLY:
+                WindowManager.asset_library_status_finished_loading(downloader.remote_url)
+            case DownloadStatus.FAILED:
+                WindowManager.asset_library_status_failed_loading(
+                    downloader.remote_url, message=downloader.error_message)
+    finally:
+        sync_mutex.mutex_unlock(downloader.local_path)
+
+
+def _remote_asset_library_sync_update(downloader: _RemoteAssetListingDownloader) -> None:
+    from _bpy_internal.assets.remote_library_listing.listing_downloader import DownloadStatus
+
+    # Only call `asset_library_status_ping_still_loading()` if the loading is still going on.
+    if downloader.status == DownloadStatus.LOADING:
+        bpy.types.WindowManager.asset_library_status_ping_still_loading(downloader.remote_url)
+
+
+def _remote_asset_library_sync_metafiles_done(downloader: _RemoteAssetListingDownloader) -> None:
+    bpy.types.WindowManager.asset_library_status_ping_metafiles_in_place(downloader.remote_url)
+
+
+def _remote_asset_library_sync_new_page_done(downloader: _RemoteAssetListingDownloader) -> None:
+    bpy.types.WindowManager.asset_library_status_ping_loaded_new_pages(downloader.remote_url)
+
+
+def _remote_asset_library_sync_all_periodic():
+    """Periodically download remote asset library listings."""
+    if not bpy.app.online_access:
+        return
+    if not bpy.context.preferences.experimental.use_remote_asset_libraries:
+        return
+
+    for asset_lib in bpy.context.preferences.filepaths.asset_libraries:
+        if not asset_lib.enabled:
+            continue
+        remote_asset_library_sync(asset_lib.remote_url, Path(asset_lib.path),
+                                  only_if_older_than_sec=REMOTE_ASSET_LIBS_AUTOSYNC_PERIOD_SEC)
+
+
+# -----------------------------------------------------------------------------
 # Handlers
 
 @bpy.app.handlers.persistent
-def extenion_repos_sync(repo, *_):
+def extension_repos_sync(repo, *_):
     # Ignore in background mode as this is for the UI to stay in sync.
     # Automated tasks must sync explicitly.
     if bpy.app.background:
@@ -443,7 +582,7 @@ def extenion_repos_sync(repo, *_):
 
 
 @bpy.app.handlers.persistent
-def extenion_repos_files_clear(directory, _):
+def extension_repos_files_clear(directory, _):
     # Perform a "safe" file deletion by only removing files known to be either
     # packages or known extension meta-data.
     #
@@ -476,11 +615,11 @@ def extenion_repos_files_clear(directory, _):
 # -----------------------------------------------------------------------------
 # Wrap Handlers
 
-_monkeypatch_extenions_repos_update_dirs = set()
+_monkeypatch_extensions_repos_update_dirs = set()
 
 
-def monkeypatch_extenions_repos_update_pre_impl():
-    _monkeypatch_extenions_repos_update_dirs.clear()
+def monkeypatch_extensions_repos_update_pre_impl():
+    _monkeypatch_extensions_repos_update_dirs.clear()
 
     extension_repos = bpy.context.preferences.extensions.repos
     for repo_item in extension_repos:
@@ -490,10 +629,10 @@ def monkeypatch_extenions_repos_update_pre_impl():
         if directory is None:
             continue
 
-        _monkeypatch_extenions_repos_update_dirs.add(directory)
+        _monkeypatch_extensions_repos_update_dirs.add(directory)
 
 
-def monkeypatch_extenions_repos_update_post_impl():
+def monkeypatch_extensions_repos_update_post_impl():
     import os
     from . import bl_extension_ops
 
@@ -511,13 +650,14 @@ def monkeypatch_extenions_repos_update_post_impl():
         # Happens for newly added extension directories.
         if not os.path.exists(directory):
             continue
-        if directory in _monkeypatch_extenions_repos_update_dirs:
+        if directory in _monkeypatch_extensions_repos_update_dirs:
             continue
-        # Ignore missing because the new repo might not have a JSON file.
         repo_cache_store.refresh_remote_from_directory(directory=directory, error_fn=print, force=True)
+        # Ignore missing because the local JSON (local data about the remote repository)
+        # might not exist yet for a new repo.
         repo_cache_store.refresh_local_from_directory(directory=directory, error_fn=print, ignore_missing=True)
 
-    _monkeypatch_extenions_repos_update_dirs.clear()
+    _monkeypatch_extensions_repos_update_dirs.clear()
 
     # Based on changes, the statistics may need to be re-calculated.
     repo_stats_calc()
@@ -527,7 +667,7 @@ def monkeypatch_extenions_repos_update_post_impl():
 def monkeypatch_extensions_repos_update_pre(*_):
     print_debug("PRE:")
     try:
-        monkeypatch_extenions_repos_update_pre_impl()
+        monkeypatch_extensions_repos_update_pre_impl()
     except Exception as ex:
         print_debug("ERROR", str(ex))
     try:
@@ -537,14 +677,14 @@ def monkeypatch_extensions_repos_update_pre(*_):
 
 
 @bpy.app.handlers.persistent
-def monkeypatch_extenions_repos_update_post(*_):
+def monkeypatch_extensions_repos_update_post(*_):
     print_debug("POST:")
     try:
-        monkeypatch_extenions_repos_update_post.fn_orig()
+        monkeypatch_extensions_repos_update_post.fn_orig()
     except Exception as ex:
         print_debug("ERROR", str(ex))
     try:
-        monkeypatch_extenions_repos_update_post_impl()
+        monkeypatch_extensions_repos_update_post_impl()
     except Exception as ex:
         print_debug("ERROR", str(ex))
 
@@ -569,7 +709,7 @@ def monkeypatch_install():
     # pylint: disable-next=protected-access
     fn_orig = addon_utils._initialize_extension_repos_post
 
-    fn_override = monkeypatch_extenions_repos_update_post
+    fn_override = monkeypatch_extensions_repos_update_post
     for i, fn in enumerate(handlers):
         if fn is fn_orig:
             handlers[i] = fn_override
@@ -591,7 +731,7 @@ def monkeypatch_uninstall():
     # pylint: disable-next=protected-access
     handlers = bpy.app.handlers._extension_repos_update_post
 
-    fn_override = monkeypatch_extenions_repos_update_post
+    fn_override = monkeypatch_extensions_repos_update_post
     for i, fn in enumerate(handlers):
         if fn is fn_override:
             handlers[i] = fn_override.fn_orig
@@ -693,7 +833,10 @@ cli_commands = []
 
 
 def register():
-    from bpy.app.translations import pgettext_rpt as rpt_
+    from bpy.app.translations import (
+        pgettext_n as n_,
+        pgettext_rpt as rpt_,
+    )
 
     prefs = bpy.context.preferences
 
@@ -752,12 +895,12 @@ def register():
     )
     WindowManager.extension_show_panel_installed = BoolProperty(
         name="Show Installed Extensions",
-        description="Only show installed extensions",
+        description="Show the installed extensions panel",
         default=True,
     )
     WindowManager.extension_show_panel_available = BoolProperty(
-        name="Show Installed Extensions",
-        description="Only show installed extensions",
+        name="Show Available Extensions",
+        description="Show the available extensions panel",
         default=True,
     )
     WindowManager.extension_repo_filter = EnumProperty(
@@ -766,10 +909,10 @@ def register():
         items=lambda _, context: [
             # Use `_ALL_` as it's guaranteed never to collide with extension
             # repository module ID's which cannot start with an underscore
-            ('_ALL_', "All Repositories", "Show extensions from all repositories"),
+            ('_ALL_', n_("All Repositories"), n_("Show extensions from all repositories")),
             None,
             *[
-                (repo.module, repo.name, "Only show extensions from this repository")
+                (repo.module, repo.name, n_("Only show extensions from this repository"))
                 for repo in context.preferences.extensions.repos
                 if repo.enabled
             ],
@@ -781,13 +924,16 @@ def register():
 
     # pylint: disable-next=protected-access
     handlers = bpy.app.handlers._extension_repos_sync
-    handlers.append(extenion_repos_sync)
+    handlers.append(extension_repos_sync)
 
     # pylint: disable-next=protected-access
     handlers = bpy.app.handlers._extension_repos_files_clear
-    handlers.append(extenion_repos_files_clear)
+    handlers.append(extension_repos_files_clear)
 
     cli_commands.append(bpy.utils.register_cli_command("extension", cli_extension))
+
+    from _bpy_internal.assets import remote_library_listing
+    cli_commands.append(bpy.utils.register_cli_command("asset_listing", remote_library_listing.asset_listing_main))
 
     monkeypatch_install()
 
@@ -795,6 +941,7 @@ def register():
         if prefs.view.show_extensions_updates:
             from . import bl_extension_notify
             bl_extension_notify.update_non_blocking(repos_fn=repos_to_notify)
+        _remote_asset_library_sync_all_periodic()
 
 
 def unregister():
@@ -825,13 +972,13 @@ def unregister():
 
     # pylint: disable-next=protected-access
     handlers = bpy.app.handlers._extension_repos_sync
-    if extenion_repos_sync in handlers:
-        handlers.remove(extenion_repos_sync)
+    if extension_repos_sync in handlers:
+        handlers.remove(extension_repos_sync)
 
     # pylint: disable-next=protected-access
     handlers = bpy.app.handlers._extension_repos_files_clear
-    if extenion_repos_files_clear in handlers:
-        handlers.remove(extenion_repos_files_clear)
+    if extension_repos_files_clear in handlers:
+        handlers.remove(extension_repos_files_clear)
 
     for cmd in cli_commands:
         bpy.utils.unregister_cli_command(cmd)

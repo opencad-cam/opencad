@@ -29,7 +29,7 @@ PointCloud *point_merge_by_distance(const PointCloud &src_points,
   /* Create the KD tree based on only the selected points, to speed up merge detection and
    * balancing. */
   KDTree_3d *tree = kdtree_3d_new(selection.size());
-  selection.foreach_index_optimized<int64_t>(
+  selection.foreach_index(
       [&](const int64_t i, const int64_t pos) { kdtree_3d_insert(tree, pos, positions[i]); });
   kdtree_3d_balance(tree);
 
@@ -103,7 +103,7 @@ PointCloud *point_merge_by_distance(const PointCloud &src_points,
     point_merge_counts[dst_index]++;
   }
 
-  Set<StringRefNull> attribute_ids = src_attributes.all_ids();
+  Set<StringRefNull> attribute_names = src_attributes.all_names();
 
   /* Transfer the ID attribute if it exists, using the ID of the first merged point. */
   bke::GAttributeReader src_id_attribute = src_attributes.lookup("id");
@@ -121,41 +121,31 @@ PointCloud *point_merge_by_distance(const PointCloud &src_points,
     });
 
     dst.finish();
-    attribute_ids.remove_contained("id");
+    attribute_names.remove_contained("id");
   }
 
   /* Transfer all other attributes. */
-  for (const StringRef id : attribute_ids) {
-    if (attribute_filter.allow_skip(id)) {
+  for (const StringRef name : attribute_names) {
+    if (attribute_filter.allow_skip(name)) {
       continue;
     }
 
-    bke::GAttributeReader src_attribute = src_attributes.lookup(id);
-    bke::attribute_math::convert_to_static_type(src_attribute.varray.type(), [&](auto dummy) {
-      using T = decltype(dummy);
-      if constexpr (!std::is_void_v<bke::attribute_math::DefaultMixer<T>>) {
-        bke::SpanAttributeWriter<T> dst_attribute =
-            dst_attributes.lookup_or_add_for_write_only_span<T>(id, bke::AttrDomain::Point);
-        VArraySpan<T> src = src_attribute.varray.typed<T>();
+    bke::GAttributeReader src_attribute = src_attributes.lookup(name);
+    const bke::AttrType type = bke::cpp_type_to_attribute_type(src_attribute.varray.type());
 
-        threading::parallel_for(IndexRange(dst_size), 1024, [&](IndexRange range) {
-          for (const int i_dst : range) {
-            /* Create a separate mixer for every point to avoid allocating temporary buffers
-             * in the mixer the size of the result point cloud and to improve memory locality. */
-            bke::attribute_math::DefaultMixer<T> mixer{dst_attribute.span.slice(i_dst, 1)};
-
-            Span<int> src_merge_indices = merge_map_indices.as_span().slice(map_offsets[i_dst]);
-            for (const int i_src : src_merge_indices) {
-              mixer.mix_in(0, src[i_src]);
-            }
-
-            mixer.finalize();
-          }
-        });
-
-        dst_attribute.finish();
+    const CommonVArrayInfo info = src_attribute.varray.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src_attribute.varray.type(), info.data));
+      if (dst_attributes.add(name, bke::AttrDomain::Point, type, init)) {
+        continue;
       }
-    });
+    }
+
+    bke::GSpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span(
+        name, bke::AttrDomain::Point, type);
+    bke::attribute_math::mix_groups(
+        GVArraySpan(src_attribute.varray), map_offsets, merge_map_indices, dst_attribute.span);
+    dst_attribute.finish();
   }
 
   debug_randomize_point_order(dst_pointcloud);

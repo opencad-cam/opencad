@@ -8,17 +8,12 @@
 
 #include "BLI_implicit_sharing.h"
 
-#ifdef __cplusplus
+namespace blender {
 
-namespace blender::bke {
+namespace bke {
 class AttributeStorage;
 class AttributeStorageRuntime;
-}  // namespace blender::bke
-
-using AttributeStorageRuntimeHandle = blender::bke::AttributeStorageRuntime;
-#else
-struct AttributeStorageRuntimeHandle;
-#endif
+}  // namespace bke
 
 /** DNA data for bke::Attribute::ArrayData. */
 struct AttributeArray {
@@ -26,6 +21,14 @@ struct AttributeArray {
   const ImplicitSharingInfoHandle *sharing_info = nullptr;
   /* The number of elements in the array. */
   int64_t size = 0;
+  /**
+   * Blender 5.0 (the first version to read #AttributeStorage) does not fully support single value
+   * storage at runtime, even though it supports reading it from the file. The purpose of this
+   * field is to let versions 5.1 and later detect that the storage is a single value, while still
+   * being compatible with 5.0, which doesn't have this field and will just use array storage.
+   */
+  int8_t is_single = 0;
+  char _pad[7] = {};
 };
 
 /** DNA data for bke::Attribute::SingleData. */
@@ -60,10 +63,12 @@ struct AttributeStorage {
 
   char _pad[4] = {};
 
-  AttributeStorageRuntimeHandle *runtime = nullptr;
+  bke::AttributeStorageRuntime *runtime = nullptr;
 
 #ifdef __cplusplus
-  blender::bke::AttributeStorage &wrap();
-  const blender::bke::AttributeStorage &wrap() const;
+  bke::AttributeStorage &wrap();
+  const bke::AttributeStorage &wrap() const;
 #endif
 };
+
+}  // namespace blender

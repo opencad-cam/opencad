@@ -10,6 +10,8 @@
 
 #include "DNA_space_types.h"
 
+namespace blender {
+
 struct ARegion;
 struct AZone;
 struct ReportList;
@@ -66,6 +68,9 @@ enum class AreaDockTarget {
 /* Edges must be within these to allow joining. */
 #define AREAJOINTOLERANCEX (AREAMINX * UI_SCALE_FAC)
 #define AREAJOINTOLERANCEY (HEADERY * UI_SCALE_FAC)
+
+/* Edges must be within this amount to allow aligned edge merging and moving. */
+#define EDGE_ALIGN_TOLERANCE (7 * UI_SCALE_FAC)
 
 /**
  * Expanded interaction influence of area borders.
@@ -149,12 +154,8 @@ void screen_change_update(bContext *C, wmWindow *win, bScreen *screen);
  */
 void screen_change_prepare(
     bScreen *screen_old, bScreen *screen_new, Main *bmain, bContext *C, wmWindow *win);
-ScrArea *area_split(const wmWindow *win,
-                    bScreen *screen,
-                    ScrArea *area,
-                    eScreenAxis dir_axis,
-                    float fac,
-                    bool merge);
+ScrArea *area_split(
+    const wmWindow *win, bScreen *screen, ScrArea *area, eScreenAxis dir_axis, float fac);
 /**
  * Join any two neighboring areas. Might involve complex changes.
  */
@@ -172,8 +173,11 @@ eScreenDir area_getorientation(ScrArea *sa_a, ScrArea *sa_b);
 void area_getoffsets(ScrArea *sa_a, ScrArea *sa_b, eScreenDir dir, int *r_offset1, int *r_offset2);
 /**
  * Close a screen area, allowing most-aligned neighbor to take its place.
+ * not_area is optional area to NOT join into.
  */
-bool screen_area_close(bContext *C, ReportList *reports, bScreen *screen, ScrArea *area);
+bool screen_area_close(
+    bContext *C, ReportList *reports, bScreen *screen, ScrArea *area, ScrArea *not_area = nullptr);
+
 void screen_area_spacelink_add(const Scene *scene, ScrArea *area, eSpace_Type space_type);
 AZone *ED_area_actionzone_find_xy(ScrArea *area, const int xy[2]);
 
@@ -227,6 +231,21 @@ short screen_geom_find_area_split_point(const ScrArea *area,
  */
 void screen_geom_select_connected_edge(const wmWindow *win, ScrEdge *edge);
 
+/**
+ * Select all edges that are aligned with \a edge.
+ */
+void screen_geom_select_extended_edge(const wmWindow *win, ScrEdge *edge);
+
+/**
+ * True if the edge can be extended.
+ */
+bool screen_geom_edge_can_extend(const wmWindow *win, ScrEdge *edge);
+
+/**
+ * Merge aligned edges into a single edge.
+ */
+void screen_geom_edge_aligned_merge(const wmWindow *win, ScrEdge *edge);
+
 /* `screen_context.cc` */
 
 /**
@@ -244,3 +263,5 @@ void SCREEN_OT_screenshot_area(wmOperatorType *ot);
 /* `workspace_layout_edit.cc` */
 
 bool workspace_layout_set_poll(const WorkSpaceLayout *layout);
+
+}  // namespace blender

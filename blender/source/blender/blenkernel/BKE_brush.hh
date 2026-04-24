@@ -12,12 +12,15 @@
 
 #include <optional>
 
+#include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 
 #include "DNA_brush_enums.h"
 #include "DNA_color_types.h"
 #include "DNA_object_enums.h"
 #include "DNA_userdef_enums.h"
+
+namespace blender {
 
 enum class PaintMode : int8_t;
 struct Brush;
@@ -73,6 +76,8 @@ Brush *BKE_brush_duplicate(Main *bmain,
  */
 void BKE_brush_init_gpencil_settings(Brush *brush);
 
+void BKE_brush_init_mesh_automasking_settings(Brush *brush);
+
 void BKE_brush_init_curves_sculpt_settings(Brush *brush);
 
 /**
@@ -88,12 +93,7 @@ void BKE_brush_init_curves_sculpt_settings(Brush *brush);
  */
 void BKE_brush_tag_unsaved_changes(Brush *brush);
 
-Brush *BKE_brush_first_search(Main *bmain, eObjectMode ob_mode);
-
-void BKE_brush_jitter_pos(const Paint &paint,
-                          const Brush &brush,
-                          const float pos[2],
-                          float jitterpos[2]);
+float2 BKE_brush_jitter_pos(const Paint &paint, const Brush &brush, const float2 &pos);
 void BKE_brush_randomize_texture_coords(Paint *paint, bool mask);
 
 /* Brush curve. */
@@ -103,14 +103,18 @@ void BKE_brush_randomize_texture_coords(Paint *paint, bool mask);
  */
 void BKE_brush_curve_preset(Brush *b, eCurveMappingPreset preset);
 
+namespace bke::brush {
+void common_pressure_curves_init(Brush &brush);
+}
+
 /**
  * Combine the brush strength based on the distances and brush settings with the existing factors.
  */
 void BKE_brush_calc_curve_factors(eBrushCurvePreset preset,
                                   const CurveMapping *cumap,
-                                  blender::Span<float> distances,
+                                  Span<float> distances,
                                   float brush_radius,
-                                  blender::MutableSpan<float> factors);
+                                  MutableSpan<float> factors);
 /**
  * Uses the brush curve control to find a strength value between 0 and 1.
  */
@@ -136,12 +140,12 @@ float BKE_brush_curve_strength(const Brush *br, float p, float len);
 float BKE_brush_sample_tex_3d(const Paint *paint,
                               const Brush *br,
                               const MTex *mtex,
-                              const float point[3],
-                              float rgba[4],
+                              const float3 &point,
+                              float4 &rgba,
                               int thread,
                               ImagePool *pool);
 float BKE_brush_sample_masktex(
-    const Paint *paint, Brush *br, const float point[2], int thread, ImagePool *pool);
+    const Paint *paint, Brush *br, const float2 &point, int thread, ImagePool *pool);
 
 /**
  * Get the mask texture for this given object mode.
@@ -179,11 +183,11 @@ struct BrushColorJitterSettings {
   CurveMapping *curve_val_jitter;
 };
 
-const float *BKE_brush_color_get(const Paint *paint, const Brush *brush);
+float3 BKE_brush_color_get(const Paint *paint, const Brush *brush);
 std::optional<BrushColorJitterSettings> BKE_brush_color_jitter_get_settings(const Paint *paint,
                                                                             const Brush *brush);
-const float *BKE_brush_secondary_color_get(const Paint *paint, const Brush *brush);
-void BKE_brush_color_set(Paint *paint, Brush *brush, const float color[3]);
+float3 BKE_brush_secondary_color_get(const Paint *paint, const Brush *brush);
+void BKE_brush_color_set(Paint *paint, Brush *brush, const float3 &color);
 
 void BKE_brush_color_sync_legacy(Brush *brush);
 void BKE_brush_color_sync_legacy(UnifiedPaintSettings *ups);
@@ -227,6 +231,10 @@ void BKE_brush_scale_size(int *r_brush_size,
  */
 bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode);
 
+namespace bke::brush {
+float normal_weight_get(const Brush &brush, bool invert);
+}
+
 /* debugging only */
 void BKE_brush_debug_print_state(Brush *br);
 
@@ -236,11 +244,13 @@ void BKE_brush_debug_print_state(Brush *br);
  * via BrushCapabilities inside rna_brush.cc.
  * \{ */
 
-namespace blender::bke::brush {
+namespace bke::brush {
 bool supports_dyntopo(const Brush &brush);
 bool supports_accumulate(const Brush &brush);
 bool supports_topology_rake(const Brush &brush);
 bool supports_auto_smooth(const Brush &brush);
+bool supports_normal_radius(const Brush &brush);
+bool supports_hardness(const Brush &brush);
 bool supports_height(const Brush &brush);
 bool supports_plane_height(const Brush &brush);
 bool supports_plane_depth(const Brush &brush);
@@ -263,6 +273,8 @@ bool supports_hardness_pressure(const Brush &brush);
 bool supports_inverted_direction(const Brush &brush);
 bool supports_gravity(const Brush &brush);
 bool supports_tilt(const Brush &brush);
-}  // namespace blender::bke::brush
+}  // namespace bke::brush
 
 /** \} */
+
+}  // namespace blender

@@ -83,12 +83,12 @@ VectorSet<PointCloud *> get_unique_editable_pointclouds(const bContext &C)
 
   Object *object = CTX_data_active_object(&C);
   if (object && object_has_editable_pointcloud(bmain, *object)) {
-    unique_points.add_new(static_cast<PointCloud *>(object->data));
+    unique_points.add_new(id_cast<PointCloud *>(object->data));
   }
 
   CTX_DATA_BEGIN (&C, Object *, object, selected_objects) {
     if (object_has_editable_pointcloud(bmain, *object)) {
-      unique_points.add(static_cast<PointCloud *>(object->data));
+      unique_points.add(id_cast<PointCloud *>(object->data));
     }
   }
   CTX_DATA_END;
@@ -130,7 +130,7 @@ static void POINTCLOUD_OT_select_all(wmOperatorType *ot)
 {
   ot->name = "(De)select All";
   ot->idname = "POINTCLOUD_OT_select_all";
-  ot->description = "(De)select all point cloud";
+  ot->description = "(De)select all points";
 
   ot->exec = select_all_exec;
   ot->poll = editable_pointcloud_poll;
@@ -181,7 +181,7 @@ static void POINTCLOUD_OT_select_random(wmOperatorType *ot)
 {
   ot->name = "Select Random";
   ot->idname = __func__;
-  ot->description = "Randomizes existing selection or create new random selection";
+  ot->description = "Randomize existing selection or create new random selection";
 
   ot->exec = select_random_exec;
   ot->poll = editable_pointcloud_poll;

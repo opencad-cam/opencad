@@ -33,9 +33,11 @@
 #  include "BLI_math_base.h" /* M_PI */
 #endif
 
-static CLG_LogRef LOG = {"ui.font"};
+namespace blender {
 
-namespace blender::ui {
+namespace ui {
+
+static CLG_LogRef LOG = {"ui.font"};
 
 static void fontstyle_set_ex(const uiFontStyle *fs, const float dpi_fac);
 
@@ -58,9 +60,9 @@ static void fontstyle_set_ex(const uiFontStyle *fs, const float dpi_fac);
 
 /* ********************************************** */
 
-static uiStyle *ui_style_new(ListBase *styles, const char *name, short uifont_id)
+static uiStyle *style_new(ListBaseT<uiStyle> *styles, const char *name, short uifont_id)
 {
-  uiStyle *style = MEM_callocN<uiStyle>(__func__);
+  uiStyle *style = MEM_new_zeroed<uiStyle>(__func__);
 
   BLI_addtail(styles, style);
   STRNCPY_UTF8(style->name, name);
@@ -137,7 +139,10 @@ void fontstyle_draw_ex(const uiFontStyle *fs,
                        ResultBLF *r_info)
 {
   int xofs = 0, yofs;
-  FontFlags font_flag = BLF_CLIPPING;
+  FontFlags font_flag = {};
+  if (fs_params->word_clip) {
+    font_flag |= BLF_CLIPPING;
+  }
 
   fontstyle_set(fs);
 
@@ -486,7 +491,7 @@ void style_init()
 
   /* default builtin */
   if (font_first == nullptr) {
-    font_first = MEM_callocN<uiFont>(__func__);
+    font_first = MEM_new_zeroed<uiFont>(__func__);
     BLI_addtail(&U.uifonts, font_first);
   }
 
@@ -499,22 +504,22 @@ void style_init()
     font_first->uifont_id = UIFONT_DEFAULT;
   }
 
-  LISTBASE_FOREACH (uiFont *, font, &U.uifonts) {
+  for (uiFont &font : U.uifonts) {
     const bool unique = false;
 
-    if (font->uifont_id == UIFONT_DEFAULT) {
-      font->blf_id = BLF_load_default(unique);
+    if (font.uifont_id == UIFONT_DEFAULT) {
+      font.blf_id = BLF_load_default(unique);
     }
     else {
-      font->blf_id = BLF_load(font->filepath);
-      if (font->blf_id == -1) {
-        font->blf_id = BLF_load_default(unique);
+      font.blf_id = BLF_load(font.filepath);
+      if (font.blf_id == -1) {
+        font.blf_id = BLF_load_default(unique);
       }
     }
 
-    BLF_default_set(font->blf_id);
+    BLF_default_set(font.blf_id);
 
-    if (font->blf_id == -1) {
+    if (font.blf_id == -1) {
       if (G.debug & G_DEBUG) {
         CLOG_WARN(&LOG, "%s: error, no fonts available", __func__);
       }
@@ -522,7 +527,7 @@ void style_init()
   }
 
   if (style == nullptr) {
-    style = ui_style_new(&U.uistyles, "Default Style", UIFONT_DEFAULT);
+    style = style_new(&U.uistyles, "Default Style", UIFONT_DEFAULT);
   }
 
   BLF_cache_flush_set_fn(widgetbase_draw_cache_flush);
@@ -567,10 +572,10 @@ void style_init()
       }
     }
 
-    LISTBASE_FOREACH (uiFont *, font, &U.uifonts) {
-      if (font->blf_id != -1) {
-        BLF_disable(font->blf_id, flag_disable);
-        BLF_enable(font->blf_id, flag_enable);
+    for (uiFont &font : U.uifonts) {
+      if (font.blf_id != -1) {
+        BLF_disable(font.blf_id, flag_disable);
+        BLF_enable(font.blf_id, flag_enable);
       }
     }
     if (blf_mono_font != -1) {
@@ -607,4 +612,5 @@ void fontstyle_set(const uiFontStyle *fs)
   fontstyle_set_ex(fs, UI_SCALE_FAC);
 }
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

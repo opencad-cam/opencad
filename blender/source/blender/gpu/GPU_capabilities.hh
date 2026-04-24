@@ -14,14 +14,13 @@
 
 #include "BLI_sys_types.h"
 
+namespace blender {
+
 int GPU_max_texture_size();
 int GPU_max_texture_3d_size();
 uint32_t GPU_max_buffer_texture_size();
 int GPU_max_texture_layers();
 int GPU_max_textures();
-int GPU_max_textures_vert();
-int GPU_max_textures_geom();
-int GPU_max_textures_frag();
 int GPU_max_images();
 int GPU_max_work_group_count(int index);
 int GPU_max_work_group_size(int index);
@@ -33,7 +32,6 @@ int GPU_max_vertex_attribs();
 int GPU_max_varying_floats();
 int GPU_max_shader_storage_buffer_bindings();
 int GPU_max_compute_shader_storage_blocks();
-int GPU_max_samplers();
 size_t GPU_max_uniform_buffer_size();
 size_t GPU_max_storage_buffer_size();
 /* Used when binding subrange of SSBOs. In bytes.
@@ -79,3 +77,5 @@ int GPU_minimum_per_vertex_stride();
 
 /** WARNING: Should only be called at startup from creator_args. Never call it at runtime. */
 void GPU_compilation_subprocess_override_set(int count);
+
+}  // namespace blender

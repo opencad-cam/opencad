@@ -14,7 +14,9 @@
 
 #include "BLI_radial_tiling.hh"
 
-namespace blender::nodes::node_shader_radial_tiling_cc {
+namespace blender {
+
+namespace nodes::node_shader_radial_tiling_cc {
 
 NODE_STORAGE_FUNCS(NodeRadialTiling)
 
@@ -22,33 +24,37 @@ static void sh_node_radial_tiling_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
 
-  b.add_output<decl::Vector>("Segment Coordinates")
+  b.add_output<decl::Vector>("Segment Coordinates"_ustr)
       .no_muted_links()
       .description("Segment coordinates for texture mapping within each angular segment");
-  b.add_output<decl::Float>("Segment ID")
+  b.add_output<decl::Float>("Segment ID"_ustr)
       .no_muted_links()
       .description(
           "Unique ID for every angular segment starting at 0 and increasing counterclockwise by "
           "1");
-  b.add_output<decl::Float>("Segment Width")
+  b.add_output<decl::Float>("Segment Width"_ustr)
       .no_muted_links()
       .description(
           "Relative width of each angular segment. "
           "May be used to scale textures to fit into each segment");
-  b.add_output<decl::Float>("Segment Rotation")
+  b.add_output<decl::Float>("Segment Rotation"_ustr)
       .no_muted_links()
       .description(
           "Counterclockwise rotation of each segment coordinates system. May be used to align the "
           "rotation of the textures of each segment");
 
-  b.add_input<decl::Vector>("Vector")
+  b.add_input<decl::Vector>("Vector"_ustr)
       .dimensions(2)
       .default_value(float3{0.0f, 0.0f, 0.0f})
       .description("Input texture coordinates");
-  b.add_input<decl::Float>("Sides").min(2.0f).max(1000.0f).default_value(5.0f).description(
-      "Number of angular segments for tiling. A non-integer value results in an irregular "
-      "segment");
-  b.add_input<decl::Float>("Roundness")
+  b.add_input<decl::Float>("Sides"_ustr)
+      .min(2.0f)
+      .max(1000.0f)
+      .default_value(5.0f)
+      .description(
+          "Number of angular segments for tiling. A non-integer value results in an irregular "
+          "segment");
+  b.add_input<decl::Float>("Roundness"_ustr)
       .min(0.0f)
       .max(1.0f)
       .default_value(0.0f)
@@ -63,7 +69,7 @@ static void node_shader_buts_radial_tiling(ui::Layout &layout, bContext * /*C*/,
 
 static void node_shader_init_radial_tiling(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeRadialTiling *storage = MEM_new_for_free<NodeRadialTiling>(__func__);
+  NodeRadialTiling *storage = MEM_new<NodeRadialTiling>(__func__);
   storage->normalize = false;
 
   node->storage = storage;
@@ -201,25 +207,27 @@ static void sh_node_radial_tiling_build_multi_function(NodeMultiFunctionBuilder 
   builder.construct_and_set_matching_fn<RoundedPolygonFunction>(storage.normalize);
 }
 
-}  // namespace blender::nodes::node_shader_radial_tiling_cc
+}  // namespace nodes::node_shader_radial_tiling_cc
 
 void register_node_type_sh_radial_tiling()
 {
-  namespace file_ns = blender::nodes::node_shader_radial_tiling_cc;
+  namespace file_ns = nodes::node_shader_radial_tiling_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeRadialTiling");
+  common_node_type_base(&ntype, "ShaderNodeRadialTiling"_ustr);
   ntype.ui_name = "Radial Tiling";
   ntype.ui_description = "Transform Coordinate System for Radial Tiling";
   ntype.nclass = NODE_CLASS_OP_VECTOR;
   ntype.declare = file_ns::sh_node_radial_tiling_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_radial_tiling;
   ntype.initfunc = file_ns::node_shader_init_radial_tiling;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeRadialTiling", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_radial_tiling;
   ntype.build_multi_function = file_ns::sh_node_radial_tiling_build_multi_function;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

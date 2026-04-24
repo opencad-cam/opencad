@@ -21,12 +21,14 @@
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
-struct CurveMapping;
-namespace blender::gpu {
-class Shader;
-}  // namespace blender::gpu
+namespace blender {
 
-namespace blender::ocio {
+struct CurveMapping;
+namespace gpu {
+class Shader;
+}  // namespace gpu
+
+namespace ocio {
 
 class Config;
 
@@ -60,6 +62,9 @@ struct GPUDisplayParameters {
   /* Rather than outputting colors for the specified display, output extended
    * sRGB colors emulating the specified display. */
   bool use_display_emulation = false;
+  /* Rather than outputting native display colors, output in a color space
+   * suitable for plotting SDR or HDR scopes. */
+  bool use_scope_space = false;
 };
 
 class GPUShaderBinder {
@@ -127,4 +132,5 @@ class GPUShaderBinder {
                                 Span<std::array<StringRefNull, 2>> additional_defines);
 };
 
-}  // namespace blender::ocio
+}  // namespace ocio
+}  // namespace blender

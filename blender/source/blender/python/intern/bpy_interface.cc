@@ -71,6 +71,8 @@
 #include "../gpu/gpu_py_api.hh"
 #include "../mathutils/mathutils.hh"
 
+namespace blender {
+
 /* Logging types to use anywhere in the Python modules. */
 
 CLG_LOGREF_DECLARE_GLOBAL(BPY_LOG_INTERFACE, "bpy.interface");
@@ -86,6 +88,7 @@ static int py_call_level = 0;
 
 /* Set by command line arguments before Python starts. */
 static bool py_use_system_env = false;
+static bool py_use_user_env = false;
 
 // #define TIME_PY_RUN /* Simple python tests. prints on exit. */
 
@@ -115,7 +118,15 @@ void BPY_context_update(bContext *C)
   BPY_modules_update();
 }
 
-void bpy_context_set(bContext *C, PyGILState_STATE *gilstate)
+/**
+ * Wrap `bpy_context_set` & `bpy_context_set_allow_null`.
+ *
+ * \param allow_null_context: Ideally we would phase this out,
+ * however some code uses a null context, see: `bpy_context_set_allow_null` doc-string for details.
+ */
+static void bpy_context_set_ex(bContext *C,
+                               PyGILState_STATE *gilstate,
+                               const bool allow_null_context)
 {
   py_call_level++;
 
@@ -124,9 +135,15 @@ void bpy_context_set(bContext *C, PyGILState_STATE *gilstate)
   }
 
   if (py_call_level == 1) {
+    if (!allow_null_context) {
+      BLI_assert_msg(C != nullptr, "bpy: Trying to set invalid nullptr context");
+    }
+
     BPY_context_update(C);
 
-    pyrna_context_init(C);
+    if (C != nullptr) {
+      pyrna_context_init(C);
+    }
 
 #ifdef TIME_PY_RUN
     if (bpy_timer_count == 0) {
@@ -139,6 +156,16 @@ void bpy_context_set(bContext *C, PyGILState_STATE *gilstate)
     bpy_timer_count++;
 #endif
   }
+}
+
+void bpy_context_set(bContext *C, PyGILState_STATE *gilstate)
+{
+  bpy_context_set_ex(C, gilstate, false);
+}
+
+void bpy_context_set_allow_null(bContext *C, PyGILState_STATE *gilstate)
+{
+  bpy_context_set_ex(C, gilstate, true);
 }
 
 void bpy_context_clear(bContext *C, const PyGILState_STATE *gilstate)
@@ -159,7 +186,10 @@ void bpy_context_clear(bContext *C, const PyGILState_STATE *gilstate)
     BPY_context_set(nullptr);
 #endif
 
-    pyrna_context_clear(C);
+    /* See previous comment regarding null check in #bpy_context_set. */
+    if (C != nullptr) {
+      pyrna_context_clear(C);
+    }
 
 #ifdef TIME_PY_RUN
     bpy_timer_run_tot += BLI_time_now_seconds() - bpy_timer_run;
@@ -201,7 +231,6 @@ void BPY_context_dict_clear_members_array(void **dict_p,
     PyObject *key = PyUnicode_FromString(context_members[i]);
     PyObject *item;
 
-#if PY_VERSION_HEX >= 0x030d0000
     switch (PyDict_Pop(dict, key, &item)) {
       case 1: {
         Py_DECREF(item);
@@ -214,10 +243,6 @@ void BPY_context_dict_clear_members_array(void **dict_p,
         break;
       }
     }
-#else /* Remove when Python 3.12 support is dropped. */
-    item = _PyDict_Pop(dict, key, Py_None);
-    Py_DECREF(item);
-#endif
 
     Py_DECREF(key);
   }
@@ -267,7 +292,7 @@ bContext *BPY_context_get()
 
 void BPY_context_set(bContext *C)
 {
-  bpy_context_module->ptr->data = (void *)C;
+  bpy_context_module->ptr->data = static_cast<void *>(C);
 }
 
 #ifdef WITH_FLUID
@@ -347,17 +372,24 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
 #ifndef WITH_PYTHON_MODULE
   BLI_assert_msg(Py_IsInitialized() == 0, "Python has already been initialized");
 
+  /* It's necessary to disable isolation so `user-site-packages` can be used.
+   * Leave everything else disabled (mainly environment variables). */
+  const std::optional<bool> isolated_override = ((py_use_system_env == false) &&
+                                                 (py_use_user_env == true)) ?
+                                                    std::optional(false) :
+                                                    std::nullopt;
+
   /* #PyPreConfig (early-configuration). */
   {
     PyPreConfig preconfig;
     PyStatus status;
 
     /* To narrow down reports where the systems Python is inexplicably used, see: #98131. */
-    CLOG_DEBUG(
-        BPY_LOG_INTERFACE,
-        "Initializing %s support for the systems Python environment such as 'PYTHONPATH' and "
-        "the user-site directory.",
-        py_use_system_env ? "*with*" : "*without*");
+    CLOG_DEBUG(BPY_LOG_INTERFACE,
+               "Initializing %s support for the systems Python environment such as 'PYTHONPATH', "
+               "%s support for the user-site directory.",
+               py_use_system_env ? "*with*" : "*without*",
+               py_use_user_env ? "*with*" : "*without*");
 
     if (py_use_system_env) {
       PyPreConfig_InitPythonConfig(&preconfig);
@@ -367,6 +399,10 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
        * Since an incorrect 'PYTHONPATH' causes difficult to debug errors, see: #72807.
        * An alternative to setting `preconfig.use_environment = 0` */
       PyPreConfig_InitIsolatedConfig(&preconfig);
+    }
+
+    if (isolated_override) {
+      preconfig.isolated = isolated_override.value();
     }
 
     /* Force UTF8 on all platforms, since this is what's used for Blender's internal strings,
@@ -414,6 +450,10 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
       config.install_signal_handlers = 1;
     }
 
+    if (isolated_override) {
+      config.isolated = isolated_override.value();
+    }
+
     /* Suppress error messages when calculating the module search path.
      * While harmless, it's noisy. */
     config.pathconfig_warnings = 0;
@@ -443,18 +483,26 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
       }
     }
 
-    /* Allow the user site directory because this is used
-     * when PIP installing packages from Blender, see: #104000.
+    /* By default, use an isolated environment unless the user passes in:
+     * `--python-use-user-env`.
      *
-     * NOTE(@ideasman42): While an argument can be made for isolating Blender's Python
-     * from the users home directory entirely, an alternative directory should be used in that
-     * case - so PIP can be used to install packages. Otherwise PIP will install packages to a
-     * directory which us not in the users `sys.path`, see `site.USER_BASE` for details. */
-    // config.user_site_directory = py_use_system_env;
+     * This is a somewhat contentious issue since Python developers may want to access
+     * modules from their user path. The problem with this is it's possible for this path
+     * to contain modules that override Blender's bundled Python modules and user modules
+     * may not be binary compatible with Blender.
+     * So it's possible for the existence of user modules to "break" Blender.
+     * Given this situation, default to an isolated environment with command line arguments
+     * to enable *user* and *system* Python settings, see: #107137.
+     *
+     * - See also related reports about users site packages failing to load, see: #104000, #106963.
+     * - See `site.USER_BASE` for the location PIP will install user packages
+     *   this could be customized if we want to support a separate "blender-user" user path.
+     */
+    config.user_site_directory = py_use_user_env;
 
     /* While `sys.argv` is set, we don't want Python to interpret it. */
     config.parse_argv = 0;
-    status = PyConfig_SetBytesArgv(&config, argc, (char *const *)argv);
+    status = PyConfig_SetBytesArgv(&config, argc, const_cast<char *const *>(argv));
     pystatus_exit_on_error(status);
 
     /* Needed for Python's initialization for portable Python installations.
@@ -683,6 +731,26 @@ void BPY_python_use_system_env()
 {
   BLI_assert(!Py_IsInitialized());
   py_use_system_env = true;
+
+  /* NOTE: it's debatable if enabling the system-environment should enable the user-environment.
+   *
+   * While in principle it's possible a developer wants to access user site-packages
+   * in an otherwise isolated environment. The intent with the system-environment was
+   * to disable all isolation, so Python developers have a convenient way to access
+   * the full Python environment.
+   *
+   * Having to pass in multiple arguments to achieve this goes against the original intention.
+   *
+   * If a developer wants to enable the system-environment and disable user-environment
+   * this can be achieved by running with the environment variable `PYTHONNOUSERSITE=1`
+   * along with the argument `--python-use-system-env`. */
+  py_use_user_env = true;
+}
+
+void BPY_python_use_user_env()
+{
+  BLI_assert(!Py_IsInitialized());
+  py_use_user_env = true;
 }
 
 bool BPY_python_use_system_env_get()
@@ -702,13 +770,20 @@ void BPY_python_backtrace(FILE *fp)
   if (frame == nullptr) {
     return;
   }
+  /* The reference is borrowed, increase since #PyFrame_GetBack is *not* borrowed,
+   * and this simplifies handling reference counts in the loop. */
+  Py_INCREF(frame);
   do {
     PyCodeObject *code = PyFrame_GetCode(frame);
     const int line = PyFrame_GetLineNumber(frame);
     const char *filepath = PyUnicode_AsUTF8(code->co_filename);
     const char *funcname = PyUnicode_AsUTF8(code->co_name);
     fprintf(fp, "  File \"%s\", line %d in %s\n", filepath, line, funcname);
-  } while ((frame = PyFrame_GetBack(frame)));
+    Py_DECREF(code);
+    PyFrameObject *frame_next = PyFrame_GetBack(frame);
+    Py_DECREF(frame);
+    frame = frame_next;
+  } while (frame);
 }
 
 void BPY_DECREF(void *pyob_ptr)
@@ -810,7 +885,7 @@ bool BPY_context_member_get(bContext *C, const char *member, bContextDataResult 
   PointerRNA *ptr = nullptr;
   bool done = false;
 
-  pyctx = (PyObject *)CTX_py_dict_get(C);
+  pyctx = static_cast<PyObject *>(CTX_py_dict_get(C));
   item = PyDict_GetItemString(pyctx, member);
 
   if (item == nullptr) {
@@ -1169,3 +1244,5 @@ int text_check_identifier_nodigit_unicode(const uint ch)
 }
 
 /** \} */
+
+}  // namespace blender

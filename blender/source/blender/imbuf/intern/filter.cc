@@ -17,6 +17,8 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
+namespace blender {
+
 static void filtcolum(uchar *point, int y, int skip)
 {
   uint c1, c2, c3, error;
@@ -62,8 +64,8 @@ static void filtcolumf(float *point, int y, int skip)
 
 void IMB_filtery(ImBuf *ibuf)
 {
-  uchar *point = ibuf->byte_buffer.data;
-  float *pointf = ibuf->float_buffer.data;
+  uchar *point = ibuf->byte_data_for_write();
+  float *pointf = ibuf->float_data_for_write();
 
   int x = ibuf->x;
   int y = ibuf->y;
@@ -106,11 +108,11 @@ void IMB_mask_filter_extend(char *mask, int width, int height)
   rowlen = width;
 
   /* make a copy, to prevent flooding */
-  temprect = static_cast<char *>(MEM_dupallocN(mask));
+  temprect = MEM_dupalloc(mask);
 
   for (y = 1; y <= height; y++) {
     /* setup rows */
-    row1 = (char *)(temprect + (y - 2) * rowlen);
+    row1 = static_cast<char *>(temprect + (y - 2) * rowlen);
     row2 = row1 + rowlen;
     row3 = row2 + rowlen;
     if (y == 1) {
@@ -138,28 +140,29 @@ void IMB_mask_filter_extend(char *mask, int width, int height)
     }
   }
 
-  MEM_freeN(temprect);
+  MEM_delete(temprect);
 }
 
 void IMB_mask_clear(ImBuf *ibuf, const char *mask, int val)
 {
   int x, y;
-  if (ibuf->float_buffer.data) {
+  if (float *float_data = ibuf->float_data_for_write()) {
     for (x = 0; x < ibuf->x; x++) {
       for (y = 0; y < ibuf->y; y++) {
         if (mask[ibuf->x * y + x] == val) {
-          float *col = ibuf->float_buffer.data + 4 * (ibuf->x * y + x);
+          float *col = float_data + 4 * (ibuf->x * y + x);
           col[0] = col[1] = col[2] = col[3] = 0.0f;
         }
       }
     }
   }
   else {
+    uchar *byte_data = ibuf->byte_data_for_write();
     /* char buffer */
     for (x = 0; x < ibuf->x; x++) {
       for (y = 0; y < ibuf->y; y++) {
         if (mask[ibuf->x * y + x] == val) {
-          char *col = (char *)(ibuf->byte_buffer.data + 4 * ibuf->x * y + x);
+          char *col = reinterpret_cast<char *>(byte_data + 4 * ibuf->x * y + x);
           col[0] = col[1] = col[2] = col[3] = 0;
         }
       }
@@ -187,8 +190,8 @@ static int check_pixel_assigned(
     if (mask != nullptr) {
       res = mask[index] != 0 ? 1 : 0;
     }
-    else if ((is_float && ((const float *)buffer)[alpha_index] != 0.0f) ||
-             (!is_float && ((const uchar *)buffer)[alpha_index] != 0))
+    else if ((is_float && (static_cast<const float *>(buffer))[alpha_index] != 0.0f) ||
+             (!is_float && (static_cast<const uchar *>(buffer))[alpha_index] != 0))
     {
       res = 1;
     }
@@ -202,14 +205,14 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
   const int width = ibuf->x;
   const int height = ibuf->y;
   const int depth = 4; /* always 4 channels */
-  const int chsize = ibuf->float_buffer.data ? sizeof(float) : sizeof(uchar);
+  const int chsize = ibuf->float_data() ? sizeof(float) : sizeof(uchar);
   const size_t bsize = size_t(width) * height * depth * chsize;
-  const bool is_float = (ibuf->float_buffer.data != nullptr);
-  void *dstbuf = MEM_dupallocN(ibuf->float_buffer.data ? (void *)ibuf->float_buffer.data :
-                                                         (void *)ibuf->byte_buffer.data);
-  char *dstmask = mask == nullptr ? nullptr : (char *)MEM_dupallocN(mask);
-  void *srcbuf = ibuf->float_buffer.data ? (void *)ibuf->float_buffer.data :
-                                           (void *)ibuf->byte_buffer.data;
+  const bool is_float = (ibuf->float_data() != nullptr);
+  void *dstbuf = ibuf->float_data() ? static_cast<void *>(MEM_dupalloc(ibuf->float_data())) :
+                                      static_cast<void *>(MEM_dupalloc(ibuf->byte_data()));
+  char *dstmask = mask == nullptr ? nullptr : MEM_dupalloc(mask);
+  void *srcbuf = ibuf->float_data() ? static_cast<void *>(ibuf->float_data_for_write()) :
+                                      static_cast<void *>(ibuf->byte_data_for_write());
   char *srcmask = mask;
   int cannot_early_out = 1, r, n, k, i, j, c;
   float weight[25];
@@ -269,12 +272,12 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
                   if (check_pixel_assigned(srcbuf, srcmask, tmpindex, depth, is_float)) {
                     if (is_float) {
                       for (c = 0; c < depth; c++) {
-                        tmp[c] = ((const float *)srcbuf)[depth * tmpindex + c];
+                        tmp[c] = (static_cast<const float *>(srcbuf))[depth * tmpindex + c];
                       }
                     }
                     else {
                       for (c = 0; c < depth; c++) {
-                        tmp[c] = float(((const uchar *)srcbuf)[depth * tmpindex + c]);
+                        tmp[c] = float((static_cast<const uchar *>(srcbuf))[depth * tmpindex + c]);
                       }
                     }
 
@@ -296,15 +299,13 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
 
               if (is_float) {
                 for (c = 0; c < depth; c++) {
-                  ((float *)dstbuf)[depth * index + c] = acc[c];
+                  (static_cast<float *>(dstbuf))[depth * index + c] = acc[c];
                 }
               }
               else {
                 for (c = 0; c < depth; c++) {
-                  ((uchar *)dstbuf)[depth * index + c] = acc[c] > 255 ?
-                                                             255 :
-                                                             (acc[c] < 0 ? 0 :
-                                                                           uchar(roundf(acc[c])));
+                  (static_cast<uchar *>(dstbuf))[depth * index + c] =
+                      acc[c] > 255 ? 255 : (acc[c] < 0 ? 0 : uchar(roundf(acc[c])));
                 }
               }
 
@@ -326,9 +327,9 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
   }
 
   /* free memory */
-  MEM_freeN(dstbuf);
+  MEM_delete_void(dstbuf);
   if (dstmask != nullptr) {
-    MEM_freeN(dstmask);
+    MEM_delete(dstmask);
   }
 }
 
@@ -384,12 +385,12 @@ void IMB_premultiply_alpha(ImBuf *ibuf)
     return;
   }
 
-  if (ibuf->byte_buffer.data) {
-    IMB_premultiply_rect(ibuf->byte_buffer.data, ibuf->planes, ibuf->x, ibuf->y);
+  if (uchar *byte_data = ibuf->byte_data_for_write()) {
+    IMB_premultiply_rect(byte_data, ibuf->planes, ibuf->x, ibuf->y);
   }
 
-  if (ibuf->float_buffer.data) {
-    IMB_premultiply_rect_float(ibuf->float_buffer.data, ibuf->channels, ibuf->x, ibuf->y);
+  if (float *float_data = ibuf->float_data_for_write()) {
+    IMB_premultiply_rect_float(float_data, ibuf->channels, ibuf->x, ibuf->y);
   }
 }
 
@@ -446,11 +447,13 @@ void IMB_unpremultiply_alpha(ImBuf *ibuf)
     return;
   }
 
-  if (ibuf->byte_buffer.data) {
-    IMB_unpremultiply_rect(ibuf->byte_buffer.data, ibuf->planes, ibuf->x, ibuf->y);
+  if (uchar *byte_data = ibuf->byte_data_for_write()) {
+    IMB_unpremultiply_rect(byte_data, ibuf->planes, ibuf->x, ibuf->y);
   }
 
-  if (ibuf->float_buffer.data) {
-    IMB_unpremultiply_rect_float(ibuf->float_buffer.data, ibuf->channels, ibuf->x, ibuf->y);
+  if (float *float_data = ibuf->float_data_for_write()) {
+    IMB_unpremultiply_rect_float(float_data, ibuf->channels, ibuf->x, ibuf->y);
   }
 }
+
+}  // namespace blender

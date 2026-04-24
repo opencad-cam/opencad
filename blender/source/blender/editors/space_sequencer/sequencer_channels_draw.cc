@@ -107,8 +107,8 @@ static float draw_channel_widget_mute(const SeqChannelDrawContext *context,
   const int icon = seq::channel_is_muted(channel) ? ICON_CHECKBOX_DEHLT : ICON_CHECKBOX_HLT;
 
   PointerRNA ptr = RNA_pointer_create_discrete(
-      &context->scene->id, &RNA_SequenceTimelineChannel, channel);
-  PropertyRNA *hide_prop = RNA_struct_type_find_property(&RNA_SequenceTimelineChannel, "mute");
+      &context->scene->id, RNA_SequenceTimelineChannel, channel);
+  PropertyRNA *hide_prop = RNA_struct_type_find_property(RNA_SequenceTimelineChannel, "mute");
 
   block_emboss_set(block, ui::EmbossType::None);
   ui::Button *but = uiDefIconButR_prop(block,
@@ -124,11 +124,10 @@ static float draw_channel_widget_mute(const SeqChannelDrawContext *context,
                                        0,
                                        0,
                                        std::nullopt);
-  button_retval_set(but, 1);
 
   char *tooltip = BLI_sprintfN(
       "%s channel %d", seq::channel_is_muted(channel) ? "Unmute" : "Mute", channel_index);
-  button_func_tooltip_set(but, draw_channel_widget_tooltip, tooltip, MEM_freeN);
+  button_func_tooltip_set(but, draw_channel_widget_tooltip, tooltip, MEM_delete_void);
 
   return width;
 }
@@ -146,8 +145,8 @@ static float draw_channel_widget_lock(const SeqChannelDrawContext *context,
   const int icon = seq::channel_is_locked(channel) ? ICON_LOCKED : ICON_UNLOCKED;
 
   PointerRNA ptr = RNA_pointer_create_discrete(
-      &context->scene->id, &RNA_SequenceTimelineChannel, channel);
-  PropertyRNA *hide_prop = RNA_struct_type_find_property(&RNA_SequenceTimelineChannel, "lock");
+      &context->scene->id, RNA_SequenceTimelineChannel, channel);
+  PropertyRNA *hide_prop = RNA_struct_type_find_property(RNA_SequenceTimelineChannel, "lock");
 
   block_emboss_set(block, ui::EmbossType::None);
   ui::Button *but = uiDefIconButR_prop(block,
@@ -163,11 +162,10 @@ static float draw_channel_widget_lock(const SeqChannelDrawContext *context,
                                        0,
                                        0,
                                        "");
-  button_retval_set(but, 1);
 
   char *tooltip = BLI_sprintfN(
       "%s channel %d", seq::channel_is_locked(channel) ? "Unlock" : "Lock", channel_index);
-  button_func_tooltip_set(but, draw_channel_widget_tooltip, tooltip, MEM_freeN);
+  button_func_tooltip_set(but, draw_channel_widget_tooltip, tooltip, MEM_delete_void);
 
   return width;
 }
@@ -223,7 +221,7 @@ static void draw_channel_labels(const SeqChannelDrawContext *context,
   if (channel_is_being_renamed(sseq, channel_index)) {
     SeqTimelineChannel *channel = seq::channel_get_by_index(context->channels, channel_index);
     PointerRNA ptr = RNA_pointer_create_discrete(
-        &context->scene->id, &RNA_SequenceTimelineChannel, channel);
+        &context->scene->id, RNA_SequenceTimelineChannel, channel);
     PropertyRNA *prop = RNA_struct_name_property(ptr.type);
 
     block_emboss_set(block, ui::EmbossType::Emboss);
@@ -240,7 +238,6 @@ static void draw_channel_labels(const SeqChannelDrawContext *context,
                                 0,
                                 0,
                                 std::nullopt);
-    button_retval_set(but, 1);
     block_emboss_set(block, ui::EmbossType::None);
 
     if (button_active_only(context->C, context->region, block, but) == false) {

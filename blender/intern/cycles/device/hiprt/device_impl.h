@@ -11,11 +11,7 @@
 #  include "device/hip/queue.h"
 #  include "device/hiprt/queue.h"
 
-#  ifdef WITH_HIP_DYNLOAD
-#    include <hiprtew.h>
-#  else
-#    include <hiprt/hiprt_types.h>
-#  endif
+#  include <hiprt/hiprt_types.h>
 
 CCL_NAMESPACE_BEGIN
 
@@ -29,16 +25,16 @@ class BVHHIPRT;
 class HIPRTDevice : public HIPDevice {
 
  public:
+  static bool is_supported();
+
   BVHLayoutMask get_bvh_layout_mask(const uint kernel_features) const override;
 
   HIPRTDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
 
   ~HIPRTDevice() override;
   unique_ptr<DeviceQueue> gpu_queue_create() override;
-  string compile_kernel_get_common_cflags(const uint kernel_features) override;
-  string compile_kernel(const uint kernel_features,
-                        const char *name,
-                        const char *base = "hiprt") override;
+  string compile_kernel_get_common_cflags(const uint kernel_features);
+  string compile_kernel(const uint kernel_features, const char *name, const char *base = "hiprt");
 
   bool load_kernels(const uint kernel_features) override;
 
@@ -68,7 +64,10 @@ class HIPRTDevice : public HIPDevice {
                         hiprtBuildOptions options,
                         bool refit);
   void free_bvh_memory_delayed();
+
   hiprtContext hiprt_context;
+  hipModule_t hiprt_module_;
+
   hiprtScene scene;
   hiprtFuncTable functions_table;
 

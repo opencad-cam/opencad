@@ -42,13 +42,15 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
+namespace blender {
+
 using namespace blender::bke;
 
 static CLG_LogRef LOG = {"lib.main"};
 
 Main::Main()
 {
-  SpinLock *main_lock = MEM_mallocN<SpinLock>("main lock");
+  SpinLock *main_lock = MEM_new_uninitialized<SpinLock>("main lock");
   BLI_spin_init(main_lock);
   /* Use C-style cast to workaround an issue casting away volatile for builds without TBB. */
   this->lock = (MainLock *)main_lock;
@@ -82,7 +84,7 @@ Main::~Main()
 
   BLI_spin_end(reinterpret_cast<SpinLock *>(this->lock));
   /* The void cast is needed when building without TBB. */
-  MEM_freeN((void *)reinterpret_cast<SpinLock *>(this->lock));
+  MEM_delete_void((void *)reinterpret_cast<SpinLock *>(this->lock));
   this->lock = nullptr;
 }
 
@@ -102,12 +104,12 @@ void BKE_main_clear(Main &bmain)
   const int free_flag = (LIB_ID_FREE_NO_MAIN | LIB_ID_FREE_NO_UI_USER |
                          LIB_ID_FREE_NO_USER_REFCOUNT | LIB_ID_FREE_NO_DEG_TAG);
 
-  MEM_SAFE_FREE(bmain.blen_thumb);
+  MEM_SAFE_DELETE(bmain.blen_thumb);
 
   MainListsArray lbarray = BKE_main_lists_get(bmain);
   int a = lbarray.size();
   while (a--) {
-    ListBase *lb = lbarray[a];
+    ListBaseT<ID> *lb = lbarray[a];
     ID *id, *id_next;
 
     for (id = static_cast<ID *>(lb->first); id != nullptr; id = id_next) {
@@ -253,7 +255,7 @@ static bool are_ids_from_different_mains_matching(Main *bmain_1, ID *id_1, Main 
     return true;
   }
 
-  /* Linked packed IDs only match with other packed IDs, and only if their deephashes are
+  /* Linked packed IDs only match with other packed IDs, and only if their deep-hashes are
    * identical. */
   if (ID_IS_PACKED(id_1) && ID_IS_PACKED(id_2)) {
     BLI_assert_msg(false, "No packed ID should be passed to this function currently.");
@@ -295,10 +297,10 @@ static bool are_ids_from_different_mains_matching(Main *bmain_1, ID *id_1, Main 
 }
 
 static void main_merge_add_id_to_move(Main *bmain_dst,
-                                      blender::Map<std::string, blender::Vector<ID *>> &id_map_dst,
+                                      Map<std::string, Vector<ID *>> &id_map_dst,
                                       ID *id_src,
                                       id::IDRemapper &id_remapper,
-                                      blender::Vector<ID *> &ids_to_move,
+                                      Vector<ID *> &ids_to_move,
                                       const bool is_library,
                                       MainMergeReport &reports)
 {
@@ -309,8 +311,8 @@ static void main_merge_add_id_to_move(Main *bmain_dst,
     Library *ref_src_library = ID_IS_PACKED(id_src) ? id_src->lib->archive_parent_library :
                                                       id_src->lib;
     BLI_assert((ref_src_library->flag & LIBRARY_FLAG_IS_ARCHIVE) == 0);
-    blender::Vector<ID *> id_src_lib_dst = id_map_dst.lookup_default(
-        ref_src_library->runtime->filepath_abs, {});
+    Vector<ID *> id_src_lib_dst = id_map_dst.lookup_default(ref_src_library->runtime->filepath_abs,
+                                                            {});
     /* The current library of the source ID would be remapped to null, which means that it comes
      * from the destination Main. */
     is_id_src_from_bmain_dst = !id_src_lib_dst.is_empty() && !id_src_lib_dst[0];
@@ -335,7 +337,7 @@ static void main_merge_add_id_to_move(Main *bmain_dst,
       /* Archive libraries are never moved.
        * When moved, regular libraries need to see their vector of owned archive libraries cleared,
        * since these will remain in the source Main. */
-      Library *lib_src = blender::id_cast<Library *>(id_src);
+      Library *lib_src = id_cast<Library *>(id_src);
       BLI_assert((lib_src->flag & LIBRARY_FLAG_IS_ARCHIVE) == 0);
       lib_src->runtime->archived_libraries.clear();
       /* Libraries should be added to destination Main before any other ID, to ensure that
@@ -353,10 +355,10 @@ void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &report
 {
   Main *bmain_src = *r_bmain_src;
   /* NOTE: Dedicated mapping type is needed here, to handle properly the library cases. */
-  blender::Map<std::string, blender::Vector<ID *>> id_map_dst;
+  Map<std::string, Vector<ID *>> id_map_dst;
   /* Packed IDs are only matched by their deep hashes, and can only match with other packed IDS, so
    * they have their own dedicated mapping. */
-  blender::Map<IDHash, ID *> id_packed_map_dst;
+  Map<IDHash, ID *> id_packed_map_dst;
   ID *id_iter_dst, *id_iter_src;
   FOREACH_MAIN_ID_BEGIN (bmain_dst, id_iter_dst) {
     if (GS(id_iter_dst->name) == ID_LI) {
@@ -391,7 +393,7 @@ void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &report
    * afterwards (especially in case some source linked IDs become local in `bmain_dst`). */
   id::IDRemapper id_remapper;
   id::IDRemapper id_remapper_libraries;
-  blender::Vector<ID *> ids_to_move;
+  Vector<ID *> ids_to_move;
 
   FOREACH_MAIN_ID_BEGIN (bmain_src, id_iter_src) {
     const bool is_library = GS(id_iter_src->name) == ID_LI;
@@ -420,7 +422,7 @@ void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &report
       }
     }
     else {
-      blender::Vector<ID *> ids_dst = id_map_dst.lookup_default(
+      Vector<ID *> ids_dst = id_map_dst.lookup_default(
           is_library ? reinterpret_cast<Library *>(id_iter_src)->runtime->filepath_abs :
                        id_iter_src->name,
           {});
@@ -499,12 +501,25 @@ void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &report
     if (ID_IS_LINKED(id_iter_src)) {
       /* Note that no bmain is given here, so this is only a 'raw' remapping. */
       BKE_libblock_relink_multiple(nullptr,
-                                   blender::Span(&id_iter_src, 1),
+                                   Span(&id_iter_src, 1),
                                    ID_REMAP_TYPE_REMAP,
                                    id_remapper_libraries,
                                    ID_REMAP_DO_LIBRARY_POINTERS);
       BLI_assert(id_iter_src->lib);
     }
+  }
+
+  /* Adding back the IDs into the destination Main needs to be done in a separate loop. The main
+   * reason is again the name-maps of libraries (for linked IDs).
+   *
+   * Since libraries are also moved from old to new Main, getting their name-map 'randomly' built
+   * when their first linked ID is moved can lead to it missing some ID names, and other validity
+   * issues.
+   *
+   * See also https://projects.blender.org/blender/blender/pulls/150355#issuecomment-1808744 for a
+   * reproducible case. */
+  for (ID *id_iter_src : ids_to_move) {
+    BLI_assert((id_iter_src->tag & ID_TAG_NO_MAIN) != 0);
     BKE_libblock_management_main_add(bmain_dst, id_iter_src);
   }
 
@@ -562,12 +577,12 @@ bool BKE_main_needs_overwrite_confirm(const Main *bmain)
 
 void BKE_main_lock(Main *bmain)
 {
-  BLI_spin_lock((SpinLock *)bmain->lock);
+  BLI_spin_lock(reinterpret_cast<SpinLock *>(bmain->lock));
 }
 
 void BKE_main_unlock(Main *bmain)
 {
-  BLI_spin_unlock((SpinLock *)bmain->lock);
+  BLI_spin_unlock(reinterpret_cast<SpinLock *>(bmain->lock));
 }
 
 static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
@@ -583,7 +598,7 @@ static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
     {
       MainIDRelationsEntry *entry = bmain_relations->relations_from_pointers->lookup_or_add_cb(
           self_id, [&]() {
-            auto *entry = MEM_callocN<MainIDRelationsEntry>(__func__);
+            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
             entry->session_uid = self_id->session_uid;
             return entry;
           });
@@ -591,7 +606,7 @@ static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
       MainIDRelationsEntryItem *to_id_entry = static_cast<MainIDRelationsEntryItem *>(
           BLI_mempool_alloc(bmain_relations->entry_items_pool));
       to_id_entry->next = entry->to_ids;
-      to_id_entry->id_pointer.to = id_pointer;
+      to_id_entry->id_pointer.to = *id_pointer;
       to_id_entry->session_uid = (*id_pointer != nullptr) ? (*id_pointer)->session_uid :
                                                             MAIN_ID_SESSION_UID_UNSET;
       to_id_entry->usage_flag = cb_flag;
@@ -602,7 +617,7 @@ static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
     if (*id_pointer != nullptr) {
       MainIDRelationsEntry *entry = bmain_relations->relations_from_pointers->lookup_or_add_cb(
           *id_pointer, [&]() {
-            auto *entry = MEM_callocN<MainIDRelationsEntry>(__func__);
+            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
             entry->session_uid = (*id_pointer)->session_uid;
             return entry;
           });
@@ -626,9 +641,9 @@ void BKE_main_relations_create(Main *bmain, const short flag)
     BKE_main_relations_free(bmain);
   }
 
-  bmain->relations = MEM_mallocN<MainIDRelations>(__func__);
-  bmain->relations->relations_from_pointers =
-      MEM_new<blender::Map<const ID *, MainIDRelationsEntry *>>(__func__);
+  bmain->relations = MEM_new_uninitialized<MainIDRelations>(__func__);
+  bmain->relations->relations_from_pointers = MEM_new<Map<const ID *, MainIDRelationsEntry *>>(
+      __func__);
   bmain->relations->entry_items_pool = BLI_mempool_create(
       sizeof(MainIDRelationsEntryItem), 128, 128, BLI_MEMPOOL_NOP);
 
@@ -644,7 +659,7 @@ void BKE_main_relations_create(Main *bmain, const short flag)
     /* Ensure all IDs do have an entry, even if they are not connected to any other. */
     MainIDRelationsEntry *entry = bmain->relations->relations_from_pointers->lookup_or_add_cb(
         id, [&]() {
-          auto *entry = MEM_callocN<MainIDRelationsEntry>(__func__);
+          auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
           entry->session_uid = id->session_uid;
           return entry;
         });
@@ -661,11 +676,11 @@ void BKE_main_relations_free(Main *bmain)
 {
   if (bmain->relations != nullptr) {
     for (MainIDRelationsEntry *entry : bmain->relations->relations_from_pointers->values()) {
-      MEM_freeN(entry);
+      MEM_delete(entry);
     }
     MEM_delete(bmain->relations->relations_from_pointers);
     BLI_mempool_destroy(bmain->relations->entry_items_pool);
-    MEM_freeN(bmain->relations);
+    MEM_delete(bmain->relations);
     bmain->relations = nullptr;
   }
 }
@@ -685,10 +700,10 @@ void BKE_main_relations_tag_set(Main *bmain, const eMainIDRelationsEntryTags tag
   }
 }
 
-blender::Set<const ID *> *BKE_main_set_create(Main *bmain, blender::Set<const ID *> *set)
+Set<const ID *> *BKE_main_set_create(Main *bmain, Set<const ID *> *set)
 {
   if (set == nullptr) {
-    set = MEM_new<blender::Set<const ID *>>(__func__);
+    set = MEM_new<Set<const ID *>>(__func__);
   }
 
   ID *id;
@@ -717,20 +732,19 @@ struct LibWeakRefKey {
 
   uint64_t hash() const
   {
-    return blender::get_default_hash(blender::StringRef(this->filepath),
-                                     blender::StringRef(this->id_name));
+    return get_default_hash(StringRef(this->filepath), StringRef(this->id_name));
   }
 };
 
 struct MainLibraryWeakReferenceMap {
-  blender::Map<LibWeakRefKey, ID *> map;
+  Map<LibWeakRefKey, ID *> map;
 };
 
 MainLibraryWeakReferenceMap *BKE_main_library_weak_reference_create(Main *bmain)
 {
   auto *library_weak_reference_mapping = MEM_new<MainLibraryWeakReferenceMap>(__func__);
 
-  ListBase *lb;
+  ListBaseT<ID> *lb;
   FOREACH_MAIN_LISTBASE_BEGIN (bmain, lb) {
     ID *id_iter = static_cast<ID *>(lb->first);
     if (id_iter == nullptr) {
@@ -831,7 +845,7 @@ void BKE_main_library_weak_reference_remove_item(
   BLI_assert(library_weak_reference_mapping->map.lookup(key) == old_id);
   library_weak_reference_mapping->map.remove(key);
 
-  MEM_SAFE_FREE(old_id->library_weak_reference);
+  MEM_SAFE_DELETE(old_id->library_weak_reference);
 }
 
 ID *BKE_main_library_weak_reference_find(Main *bmain,
@@ -843,23 +857,23 @@ ID *BKE_main_library_weak_reference_find(Main *bmain,
   STRNCPY(library_filepath_abs, library_filepath);
   BLI_path_abs(library_filepath_abs, BKE_main_blendfile_path(bmain));
 
-  ListBase *id_list = which_libbase(bmain, GS(library_id_name));
-  LISTBASE_FOREACH (ID *, existing_id, id_list) {
-    if (!(existing_id->library_weak_reference &&
-          STREQ(existing_id->library_weak_reference->library_id_name, library_id_name)))
+  ListBaseT<ID> *id_list = which_libbase(bmain, GS(library_id_name));
+  for (ID &existing_id : *id_list) {
+    if (!(existing_id.library_weak_reference &&
+          STREQ(existing_id.library_weak_reference->library_id_name, library_id_name)))
     {
       continue;
     }
 
     char existing_filepath_abs[FILE_MAX];
-    STRNCPY(existing_filepath_abs, existing_id->library_weak_reference->library_filepath);
+    STRNCPY(existing_filepath_abs, existing_id.library_weak_reference->library_filepath);
     BLI_path_abs(existing_filepath_abs, BKE_main_blendfile_path(bmain));
 
     if (!STREQ(existing_filepath_abs, library_filepath_abs)) {
       continue;
     }
 
-    return existing_id;
+    return &existing_id;
   }
 
   return nullptr;
@@ -870,7 +884,7 @@ void BKE_main_library_weak_reference_add(ID *local_id,
                                          const char *library_id_name)
 {
   if (local_id->library_weak_reference == nullptr) {
-    local_id->library_weak_reference = MEM_new_for_free<LibraryWeakReference>(__func__);
+    local_id->library_weak_reference = MEM_new<LibraryWeakReference>(__func__);
   }
 
   STRNCPY(local_id->library_weak_reference->library_filepath, library_filepath);
@@ -882,12 +896,12 @@ BlendThumbnail *BKE_main_thumbnail_from_buffer(Main *bmain, const uint8_t *rect,
   BlendThumbnail *data = nullptr;
 
   if (bmain) {
-    MEM_SAFE_FREE(bmain->blen_thumb);
+    MEM_SAFE_DELETE(bmain->blen_thumb);
   }
 
   if (rect) {
     const size_t data_size = BLEN_THUMB_MEMSIZE(size[0], size[1]);
-    data = static_cast<BlendThumbnail *>(MEM_mallocN(data_size, __func__));
+    data = static_cast<BlendThumbnail *>(MEM_new_uninitialized(data_size, __func__));
     data->width = size[0];
     data->height = size[1];
     memcpy(data->rect, rect, data_size - sizeof(*data));
@@ -904,17 +918,17 @@ BlendThumbnail *BKE_main_thumbnail_from_imbuf(Main *bmain, ImBuf *img)
   BlendThumbnail *data = nullptr;
 
   if (bmain) {
-    MEM_SAFE_FREE(bmain->blen_thumb);
+    MEM_SAFE_DELETE(bmain->blen_thumb);
   }
 
   if (img) {
     const size_t data_size = BLEN_THUMB_MEMSIZE(img->x, img->y);
-    data = static_cast<BlendThumbnail *>(MEM_mallocN(data_size, __func__));
+    data = static_cast<BlendThumbnail *>(MEM_new_uninitialized(data_size, __func__));
 
     IMB_byte_from_float(img); /* Just in case... */
     data->width = img->x;
     data->height = img->y;
-    memcpy(data->rect, img->byte_buffer.data, data_size - sizeof(*data));
+    memcpy(data->rect, img->byte_data(), data_size - sizeof(*data));
   }
 
   if (bmain) {
@@ -932,8 +946,11 @@ ImBuf *BKE_main_thumbnail_to_imbuf(Main *bmain, BlendThumbnail *data)
   }
 
   if (data) {
-    img = IMB_allocFromBuffer(
-        (const uint8_t *)data->rect, nullptr, uint(data->width), uint(data->height), 4);
+    img = IMB_allocFromBuffer(reinterpret_cast<const uint8_t *>(data->rect),
+                              nullptr,
+                              uint(data->width),
+                              uint(data->height),
+                              4);
   }
 
   return img;
@@ -941,10 +958,10 @@ ImBuf *BKE_main_thumbnail_to_imbuf(Main *bmain, BlendThumbnail *data)
 
 void BKE_main_thumbnail_create(Main *bmain)
 {
-  MEM_SAFE_FREE(bmain->blen_thumb);
+  MEM_SAFE_DELETE(bmain->blen_thumb);
 
   bmain->blen_thumb = static_cast<BlendThumbnail *>(
-      MEM_callocN(BLEN_THUMB_MEMSIZE(BLEN_THUMB_SIZE, BLEN_THUMB_SIZE), __func__));
+      MEM_new_zeroed(BLEN_THUMB_MEMSIZE(BLEN_THUMB_SIZE, BLEN_THUMB_SIZE), __func__));
   bmain->blen_thumb->width = BLEN_THUMB_SIZE;
   bmain->blen_thumb->height = BLEN_THUMB_SIZE;
 }
@@ -964,87 +981,87 @@ const char *BKE_main_blendfile_path_from_library(const Library &library)
   return library.runtime->filepath_abs;
 }
 
-ListBase *which_libbase(Main *bmain, short type)
+ListBaseT<ID> *which_libbase(Main *bmain, short type)
 {
-  switch ((ID_Type)type) {
+  switch (ID_Type(type)) {
     case ID_SCE:
-      return &(bmain->scenes);
+      return &(bmain->scenes.cast<ID>());
     case ID_LI:
-      return &(bmain->libraries);
+      return &(bmain->libraries.cast<ID>());
     case ID_OB:
-      return &(bmain->objects);
+      return &(bmain->objects.cast<ID>());
     case ID_ME:
-      return &(bmain->meshes);
+      return &(bmain->meshes.cast<ID>());
     case ID_CU_LEGACY:
-      return &(bmain->curves);
+      return &(bmain->curves.cast<ID>());
     case ID_MB:
-      return &(bmain->metaballs);
+      return &(bmain->metaballs.cast<ID>());
     case ID_MA:
-      return &(bmain->materials);
+      return &(bmain->materials.cast<ID>());
     case ID_TE:
-      return &(bmain->textures);
+      return &(bmain->textures.cast<ID>());
     case ID_IM:
-      return &(bmain->images);
+      return &(bmain->images.cast<ID>());
     case ID_LT:
-      return &(bmain->lattices);
+      return &(bmain->lattices.cast<ID>());
     case ID_LA:
-      return &(bmain->lights);
+      return &(bmain->lights.cast<ID>());
     case ID_CA:
-      return &(bmain->cameras);
+      return &(bmain->cameras.cast<ID>());
     case ID_KE:
-      return &(bmain->shapekeys);
+      return &(bmain->shapekeys.cast<ID>());
     case ID_WO:
-      return &(bmain->worlds);
+      return &(bmain->worlds.cast<ID>());
     case ID_SCR:
-      return &(bmain->screens);
+      return &(bmain->screens.cast<ID>());
     case ID_VF:
-      return &(bmain->fonts);
+      return &(bmain->fonts.cast<ID>());
     case ID_TXT:
-      return &(bmain->texts);
+      return &(bmain->texts.cast<ID>());
     case ID_SPK:
-      return &(bmain->speakers);
+      return &(bmain->speakers.cast<ID>());
     case ID_LP:
-      return &(bmain->lightprobes);
+      return &(bmain->lightprobes.cast<ID>());
     case ID_SO:
-      return &(bmain->sounds);
+      return &(bmain->sounds.cast<ID>());
     case ID_GR:
-      return &(bmain->collections);
+      return &(bmain->collections.cast<ID>());
     case ID_AR:
-      return &(bmain->armatures);
+      return &(bmain->armatures.cast<ID>());
     case ID_AC:
-      return &(bmain->actions);
+      return &(bmain->actions.cast<ID>());
     case ID_NT:
-      return &(bmain->nodetrees);
+      return &(bmain->nodetrees.cast<ID>());
     case ID_BR:
-      return &(bmain->brushes);
+      return &(bmain->brushes.cast<ID>());
     case ID_PA:
-      return &(bmain->particles);
+      return &(bmain->particles.cast<ID>());
     case ID_WM:
-      return &(bmain->wm);
+      return &(bmain->wm.cast<ID>());
     case ID_GD_LEGACY:
-      return &(bmain->gpencils);
+      return &(bmain->gpencils.cast<ID>());
     case ID_GP:
-      return &(bmain->grease_pencils);
+      return &(bmain->grease_pencils.cast<ID>());
     case ID_MC:
-      return &(bmain->movieclips);
+      return &(bmain->movieclips.cast<ID>());
     case ID_MSK:
-      return &(bmain->masks);
+      return &(bmain->masks.cast<ID>());
     case ID_LS:
-      return &(bmain->linestyles);
+      return &(bmain->linestyles.cast<ID>());
     case ID_PAL:
-      return &(bmain->palettes);
+      return &(bmain->palettes.cast<ID>());
     case ID_PC:
-      return &(bmain->paintcurves);
+      return &(bmain->paintcurves.cast<ID>());
     case ID_CF:
-      return &(bmain->cachefiles);
+      return &(bmain->cachefiles.cast<ID>());
     case ID_WS:
-      return &(bmain->workspaces);
+      return &(bmain->workspaces.cast<ID>());
     case ID_CV:
-      return &(bmain->hair_curves);
+      return &(bmain->hair_curves.cast<ID>());
     case ID_PT:
-      return &(bmain->pointclouds);
+      return &(bmain->pointclouds.cast<ID>());
     case ID_VO:
-      return &(bmain->volumes);
+      return &(bmain->volumes.cast<ID>());
   }
   return nullptr;
 }
@@ -1053,64 +1070,145 @@ MainListsArray BKE_main_lists_get(Main &bmain)
 {
   MainListsArray lb{};
   /* Libraries may be accessed from pretty much any other ID. */
-  lb[INDEX_ID_LI] = &bmain.libraries;
+  lb[INDEX_ID_LI] = &(bmain.libraries.cast<ID>());
 
   /* Moved here to avoid problems when freeing with animato (aligorith). */
-  lb[INDEX_ID_AC] = &bmain.actions;
+  lb[INDEX_ID_AC] = &(bmain.actions.cast<ID>());
 
-  lb[INDEX_ID_KE] = &bmain.shapekeys;
+  lb[INDEX_ID_KE] = &(bmain.shapekeys.cast<ID>());
 
   /* Referenced by gpencil, so needs to be before that to avoid crashes. */
-  lb[INDEX_ID_PAL] = &bmain.palettes;
+  lb[INDEX_ID_PAL] = &(bmain.palettes.cast<ID>());
 
   /* Referenced by nodes, objects, view, scene etc, before to free after. */
-  lb[INDEX_ID_GD_LEGACY] = &bmain.gpencils;
-  lb[INDEX_ID_GP] = &bmain.grease_pencils;
+  lb[INDEX_ID_GD_LEGACY] = &(bmain.gpencils.cast<ID>());
+  lb[INDEX_ID_GP] = &(bmain.grease_pencils.cast<ID>());
 
-  lb[INDEX_ID_NT] = &bmain.nodetrees;
-  lb[INDEX_ID_IM] = &bmain.images;
-  lb[INDEX_ID_TE] = &bmain.textures;
-  lb[INDEX_ID_MA] = &bmain.materials;
-  lb[INDEX_ID_VF] = &bmain.fonts;
+  lb[INDEX_ID_NT] = &(bmain.nodetrees.cast<ID>());
+  lb[INDEX_ID_IM] = &(bmain.images.cast<ID>());
+  lb[INDEX_ID_TE] = &(bmain.textures.cast<ID>());
+  lb[INDEX_ID_MA] = &(bmain.materials.cast<ID>());
+  lb[INDEX_ID_VF] = &(bmain.fonts.cast<ID>());
 
   /* Important!: When adding a new object type,
    * the specific data should be inserted here. */
 
-  lb[INDEX_ID_AR] = &bmain.armatures;
+  lb[INDEX_ID_AR] = &(bmain.armatures.cast<ID>());
 
-  lb[INDEX_ID_CF] = &bmain.cachefiles;
-  lb[INDEX_ID_ME] = &bmain.meshes;
-  lb[INDEX_ID_CU_LEGACY] = &bmain.curves;
-  lb[INDEX_ID_MB] = &bmain.metaballs;
-  lb[INDEX_ID_CV] = &bmain.hair_curves;
-  lb[INDEX_ID_PT] = &bmain.pointclouds;
-  lb[INDEX_ID_VO] = &bmain.volumes;
+  lb[INDEX_ID_CF] = &(bmain.cachefiles.cast<ID>());
+  lb[INDEX_ID_ME] = &(bmain.meshes.cast<ID>());
+  lb[INDEX_ID_CU_LEGACY] = &(bmain.curves.cast<ID>());
+  lb[INDEX_ID_MB] = &(bmain.metaballs.cast<ID>());
+  lb[INDEX_ID_CV] = &(bmain.hair_curves.cast<ID>());
+  lb[INDEX_ID_PT] = &(bmain.pointclouds.cast<ID>());
+  lb[INDEX_ID_VO] = &(bmain.volumes.cast<ID>());
 
-  lb[INDEX_ID_LT] = &bmain.lattices;
-  lb[INDEX_ID_LA] = &bmain.lights;
-  lb[INDEX_ID_CA] = &bmain.cameras;
+  lb[INDEX_ID_LT] = &(bmain.lattices.cast<ID>());
+  lb[INDEX_ID_LA] = &(bmain.lights.cast<ID>());
+  lb[INDEX_ID_CA] = &(bmain.cameras.cast<ID>());
 
-  lb[INDEX_ID_TXT] = &bmain.texts;
-  lb[INDEX_ID_SO] = &bmain.sounds;
-  lb[INDEX_ID_GR] = &bmain.collections;
-  lb[INDEX_ID_PAL] = &bmain.palettes;
-  lb[INDEX_ID_PC] = &bmain.paintcurves;
-  lb[INDEX_ID_BR] = &bmain.brushes;
-  lb[INDEX_ID_PA] = &bmain.particles;
-  lb[INDEX_ID_SPK] = &bmain.speakers;
-  lb[INDEX_ID_LP] = &bmain.lightprobes;
+  lb[INDEX_ID_TXT] = &(bmain.texts.cast<ID>());
+  lb[INDEX_ID_SO] = &(bmain.sounds.cast<ID>());
+  lb[INDEX_ID_GR] = &(bmain.collections.cast<ID>());
+  lb[INDEX_ID_PAL] = &(bmain.palettes.cast<ID>());
+  lb[INDEX_ID_PC] = &(bmain.paintcurves.cast<ID>());
+  lb[INDEX_ID_BR] = &(bmain.brushes.cast<ID>());
+  lb[INDEX_ID_PA] = &(bmain.particles.cast<ID>());
+  lb[INDEX_ID_SPK] = &(bmain.speakers.cast<ID>());
+  lb[INDEX_ID_LP] = &(bmain.lightprobes.cast<ID>());
 
-  lb[INDEX_ID_WO] = &bmain.worlds;
-  lb[INDEX_ID_MC] = &bmain.movieclips;
-  lb[INDEX_ID_SCR] = &bmain.screens;
-  lb[INDEX_ID_OB] = &bmain.objects;
+  lb[INDEX_ID_WO] = &(bmain.worlds.cast<ID>());
+  lb[INDEX_ID_MC] = &(bmain.movieclips.cast<ID>());
+  lb[INDEX_ID_SCR] = &(bmain.screens.cast<ID>());
+  lb[INDEX_ID_OB] = &(bmain.objects.cast<ID>());
   /* referenced by scenes */
-  lb[INDEX_ID_LS] = &bmain.linestyles;
-  lb[INDEX_ID_SCE] = &bmain.scenes;
+  lb[INDEX_ID_LS] = &(bmain.linestyles.cast<ID>());
+  lb[INDEX_ID_SCE] = &(bmain.scenes.cast<ID>());
   /* before wm, so it's freed after it! */
-  lb[INDEX_ID_WS] = &bmain.workspaces;
-  lb[INDEX_ID_WM] = &bmain.wm;
-  lb[INDEX_ID_MSK] = &bmain.masks;
+  lb[INDEX_ID_WS] = &(bmain.workspaces.cast<ID>());
+  lb[INDEX_ID_WM] = &(bmain.wm.cast<ID>());
+  lb[INDEX_ID_MSK] = &(bmain.masks.cast<ID>());
 
   return lb;
 }
+
+MainAllIDsIterator &MainAllIDsIterator::operator++()
+{
+  if (curr_id_) {
+    BLI_assert(curr_lbarray_index_ > -1 && curr_lbarray_index_ < int64_t(lbarray_.size()));
+    curr_id_ = static_cast<ID *>(curr_id_->next);
+    if (curr_id_) {
+      return *this;
+    }
+  }
+
+  BLI_assert(curr_id_ == nullptr);
+  BLI_assert(curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
+
+  if (curr_lbarray_index_ >= int64_t(lbarray_.size())) {
+    return *this;
+  }
+  while (true) {
+    curr_lbarray_index_++;
+    if (curr_lbarray_index_ == int64_t(lbarray_.size())) {
+      return *this;
+    }
+    /* Listbase pointers from lbarray_ can be nullptr when no data was provided (default
+     * constructor case). */
+    ListBaseT<ID> *lb_ids = lbarray_[size_t(curr_lbarray_index_)];
+    if (lb_ids && !BLI_listbase_is_empty(lb_ids)) {
+      curr_id_ = static_cast<ID *>(lb_ids->first);
+      return *this;
+    }
+  }
+  BLI_assert_unreachable();
+  return *this;
+}
+
+MainAllIDsIterator &MainAllIDsIterator::operator--()
+{
+  if (curr_id_) {
+    BLI_assert(curr_lbarray_index_ > -1 && curr_lbarray_index_ < int64_t(lbarray_.size()));
+    curr_id_ = static_cast<ID *>(curr_id_->prev);
+    if (curr_id_) {
+      return *this;
+    }
+  }
+  BLI_assert(curr_id_ == nullptr);
+  BLI_assert(curr_lbarray_index_ >= -1 && curr_lbarray_index_ <= int64_t(lbarray_.size()));
+
+  if (this->curr_lbarray_index_ <= -1) {
+    return *this;
+  }
+  while (true) {
+    curr_lbarray_index_--;
+    if (curr_lbarray_index_ == -1) {
+      return *this;
+    }
+    /* Listbase pointers from lbarray_ can be nullptr when no data was provided (default
+     * constructor case). */
+    ListBaseT<ID> *lb_ids = lbarray_[size_t(curr_lbarray_index_)];
+    if (lb_ids && !BLI_listbase_is_empty(lb_ids)) {
+      curr_id_ = static_cast<ID *>(lb_ids->last);
+      return *this;
+    }
+  }
+  BLI_assert_unreachable();
+  return *this;
+}
+
+int64_t MainAllIDsIterator::size() const
+{
+  int64_t size = 0;
+  for (const ListBaseT<ID> *lb_ids : lbarray_) {
+    /* Listbase pointers from lbarray_ can be nullptr when no data was provided (default
+     * constructor case). */
+    if (!lb_ids) {
+      continue;
+    }
+    size += BLI_listbase_count(lb_ids);
+  }
+  return size;
+}
+
+}  // namespace blender

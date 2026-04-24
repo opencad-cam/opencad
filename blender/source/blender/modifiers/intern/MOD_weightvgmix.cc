@@ -43,6 +43,8 @@
 #include "MOD_util.hh"
 #include "MOD_weightvg_util.hh"
 
+namespace blender {
+
 /**
  * This mixes the old weight with the new weight factor.
  */
@@ -121,13 +123,13 @@ static float mix_weight(float weight, float weight2, char mix_mode)
  **************************************/
 static void init_data(ModifierData *md)
 {
-  WeightVGMixModifierData *wmd = (WeightVGMixModifierData *)md;
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
   INIT_DEFAULT_STRUCT_AFTER(wmd, modifier);
 }
 
 static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
-  WeightVGMixModifierData *wmd = (WeightVGMixModifierData *)md;
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
 
   /* We need vertex groups! */
   r_cddata_masks->vmask |= CD_MASK_MDEFORMVERT;
@@ -140,7 +142,7 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
 
 static bool depends_on_time(Scene * /*scene*/, ModifierData *md)
 {
-  WeightVGMixModifierData *wmd = (WeightVGMixModifierData *)md;
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
 
   if (wmd->mask_texture) {
     return BKE_texture_dependsOnTime(wmd->mask_texture);
@@ -150,22 +152,22 @@ static bool depends_on_time(Scene * /*scene*/, ModifierData *md)
 
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
-  WeightVGMixModifierData *wmd = (WeightVGMixModifierData *)md;
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
 
-  walk(user_data, ob, (ID **)&wmd->mask_texture, IDWALK_CB_USER);
-  walk(user_data, ob, (ID **)&wmd->mask_tex_map_obj, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&wmd->mask_texture), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&wmd->mask_tex_map_obj), IDWALK_CB_NOP);
 }
 
 static void foreach_tex_link(ModifierData *md, Object *ob, TexWalkFunc walk, void *user_data)
 {
-  PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, &RNA_Modifier, md);
+  PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, RNA_Modifier, md);
   PropertyRNA *prop = RNA_struct_find_property(&ptr, "mask_texture");
   walk(user_data, ob, md, &ptr, prop);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
-  WeightVGMixModifierData *wmd = (WeightVGMixModifierData *)md;
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
   bool need_transform_relation = false;
 
   if (wmd->mask_texture != nullptr) {
@@ -188,7 +190,7 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  WeightVGMixModifierData *wmd = (WeightVGMixModifierData *)md;
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
   /* If no vertex group, bypass. */
   return (wmd->defgrp_name_a[0] == '\0');
 }
@@ -197,7 +199,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 {
   BLI_assert(mesh != nullptr);
 
-  WeightVGMixModifierData *wmd = (WeightVGMixModifierData *)md;
+  WeightVGMixModifierData *wmd = reinterpret_cast<WeightVGMixModifierData *>(md);
 
   MDeformWeight **dw1, **tdw1, **dw2, **tdw2;
   float *org_w;
@@ -263,9 +265,9 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   }
 
   /* Find out which vertices to work on. */
-  tidx = MEM_malloc_arrayN<int>(size_t(verts_num), __func__);
-  tdw1 = MEM_malloc_arrayN<MDeformWeight *>(size_t(verts_num), __func__);
-  tdw2 = MEM_malloc_arrayN<MDeformWeight *>(size_t(verts_num), __func__);
+  tidx = MEM_new_array_uninitialized<int>(size_t(verts_num), __func__);
+  tdw1 = MEM_new_array_uninitialized<MDeformWeight *>(size_t(verts_num), __func__);
+  tdw2 = MEM_new_array_uninitialized<MDeformWeight *>(size_t(verts_num), __func__);
   switch (wmd->mix_set) {
     case MOD_WVG_SET_A:
       /* All vertices in first vgroup. */
@@ -335,20 +337,20 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   }
   if (index_num == 0) {
     /* Use no vertices! Hence, return org data. */
-    MEM_freeN(tdw1);
-    MEM_freeN(tdw2);
-    MEM_freeN(tidx);
+    MEM_delete(tdw1);
+    MEM_delete(tdw2);
+    MEM_delete(tidx);
     return mesh;
   }
   if (index_num != -1) {
-    indices = MEM_malloc_arrayN<int>(size_t(index_num), __func__);
+    indices = MEM_new_array_uninitialized<int>(size_t(index_num), __func__);
     memcpy(indices, tidx, sizeof(int) * index_num);
-    dw1 = MEM_malloc_arrayN<MDeformWeight *>(size_t(index_num), __func__);
+    dw1 = MEM_new_array_uninitialized<MDeformWeight *>(size_t(index_num), __func__);
     memcpy(dw1, tdw1, sizeof(MDeformWeight *) * index_num);
-    MEM_freeN(tdw1);
-    dw2 = MEM_malloc_arrayN<MDeformWeight *>(size_t(index_num), __func__);
+    MEM_delete(tdw1);
+    dw2 = MEM_new_array_uninitialized<MDeformWeight *>(size_t(index_num), __func__);
     memcpy(dw2, tdw2, sizeof(MDeformWeight *) * index_num);
-    MEM_freeN(tdw2);
+    MEM_delete(tdw2);
   }
   else {
     /* Use all vertices. */
@@ -357,10 +359,10 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     dw1 = tdw1;
     dw2 = tdw2;
   }
-  MEM_freeN(tidx);
+  MEM_delete(tidx);
 
-  org_w = MEM_malloc_arrayN<float>(size_t(index_num), __func__);
-  new_w = MEM_malloc_arrayN<float>(size_t(index_num), __func__);
+  org_w = MEM_new_array_uninitialized<float>(size_t(index_num), __func__);
+  new_w = MEM_new_array_uninitialized<float>(size_t(index_num), __func__);
 
   /* Mix weights. */
   for (i = 0; i < index_num; i++) {
@@ -424,11 +426,11 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 #endif
 
   /* Freeing stuff. */
-  MEM_freeN(org_w);
-  MEM_freeN(new_w);
-  MEM_freeN(dw1);
-  MEM_freeN(dw2);
-  MEM_SAFE_FREE(indices);
+  MEM_delete(org_w);
+  MEM_delete(new_w);
+  MEM_delete(dw1);
+  MEM_delete(dw2);
+  MEM_SAFE_DELETE(indices);
 
   mesh->runtime->is_original_bmesh = false;
 
@@ -438,7 +440,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  blender::ui::Layout &layout = *panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
@@ -466,7 +468,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
 static void influence_panel_draw(const bContext *C, Panel *panel)
 {
-  blender::ui::Layout &layout = *panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
@@ -518,3 +520,5 @@ ModifierTypeInfo modifierType_WeightVGMix = {
     /*foreach_cache*/ nullptr,
     /*foreach_working_space_color*/ nullptr,
 };
+
+}  // namespace blender

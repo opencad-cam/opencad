@@ -9,17 +9,19 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_tex_coord_cc {
+namespace blender {
+
+namespace nodes::node_shader_tex_coord_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("Generated").translation_context(BLT_I18NCONTEXT_ID_TEXTURE);
-  b.add_output<decl::Vector>("Normal");
-  b.add_output<decl::Vector>("UV");
-  b.add_output<decl::Vector>("Object");
-  b.add_output<decl::Vector>("Camera");
-  b.add_output<decl::Vector>("Window");
-  b.add_output<decl::Vector>("Reflection");
+  b.add_output<decl::Vector>("Generated"_ustr).translation_context(BLT_I18NCONTEXT_ID_TEXTURE);
+  b.add_output<decl::Vector>("Normal"_ustr);
+  b.add_output<decl::Vector>("UV"_ustr);
+  b.add_output<decl::Vector>("Object"_ustr);
+  b.add_output<decl::Vector>("Camera"_ustr);
+  b.add_output<decl::Vector>("Window"_ustr);
+  b.add_output<decl::Vector>("Reflection"_ustr);
 }
 
 static void node_shader_buts_tex_coord(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -49,8 +51,7 @@ static int node_shader_gpu_tex_coord(GPUMaterial *mat,
 
   GPU_stack_link(mat, node, "node_tex_coord", in, out, inv_obmat, orco, mtface);
 
-  int i;
-  LISTBASE_FOREACH_INDEX (bNodeSocket *, sock, &node->outputs, i) {
+  for (const auto [i, sock] : node->outputs.enumerate()) {
     node_shader_gpu_bump_tex_coord(mat, node, &out[i].link);
     /* Normalize some vectors after dFdx/dFdy offsets.
      * This is the case for interpolated, non linear functions.
@@ -97,16 +98,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_tex_coord_cc
+}  // namespace nodes::node_shader_tex_coord_cc
 
 /* node type definition */
 void register_node_type_sh_tex_coord()
 {
-  namespace file_ns = blender::nodes::node_shader_tex_coord_cc;
+  namespace file_ns = nodes::node_shader_tex_coord_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeTexCoord", SH_NODE_TEX_COORD);
+  sh_node_type_base(&ntype, "ShaderNodeTexCoord"_ustr, SH_NODE_TEX_COORD);
   ntype.ui_name = "Texture Coordinate";
   ntype.ui_description =
       "Retrieve multiple types of texture coordinates.\nTypically used as inputs for texture "
@@ -118,5 +119,7 @@ void register_node_type_sh_tex_coord()
   ntype.gpu_fn = file_ns::node_shader_gpu_tex_coord;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

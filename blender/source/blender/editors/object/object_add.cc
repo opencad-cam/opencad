@@ -17,6 +17,7 @@
 #include "DNA_curve_types.h"
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_key_types.h"
+#include "DNA_lattice_types.h"
 #include "DNA_light_types.h"
 #include "DNA_lightprobe_types.h"
 #include "DNA_material_types.h"
@@ -27,6 +28,7 @@
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_speaker_types.h"
 #include "DNA_vfont_types.h"
 
 #include "BLI_array_utils.hh"
@@ -136,6 +138,8 @@
 
 #include "object_intern.hh"
 
+namespace blender {
+
 const EnumPropertyItem rna_enum_light_type_items[] = {
     {LA_LOCAL, "POINT", ICON_LIGHT_POINT, "Point", "Omnidirectional point light source"},
     {LA_SUN, "SUN", ICON_LIGHT_SUN, "Sun", "Constant direction parallel ray light source"},
@@ -144,7 +148,7 @@ const EnumPropertyItem rna_enum_light_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-namespace blender::ed::object {
+namespace ed::object {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Enum Declarations
@@ -539,7 +543,7 @@ void add_generic_get_opts(bContext *C,
 
     if (RNA_struct_property_is_set(op->ptr, "rotation")) {
       /* If rotation is set, always use it. Alignment (and corresponding user preference)
-       * can be ignored since this is in world space anyways.
+       * can be ignored since this is in world space anyway.
        * To not confuse (e.g. on redo), don't set it to #ALIGN_WORLD in the op UI though. */
       *r_is_view_aligned = false;
       RNA_float_get_array(op->ptr, "rotation", r_rot);
@@ -625,7 +629,7 @@ Object *add_type_with_obdata(bContext *C,
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Object *obedit = BKE_view_layer_edit_object_get(view_layer);
     if (obedit != nullptr) {
       editmode_exit_ex(bmain, scene, obedit, EM_FREEDATA);
@@ -639,14 +643,14 @@ Object *add_type_with_obdata(bContext *C,
     ob = BKE_object_add_for_data(bmain, scene, view_layer, type, name, obdata, true);
     const short *materials_len_p = BKE_id_material_len_p(obdata);
     if (materials_len_p && *materials_len_p > 0) {
-      BKE_object_materials_sync_length(bmain, ob, static_cast<ID *>(ob->data));
+      BKE_object_materials_sync_length(bmain, ob, ob->data);
     }
   }
   else {
     ob = BKE_object_add(bmain, scene, view_layer, type, name);
   }
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *ob_base_act = BKE_view_layer_active_base_get(view_layer);
   /* While not getting a valid base is not a good thing, it can happen in convoluted corner cases,
    * better not crash on it in releases. */
@@ -666,7 +670,7 @@ Object *add_type_with_obdata(bContext *C,
   DEG_id_type_tag(bmain, ID_OB);
   DEG_relations_tag_update(bmain);
   if (ob->data != nullptr) {
-    DEG_id_tag_update_ex(bmain, (ID *)ob->data, ID_RECALC_EDITORS);
+    DEG_id_tag_update_ex(bmain, ob->data, ID_RECALC_EDITORS);
   }
 
   if (enter_editmode) {
@@ -771,15 +775,17 @@ static std::optional<Bounds<float3>> lattice_add_to_selected_collect_targets_and
   float inverse_orientation_matrix[3][3];
   invert_m3_m3_safe_ortho(inverse_orientation_matrix, orientation_matrix);
 
-  LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
-    if (!BASE_SELECTED_EDITABLE(v3d, base) || !object_can_have_lattice_modifier(base->object)) {
+  for (Base &base : view_layer->object_bases) {
+    if (!BASE_SELECTED_EDITABLE(v3d, &base) || !object_can_have_lattice_modifier(base.object)) {
       continue;
     }
 
-    r_targets.append(base->object);
-    const Object *object_eval = DEG_get_evaluated(depsgraph, base->object);
+    r_targets.append(base.object);
+    const Object *object_eval = DEG_get_evaluated(depsgraph, base.object);
     if (object_eval && DEG_object_transform_is_evaluated(*object_eval)) {
-      if (std::optional<Bounds<float3>> object_bounds = BKE_object_boundbox_get(object_eval)) {
+      if (std::optional<Bounds<float3>> object_bounds = BKE_object_evaluated_geometry_bounds(
+              object_eval))
+      {
         const float (*object_to_world_matrix)[4] = object_eval->object_to_world().ptr();
         /* Generate all 8 corners of the bounding box. */
         std::array<float3, 8> corners = bounds::corners(*object_bounds);
@@ -841,7 +847,7 @@ static wmOperatorStatus lattice_add_to_selected_exec(bContext *C, wmOperator *op
 
   Object *ob_lattice = add_type(
       C, OB_LATTICE, nullptr, location, rotation_euler, enter_editmode, local_view_bits);
-  Lattice *lt = (Lattice *)ob_lattice->data;
+  Lattice *lt = id_cast<Lattice *>(ob_lattice->data);
 
   if (fit_to_selected && bounds_opt.has_value()) {
     /* Calculate the center and size of this combined bounding box. */
@@ -1031,7 +1037,7 @@ static wmOperatorStatus lightprobe_add_exec(bContext *C, wmOperator *op)
       C, OB_LIGHTPROBE, get_lightprobe_defname(type), loc, rot, false, local_view_bits);
   copy_v3_fl(ob->scale, radius);
 
-  LightProbe *probe = (LightProbe *)ob->data;
+  LightProbe *probe = id_cast<LightProbe *>(ob->data);
 
   BKE_lightprobe_type_set(probe, type);
 
@@ -1124,7 +1130,7 @@ static wmOperatorStatus effector_add_exec(bContext *C, wmOperator *op)
     ob = add_type(
         C, OB_CURVES_LEGACY, get_effector_defname(type), loc, rot, false, local_view_bits);
 
-    Curve *cu = static_cast<Curve *>(ob->data);
+    Curve *cu = id_cast<Curve *>(ob->data);
     cu->flag |= CU_PATH | CU_3D;
     editmode_enter_ex(bmain, scene, ob, 0);
 
@@ -1201,7 +1207,7 @@ static wmOperatorStatus object_camera_add_exec(bContext *C, wmOperator *op)
     }
   }
 
-  Camera *cam = static_cast<Camera *>(ob->data);
+  Camera *cam = id_cast<Camera *>(ob->data);
   cam->drawsize = v3d ? ED_view3d_grid_scale(scene, v3d, nullptr) :
                         ED_scene_grid_scale(scene, nullptr);
 
@@ -1250,7 +1256,7 @@ static wmOperatorStatus object_metaball_add_exec(bContext *C, wmOperator *op)
   add_generic_get_opts(C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
 
   bool newob = false;
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit == nullptr || obedit->type != OB_MBALL) {
     obedit = add_type(C, OB_MBALL, nullptr, loc, rot, true, local_view_bits);
@@ -1285,7 +1291,7 @@ void OBJECT_OT_metaball_add(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Add Metaball";
-  ot->description = "Add an metaball object to the scene";
+  ot->description = "Add a metaball object to the scene";
   ot->idname = "OBJECT_OT_metaball_add";
 
   /* API callbacks. */
@@ -1358,7 +1364,7 @@ static wmOperatorStatus object_armature_add_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
 
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -1386,7 +1392,7 @@ static wmOperatorStatus object_armature_add_exec(bContext *C, wmOperator *op)
   }
 
   /* Give the Armature its default bone collection. */
-  bArmature *armature = static_cast<bArmature *>(obedit->data);
+  bArmature *armature = id_cast<bArmature *>(obedit->data);
   BoneCollection *default_bonecoll = ANIM_armature_bonecoll_new(armature, "");
   ANIM_armature_bonecoll_active_set(armature, default_bonecoll);
 
@@ -1470,7 +1476,7 @@ static wmOperatorStatus object_image_add_exec(bContext *C, wmOperator *op)
 {
   Image *ima = nullptr;
 
-  ima = (Image *)WM_operator_drop_load_path(C, op, ID_IM);
+  ima = id_cast<Image *>(WM_operator_drop_load_path(C, op, ID_IM));
   if (!ima) {
     return OPERATOR_CANCELLED;
   }
@@ -1502,7 +1508,7 @@ static wmOperatorStatus object_image_add_exec(bContext *C, wmOperator *op)
 
   BKE_object_empty_draw_type_set(ob, OB_EMPTY_IMAGE);
 
-  ob->data = ima;
+  ob->data = id_cast<ID *>(ima);
 
   return OPERATOR_FINISHED;
 }
@@ -1545,7 +1551,7 @@ static wmOperatorStatus object_image_add_invoke(bContext *C, wmOperator *op, con
   /* User dropped an image on an existing image. */
   Image *ima = nullptr;
 
-  ima = (Image *)WM_operator_drop_load_path(C, op, ID_IM);
+  ima = id_cast<Image *>(WM_operator_drop_load_path(C, op, ID_IM));
   if (!ima) {
     return OPERATOR_CANCELLED;
   }
@@ -1554,13 +1560,13 @@ static wmOperatorStatus object_image_add_invoke(bContext *C, wmOperator *op, con
 
   Scene *scene = CTX_data_scene(C);
   WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
-  DEG_id_tag_update((ID *)ob_cursor, ID_RECALC_TRANSFORM);
+  DEG_id_tag_update(id_cast<ID *>(ob_cursor), ID_RECALC_TRANSFORM);
 
   BKE_object_empty_draw_type_set(ob_cursor, OB_EMPTY_IMAGE);
 
-  id_us_min(static_cast<ID *>(ob_cursor->data));
-  ob_cursor->data = ima;
-  id_us_plus(static_cast<ID *>(ob_cursor->data));
+  id_us_min(ob_cursor->data);
+  ob_cursor->data = id_cast<ID *>(ima);
+  id_us_plus(ob_cursor->data);
   return OPERATOR_FINISHED;
 }
 
@@ -1666,7 +1672,7 @@ static wmOperatorStatus object_grease_pencil_add_exec(bContext *C, wmOperator *o
   }
 
   Object *object = add_type(C, OB_GREASE_PENCIL, ob_name, loc, rot, false, local_view_bits);
-  GreasePencil &grease_pencil_id = *static_cast<GreasePencil *>(object->data);
+  GreasePencil &grease_pencil_id = *id_cast<GreasePencil *>(object->data);
   const bool use_in_front = RNA_boolean_get(op->ptr, "use_in_front");
   const bool use_lights = RNA_boolean_get(op->ptr, "use_lights");
 
@@ -1745,7 +1751,7 @@ static wmOperatorStatus object_grease_pencil_add_exec(bContext *C, wmOperator *o
   SET_FLAG_FROM_TEST(object->dtx, use_in_front, OB_DRAW_IN_FRONT);
   SET_FLAG_FROM_TEST(object->dtx, use_lights, OB_USE_GPENCIL_LIGHTS);
 
-  for (blender::bke::greasepencil::Layer *layer : grease_pencil_id.layers_for_write()) {
+  for (bke::greasepencil::Layer *layer : grease_pencil_id.layers_for_write()) {
     SET_FLAG_FROM_TEST(layer->as_node().flag, use_lights, GP_LAYER_TREE_NODE_USE_LIGHTS);
   }
 
@@ -1864,7 +1870,7 @@ static wmOperatorStatus object_light_add_exec(bContext *C, wmOperator *op)
   }
   BKE_object_obdata_size_init(ob, size);
 
-  la = (Light *)ob->data;
+  la = id_cast<Light *>(ob->data);
   la->type = type;
 
   if (type == LA_SUN) {
@@ -2167,7 +2173,7 @@ static wmOperatorStatus object_data_instance_add_exec(bContext *C, wmOperator *o
   PropertyRNA *prop_location = RNA_struct_find_property(op->ptr, "location");
 
   const short id_type = RNA_property_enum_get(op->ptr, prop_type);
-  id = WM_operator_properties_id_lookup_from_name_or_session_uid(bmain, op->ptr, (ID_Type)id_type);
+  id = WM_operator_properties_id_lookup_from_name_or_session_uid(bmain, op->ptr, ID_Type(id_type));
   if (id == nullptr) {
     return OPERATOR_CANCELLED;
   }
@@ -2241,7 +2247,7 @@ static wmOperatorStatus object_speaker_add_exec(bContext *C, wmOperator *op)
     AnimData *adt = BKE_animdata_ensure_id(&ob->id);
     NlaTrack *nlt = BKE_nlatrack_new_tail(&adt->nla_tracks, is_liboverride);
     BKE_nlatrack_set_active(&adt->nla_tracks, nlt);
-    NlaStrip *strip = BKE_nla_add_soundstrip(bmain, scene, static_cast<Speaker *>(ob->data));
+    NlaStrip *strip = BKE_nla_add_soundstrip(bmain, scene, id_cast<Speaker *>(ob->data));
     strip->start = scene->r.cfra;
     strip->end += strip->start;
 
@@ -2289,7 +2295,7 @@ static wmOperatorStatus object_curves_random_add_exec(bContext *C, wmOperator *o
 
   Object *object = add_type(C, OB_CURVES, nullptr, loc, rot, false, local_view_bits);
 
-  Curves *curves_id = static_cast<Curves *>(object->data);
+  Curves *curves_id = id_cast<Curves *>(object->data);
   curves_id->geometry.wrap() = ed::curves::primitive_random_sphere(500, 8);
 
   return OPERATOR_FINISHED;
@@ -2326,14 +2332,14 @@ static wmOperatorStatus object_curves_empty_hair_add_exec(bContext *C, wmOperato
   BKE_object_apply_mat4(curves_ob, surface_ob->object_to_world().ptr(), false, false);
 
   /* Set surface object. */
-  Curves *curves_id = static_cast<Curves *>(curves_ob->data);
+  Curves *curves_id = id_cast<Curves *>(curves_ob->data);
   curves_id->surface = surface_ob;
 
   /* Parent to surface object. */
   parent_set(op->reports, C, scene, curves_ob, surface_ob, PAR_OBJECT, false, true, nullptr);
 
   /* Decide which UV map to use for attachment. */
-  Mesh *surface_mesh = static_cast<Mesh *>(surface_ob->data);
+  Mesh *surface_mesh = id_cast<Mesh *>(surface_ob->data);
   const StringRef uv_name = surface_mesh->active_uv_map_name();
   if (!uv_name.is_empty()) {
     curves_id->surface_uv_map = BLI_strdupn(uv_name.data(), uv_name.size());
@@ -2389,7 +2395,7 @@ static wmOperatorStatus object_pointcloud_add_exec(bContext *C, wmOperator *op)
   add_generic_get_opts(C, op, 'Z', loc, rot, nullptr, nullptr, &local_view_bits, nullptr);
 
   Object *object = add_type(C, OB_POINTCLOUD, nullptr, loc, rot, false, local_view_bits);
-  PointCloud &pointcloud = *static_cast<PointCloud *>(object->data);
+  PointCloud &pointcloud = *id_cast<PointCloud *>(object->data);
   pointcloud.totpoint = 400;
 
   bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
@@ -2531,9 +2537,9 @@ static wmOperatorStatus object_delete_exec(bContext *C, wmOperator *op)
   }
 
   /* delete has to handle all open scenes */
-  BKE_main_id_tag_listbase(&bmain->scenes, ID_TAG_DOIT, true);
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    scene = WM_window_get_active_scene(win);
+  BKE_main_id_tag_listbase(&bmain->scenes.cast<ID>(), ID_TAG_DOIT, true);
+  for (wmWindow &win : wm->windows) {
+    scene = WM_window_get_active_scene(&win);
 
     if (scene->id.tag & ID_TAG_DOIT) {
       scene->id.tag &= ~ID_TAG_DOIT;
@@ -2761,7 +2767,7 @@ static void make_object_duplilist_real(bContext *C,
   }
 
   DupliList duplilist;
-  object_duplilist(depsgraph, scene, object_eval, nullptr, duplilist);
+  object_duplilist(depsgraph, object_eval, nullptr, duplilist);
 
   if (duplilist.is_empty()) {
     return;
@@ -2778,7 +2784,7 @@ static void make_object_duplilist_real(bContext *C,
 
   for (DupliObject &dob : duplilist) {
     Object *ob_src = DEG_get_original(dob.ob);
-    Object *ob_dst = static_cast<Object *>(ID_NEW_SET(ob_src, BKE_id_copy(bmain, &ob_src->id)));
+    Object *ob_dst = id_cast<Object *>(ID_NEW_SET(ob_src, BKE_id_copy(bmain, &ob_src->id)));
     id_us_min(&ob_dst->id);
 
     /* font duplis can have a totcol without material, we get them from parent
@@ -2789,7 +2795,7 @@ static void make_object_duplilist_real(bContext *C,
     }
 
     BKE_collection_object_add_from(bmain, scene, base->object, ob_dst);
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Base *base_dst = BKE_view_layer_base_find(view_layer, ob_dst);
     BLI_assert(base_dst != nullptr);
 
@@ -2809,7 +2815,7 @@ static void make_object_duplilist_real(bContext *C,
     ob_dst->transflag &= ~OB_DUPLI;
     /* Remove instantiated collection, it's annoying to keep it here
      * (and get potentially a lot of usages of it then...). */
-    id_us_min((ID *)ob_dst->instance_collection);
+    id_us_min(id_cast<ID *>(ob_dst->instance_collection));
     ob_dst->instance_collection = nullptr;
 
     copy_m4_m4(ob_dst->runtime->object_to_world.ptr(), dob.mat);
@@ -3038,7 +3044,7 @@ static const EnumPropertyItem *convert_target_itemf(bContext *C,
 static void object_data_convert_curve_to_mesh(Main *bmain, Depsgraph *depsgraph, Object *ob)
 {
   Object *object_eval = DEG_get_evaluated(depsgraph, ob);
-  Curve *curve = static_cast<Curve *>(ob->data);
+  Curve *curve = id_cast<Curve *>(ob->data);
 
   Mesh *mesh = BKE_mesh_new_from_object_to_bmain(bmain, depsgraph, object_eval, true);
   if (mesh == nullptr) {
@@ -3047,8 +3053,11 @@ static void object_data_convert_curve_to_mesh(Main *bmain, Depsgraph *depsgraph,
   }
 
   BKE_object_free_modifiers(ob, 0);
+
+  bke::mesh_ensure_active_uv_map(*mesh);
+
   /* Replace curve used by the object itself. */
-  ob->data = mesh;
+  ob->data = id_cast<ID *>(mesh);
   ob->type = OB_MESH;
   id_us_min(&curve->id);
   id_us_plus(&mesh->id);
@@ -3057,25 +3066,26 @@ static void object_data_convert_curve_to_mesh(Main *bmain, Depsgraph *depsgraph,
    * - It's possible to have multiple curve objects selected which are sharing the same curve
    *   data-block. We don't want mesh to be created for every of those objects.
    * - This is how conversion worked for a long time. */
-  LISTBASE_FOREACH (Object *, other_object, &bmain->objects) {
-    if (other_object->data == curve) {
-      other_object->type = OB_MESH;
+  for (Object &other_object : bmain->objects) {
+    if (other_object.data == id_cast<ID *>(curve)) {
+      other_object.type = OB_MESH;
 
-      id_us_min((ID *)other_object->data);
-      other_object->data = ob->data;
-      id_us_plus((ID *)other_object->data);
+      id_us_min(other_object.data);
+      other_object.data = ob->data;
+      id_us_plus(other_object.data);
     }
   }
 }
 
 static bool object_convert_poll(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   if (!ID_IS_EDITABLE(scene)) {
     return false;
   }
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   /* Don't use `active_object` in the context, it's important this value
    * is from the view-layer as it's used to check if Blender is in object mode. */
   Object *obact = BKE_view_layer_active_object_get(view_layer);
@@ -3096,12 +3106,12 @@ static Base *duplibase_for_convert(
     ob = base->object;
   }
 
-  Object *obn = (Object *)BKE_id_copy(bmain, &ob->id);
+  Object *obn = id_cast<Object *>(BKE_id_copy(bmain, &ob->id));
   id_us_min(&obn->id);
   DEG_id_tag_update(&obn->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
   BKE_collection_object_add_from(bmain, scene, ob, obn);
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *basen = BKE_view_layer_base_find(view_layer, obn);
   base_select(basen, BA_SELECT);
   base_select(base, BA_DESELECT);
@@ -3112,7 +3122,7 @@ static Base *duplibase_for_convert(
    * (this is weak, but other solution (to change name of `obn`) is even worse IMHO).
    * See #65996. */
   const bool is_meta_ball = (obn->type == OB_MBALL);
-  void *obdata = obn->data;
+  ID *obdata = obn->data;
   if (is_meta_ball) {
     obn->type = OB_EMPTY;
     obn->data = nullptr;
@@ -3164,7 +3174,7 @@ static Object *get_object_for_conversion(Base &base, ObjectConversionInfo &info,
     Object *newob = (*r_new_base)->object;
 
     /* Decrement original object data usage count. */
-    ID *original_object_data = static_cast<ID *>(newob->data);
+    ID *original_object_data = newob->data;
     id_us_min(original_object_data);
 
     /* Make a copy of the object data. */
@@ -3215,7 +3225,7 @@ static Object *convert_curves_component_to_curves(Base &base,
     const Curves *curves_eval = geometry.get_curves();
     Curves *new_curves = BKE_id_new<Curves>(info.bmain, newob->id.name + 2);
 
-    newob->data = new_curves;
+    newob->data = id_cast<ID *>(new_curves);
     newob->type = OB_CURVES;
 
     new_curves->geometry.wrap() = curves_eval->geometry.wrap();
@@ -3251,7 +3261,7 @@ static Object *convert_grease_pencil_component_to_curves(Base &base,
     newob = get_object_for_conversion(base, info, r_new_base);
 
     Curves *new_curves = BKE_id_new<Curves>(info.bmain, newob->id.name + 2);
-    newob->data = new_curves;
+    newob->data = id_cast<ID *>(new_curves);
     newob->type = OB_CURVES;
 
     if (const Curves *curves_eval = geometry.get_curves()) {
@@ -3337,7 +3347,7 @@ static Object *convert_mesh_to_mesh(Base &base, ObjectConversionInfo &info, Base
     BKE_mesh_merge_customdata_for_apply_modifier(new_mesh);
   }
 
-  Mesh *ob_data_mesh = (Mesh *)newob->data;
+  Mesh *ob_data_mesh = id_cast<Mesh *>(newob->data);
 
   if (ob_data_mesh->key) {
     /* NOTE(@ideasman42): Clearing the shape-key is needed when the
@@ -3355,6 +3365,8 @@ static Object *convert_mesh_to_mesh(Base &base, ObjectConversionInfo &info, Base
     }
   }
   BKE_mesh_nomain_to_mesh(new_mesh, ob_data_mesh, newob);
+
+  bke::mesh_ensure_active_uv_map(*ob_data_mesh);
 
   BKE_object_free_modifiers(newob, 0); /* after derivedmesh calls! */
 
@@ -3377,16 +3389,17 @@ static int mesh_to_grease_pencil_add_material(Main &bmain,
 
   if (stroke_color.has_value()) {
     copy_v4_v4(ma->gp_style->stroke_rgba, stroke_color.value());
-    srgb_to_linearrgb_v4(ma->gp_style->stroke_rgba, ma->gp_style->stroke_rgba);
+  }
+  else {
+    copy_v4_v4(ma->gp_style->stroke_rgba, float4(0.0f));
   }
 
   if (fill_color.has_value()) {
     copy_v4_v4(ma->gp_style->fill_rgba, fill_color.value());
-    srgb_to_linearrgb_v4(ma->gp_style->fill_rgba, ma->gp_style->fill_rgba);
   }
-
-  SET_FLAG_FROM_TEST(ma->gp_style->flag, stroke_color.has_value(), GP_MATERIAL_STROKE_SHOW);
-  SET_FLAG_FROM_TEST(ma->gp_style->flag, fill_color.has_value(), GP_MATERIAL_FILL_SHOW);
+  else {
+    copy_v4_v4(ma->gp_style->fill_rgba, float4(0.0f));
+  }
 
   return index;
 }
@@ -3448,14 +3461,14 @@ static void mesh_data_to_grease_pencil(const Mesh &mesh_eval,
                                        const float offset,
                                        const Array<int> &material_remap)
 {
-  grease_pencil.flag |= GREASE_PENCIL_STROKE_ORDER_3D;
+  using namespace bke::greasepencil;
 
   if (mesh_eval.edges_num <= 0) {
     return;
   }
 
-  bke::greasepencil::Layer &layer_line = grease_pencil.add_layer(DATA_("Lines"));
-  bke::greasepencil::Drawing *drawing_line = grease_pencil.insert_frame(layer_line, current_frame);
+  Layer &layer_line = grease_pencil.add_layer(DATA_("Lines"));
+  Drawing *drawing_line = grease_pencil.insert_frame(layer_line, current_frame);
 
   const Span<float3> mesh_positions = mesh_eval.vert_positions();
   const OffsetIndices<int> faces = mesh_eval.faces();
@@ -3463,68 +3476,85 @@ static void mesh_data_to_grease_pencil(const Mesh &mesh_eval,
   const Span<int> corner_verts = mesh_eval.corner_verts();
 
   if (generate_faces && !faces.is_empty()) {
-    bke::greasepencil::Layer &layer_fill = grease_pencil.add_layer(DATA_("Fills"));
-    bke::greasepencil::Drawing *drawing_fill = grease_pencil.insert_frame(layer_fill,
-                                                                          current_frame);
+    Layer &layer_fill = grease_pencil.add_layer(DATA_("Fills"));
+    Drawing *drawing_fill = grease_pencil.insert_frame(layer_fill, current_frame);
     const int fills_num = faces.size();
     const int fills_points_num = corner_verts.size();
 
     drawing_fill->strokes_for_write().resize(fills_points_num, fills_num);
-    bke::CurvesGeometry &curves_fill = drawing_fill->strokes_for_write();
-    MutableSpan<float3> positions_fill = curves_fill.positions_for_write();
-    MutableSpan<int> offsets_fill = curves_fill.offsets_for_write();
-    MutableSpan<bool> cyclic_fill = curves_fill.cyclic_for_write();
-    bke::SpanAttributeWriter<int> stroke_materials_fill =
-        curves_fill.attributes_for_write().lookup_or_add_for_write_span<int>(
-            "material_index", bke::AttrDomain::Curve);
-    bke::AttributeAccessor mesh_attributes = mesh_eval.attributes();
-    VArray<int> mesh_materials = *mesh_attributes.lookup_or_default(
+    bke::CurvesGeometry &curves = drawing_fill->strokes_for_write();
+    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+    MutableSpan<float3> positions = curves.positions_for_write();
+    MutableSpan<int> offsets = curves.offsets_for_write();
+
+    curves.fill_curve_types(CURVE_TYPE_POLY);
+    array_utils::gather(mesh_positions, corner_verts, positions);
+    array_utils::copy(faces_span, offsets);
+    attributes.add<bool>("cyclic", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
+
+    VArray<int> mesh_materials = *mesh_eval.attributes().lookup_or_default(
         "material_index", bke::AttrDomain::Face, 0);
+    bke::SpanAttributeWriter<int> material_indices =
+        attributes.lookup_or_add_for_write_only_span<int>("material_index",
+                                                          bke::AttrDomain::Curve);
+    threading::parallel_for(curves.curves_range(), 2048, [&](const IndexRange range) {
+      for (const int i : range) {
+        /* Increase material index by 1 to accommodate the stroke material. */
+        material_indices.span[i] = material_remap[mesh_materials[i]] + 1;
+      }
+    });
+    material_indices.finish();
 
-    curves_fill.fill_curve_types(CURVE_TYPE_POLY);
-    array_utils::gather(mesh_positions, corner_verts, positions_fill);
-    array_utils::copy(faces_span, offsets_fill);
-    cyclic_fill.fill(true);
+    bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_only_span<int>(
+        "fill_id", bke::AttrDomain::Curve);
+    threading::parallel_for(curves.curves_range(), 2048, [&](const IndexRange range) {
+      for (const int i : range) {
+        const int fill_id = i + 1;
+        fill_ids.span[i] = fill_id;
+      }
+    });
+    fill_ids.finish();
 
-    MutableSpan<int> material_span = stroke_materials_fill.span;
-    for (const int face_i : material_span.index_range()) {
-      /* Increase material index by 1 to accommodate the stroke material. */
-      material_span[face_i] = material_remap[mesh_materials[face_i]] + 1;
-    }
-    stroke_materials_fill.finish();
+    bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_or_add_for_write_span<bool>(
+        "hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
+    hide_stroke.finish();
   }
 
   Mesh *mesh_copied = BKE_mesh_copy_for_eval(mesh_eval);
   const Span<float3> normals = mesh_copied->vert_normals();
 
-  std::string unique_attribute_id = BKE_attribute_calc_unique_name(
+  std::string normals_attribute_name = BKE_attribute_calc_unique_name(
       AttributeOwner::from_id(&mesh_copied->id), "vertex_normal_for_conversion");
 
   mesh_copied->attributes_for_write().add(
-      unique_attribute_id,
+      normals_attribute_name,
       bke::AttrDomain::Point,
       bke::AttrType::Float3,
       bke::AttributeInitVArray(VArray<float3>::from_span(normals)));
 
   const int edges_num = mesh_copied->edges_num;
-  bke::CurvesGeometry curves = geometry::mesh_edges_to_curves_convert(
-      *mesh_copied, IndexRange(edges_num), {});
+  bke::CurvesGeometry curves_edges = geometry::mesh_edges_to_curves_convert(
+      *mesh_copied, IndexRange(edges_num), bke::attribute_filter_from_skip_ref({"radius"}));
 
-  MutableSpan<float3> curve_positions = curves.positions_for_write();
-  const VArraySpan<float3> point_normals = *curves.attributes().lookup<float3>(
-      unique_attribute_id);
-
+  MutableSpan<float3> curve_positions = curves_edges.positions_for_write();
+  const VArraySpan<float3> point_normals = *curves_edges.attributes().lookup<float3>(
+      normals_attribute_name);
   threading::parallel_for(curve_positions.index_range(), 8192, [&](const IndexRange range) {
     for (const int point_i : range) {
       curve_positions[point_i] += offset * point_normals[point_i];
     }
   });
+  curves_edges.attributes_for_write().remove(normals_attribute_name);
 
   BKE_defgroup_copy_list(&grease_pencil.vertex_group_names, &mesh_copied->vertex_group_names);
+  grease_pencil.vertex_group_active_index = mesh_copied->vertex_group_active_index;
 
-  curves.radius_for_write().fill(stroke_radius);
+  grease_pencil.flag |= GREASE_PENCIL_STROKE_ORDER_3D;
 
-  drawing_line->strokes_for_write() = std::move(curves);
+  bke::MutableAttributeAccessor attributes = curves_edges.attributes_for_write();
+  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(stroke_radius));
+
+  drawing_line->strokes_for_write() = std::move(curves_edges);
   drawing_line->tag_topology_changed();
 
   BKE_id_free(nullptr, mesh_copied);
@@ -3559,7 +3589,7 @@ static Object *convert_mesh_to_grease_pencil(Base &base,
   BKE_object_free_modifiers(newob, 0);
 
   GreasePencil *grease_pencil = BKE_grease_pencil_add(info.bmain, BKE_id_name(mesh_eval->id));
-  newob->data = grease_pencil;
+  newob->data = id_cast<ID *>(grease_pencil);
   newob->type = OB_GREASE_PENCIL;
 
   /* Reset object material array and count since currently the generic / grease pencil material
@@ -3630,7 +3660,7 @@ static Object *convert_curves_to_mesh(Base &base, ObjectConversionInfo &info, Ba
   if (mesh_eval || curves_eval) {
     newob = get_object_for_conversion(base, info, r_new_base);
     new_mesh = BKE_id_new<Mesh>(info.bmain, newob->id.name + 2);
-    newob->data = new_mesh;
+    newob->data = id_cast<ID *>(new_mesh);
     newob->type = OB_MESH;
   }
   else {
@@ -3659,6 +3689,8 @@ static Object *convert_curves_to_mesh(Base &base, ObjectConversionInfo &info, Ba
   BKE_object_free_derived_caches(newob);
   BKE_object_free_modifiers(newob, 0);
 
+  bke::mesh_ensure_active_uv_map(*new_mesh);
+
   return newob;
 }
 
@@ -3682,7 +3714,7 @@ static Object *convert_curves_to_grease_pencil(Base &base,
   if (grease_pencil_eval || curves_eval) {
     newob = get_object_for_conversion(base, info, r_new_base);
     new_grease_pencil = BKE_id_new<GreasePencil>(info.bmain, newob->id.name + 2);
-    newob->data = new_grease_pencil;
+    newob->data = id_cast<ID *>(new_grease_pencil);
     newob->type = OB_GREASE_PENCIL;
   }
   else {
@@ -3709,7 +3741,9 @@ static Object *convert_curves_to_grease_pencil(Base &base,
     BLI_assert(drawing != nullptr);
     drawing->strokes_for_write() = curves_eval->geometry.wrap();
     /* Default radius (1.0 unit) is too thick for converted strokes. */
-    drawing->radii_for_write().fill(0.01f);
+    bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+    attributes.remove("radius");
+    attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
 
     BKE_grease_pencil_nomain_to_grease_pencil(grease_pencil, new_grease_pencil);
     BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
@@ -3757,7 +3791,7 @@ static Object *convert_grease_pencil_to_mesh(Base &base,
     const Curves *curves_eval = geometry.get_curves();
     Curves *new_curves = BKE_id_new<Curves>(info.bmain, newob->id.name + 2);
 
-    newob->data = new_curves;
+    newob->data = id_cast<ID *>(new_curves);
     newob->type = OB_CURVES;
 
     new_curves->geometry.wrap() = curves_eval->geometry.wrap();
@@ -3772,7 +3806,7 @@ static Object *convert_grease_pencil_to_mesh(Base &base,
     /* Do not link `new_curves` to `bmain` since it's temporary. */
     Curves *new_curves = BKE_id_new_nomain<Curves>(newob->id.name + 2);
 
-    newob->data = new_curves;
+    newob->data = id_cast<ID *>(new_curves);
     newob->type = OB_CURVES;
 
     if (const Curves *curves_eval = geometry.get_curves()) {
@@ -3788,7 +3822,7 @@ static Object *convert_grease_pencil_to_mesh(Base &base,
         curves_id->geometry.wrap() = drawings[i].drawing.strokes();
         const int layer_index = drawings[i].layer_index;
         const bke::greasepencil::Layer *layer = grease_pencil->layers()[layer_index];
-        blender::float4x4 to_object = layer->to_object_space(*ob);
+        float4x4 to_object = layer->to_object_space(*ob);
         bke::CurvesGeometry &new_curves = curves_id->geometry.wrap();
         math::transform_points(to_object, new_curves.positions_for_write());
         geometries[i] = bke::GeometrySet::from_curves(curves_id);
@@ -3803,7 +3837,7 @@ static Object *convert_grease_pencil_to_mesh(Base &base,
     }
 
     Mesh *new_mesh = BKE_id_new<Mesh>(info.bmain, newob->id.name + 2);
-    newob->data = new_mesh;
+    newob->data = id_cast<ID *>(new_mesh);
     newob->type = OB_MESH;
 
     Mesh *mesh = bke::curve_to_wire_mesh(new_curves->geometry.wrap(), {});
@@ -3818,6 +3852,8 @@ static Object *convert_grease_pencil_to_mesh(Base &base,
 
     BKE_object_free_derived_caches(newob);
     BKE_object_free_modifiers(newob, 0);
+
+    bke::mesh_ensure_active_uv_map(*new_mesh);
   }
   else {
     BKE_reportf(
@@ -3847,11 +3883,11 @@ static Object *convert_font_to_curve_legacy_generic(Object *ob,
                                                     Object *newob,
                                                     ObjectConversionInfo &info)
 {
-  Curve *cu = static_cast<Curve *>(newob->data);
+  Curve *cu = id_cast<Curve *>(newob->data);
 
   Object *ob_eval = DEG_get_evaluated(info.depsgraph, ob);
   BKE_vfont_to_curve_ex(ob_eval,
-                        *static_cast<const Curve *>(ob_eval->data),
+                        *id_cast<const Curve *>(ob_eval->data),
                         FO_EDIT,
                         &cu->nurb,
                         nullptr,
@@ -3893,8 +3929,8 @@ static Object *convert_font_to_curve_legacy_generic(Object *ob,
     }
   }
 
-  LISTBASE_FOREACH (Nurb *, nu, &cu->nurb) {
-    nu->charidx = 0;
+  for (Nurb &nu : cu->nurb) {
+    nu.charidx = 0;
   }
 
   cu->flag &= ~CU_3D;
@@ -3922,15 +3958,15 @@ static Object *convert_font_to_curves(Base &base, ObjectConversionInfo &info, Ba
   Object *curve_ob = convert_font_to_curve_legacy_generic(ob, newob, info);
   BLI_assert(curve_ob->type == OB_CURVES_LEGACY);
 
-  Curve *legacy_curve_id = static_cast<Curve *>(curve_ob->data);
+  Curve *legacy_curve_id = id_cast<Curve *>(curve_ob->data);
   Curves *curves_nomain = bke::curve_legacy_to_curves(*legacy_curve_id);
 
   Curves *curves_id = BKE_curves_add(info.bmain, BKE_id_name(legacy_curve_id->id));
   curves_id->geometry.wrap() = curves_nomain->geometry.wrap();
 
-  blender::bke::curves_copy_parameters(*curves_nomain, *curves_id);
+  bke::curves_copy_parameters(*curves_nomain, *curves_id);
 
-  curve_ob->data = curves_id;
+  curve_ob->data = id_cast<ID *>(curves_id);
   curve_ob->type = OB_CURVES;
 
   BKE_id_free(nullptr, curves_nomain);
@@ -3938,19 +3974,20 @@ static Object *convert_font_to_curves(Base &base, ObjectConversionInfo &info, Ba
   return curve_ob;
 }
 
-/* Currently neither Grease Pencil nor legacy curves supports per-stroke/curve fill attribute, thus
- * the #fill argument applies on all strokes that are converted. */
-static void add_grease_pencil_materials_for_conversion(Main &bmain,
-                                                       ID &from_id,
-                                                       Object &gp_object,
-                                                       const bool use_fill)
+static void add_grease_pencil_materials_for_conversion(Main &bmain, ID &from_id, Object &gp_object)
 {
   short *len_p = BKE_id_material_len_p(&from_id);
   if (!len_p || *len_p == 0) {
+    Material *gp_material = BKE_grease_pencil_object_material_new(
+        &bmain, &gp_object, IFACE_("Empty Material"), nullptr);
+    gp_material->gp_style->fill_rgba[3] = 1.0f;
     return;
   }
   Material ***materials = BKE_id_material_array_p(&from_id);
   if (!materials || !(*materials)) {
+    Material *gp_material = BKE_grease_pencil_object_material_new(
+        &bmain, &gp_object, IFACE_("Empty Material"), nullptr);
+    gp_material->gp_style->fill_rgba[3] = 1.0f;
     return;
   }
   for (short i = 0; i < *len_p; i++) {
@@ -3964,14 +4001,33 @@ static void add_grease_pencil_materials_for_conversion(Main &bmain,
      * have anything to copy color information from. In those cases we still added an empty
      * material to keep the material index matching. */
     if (!orig_material) {
+      gp_material->gp_style->fill_rgba[3] = 1.0f;
       continue;
     }
 
+    copy_v4_v4(gp_material->gp_style->stroke_rgba, &orig_material->r);
     copy_v4_v4(gp_material->gp_style->fill_rgba, &orig_material->r);
-
-    SET_FLAG_FROM_TEST(gp_material->gp_style->flag, !use_fill, GP_MATERIAL_STROKE_SHOW);
-    SET_FLAG_FROM_TEST(gp_material->gp_style->flag, use_fill, GP_MATERIAL_FILL_SHOW);
   }
+}
+
+static void create_grease_pencil_fills(bke::greasepencil::Drawing &drawing)
+{
+  bke::CurvesGeometry &curves = drawing.strokes_for_write();
+  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+  VArray<int> materials = *attributes.lookup_or_default(
+      "material_index", bke::AttrDomain::Curve, 0);
+  bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_only_span<int>(
+      "fill_id", bke::AttrDomain::Curve);
+  /* Hide all the strokes, only show fills. */
+  attributes.add<bool>("hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
+
+  /* Mark all the strokes in the same material as the same fill. */
+  for (const int curve_i : curves.curves_range()) {
+    fill_ids.span[curve_i] = materials[curve_i] + 1;
+  }
+
+  fill_ids.finish();
 }
 
 static Object *convert_font_to_grease_pencil(Base &base,
@@ -3984,7 +4040,7 @@ static Object *convert_font_to_grease_pencil(Base &base,
   Object *curve_ob = convert_font_to_curve_legacy_generic(ob, newob, info);
   BLI_assert(curve_ob->type == OB_CURVES_LEGACY);
 
-  Curve *legacy_curve_id = static_cast<Curve *>(curve_ob->data);
+  Curve *legacy_curve_id = id_cast<Curve *>(curve_ob->data);
   Curves *curves_nomain = bke::curve_legacy_to_curves(*legacy_curve_id);
 
   GreasePencil *grease_pencil = BKE_grease_pencil_add(info.bmain,
@@ -3995,19 +4051,24 @@ static Object *convert_font_to_grease_pencil(Base &base,
 
   bke::greasepencil::Drawing *drawing = grease_pencil->insert_frame(layer, current_frame);
 
-  blender::bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
+  bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
 
   drawing->strokes_for_write() = std::move(curves);
   /* Default radius (1.0 unit) is too thick for converted strokes. */
-  drawing->radii_for_write().fill(0.01f);
-  drawing->tag_positions_changed();
+  bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+  attributes.remove("radius");
+  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
 
-  curve_ob->data = grease_pencil;
+  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
+  if (use_fill) {
+    create_grease_pencil_fills(*drawing);
+  }
+
+  curve_ob->data = id_cast<ID *>(grease_pencil);
   curve_ob->type = OB_GREASE_PENCIL;
   curve_ob->totcol = grease_pencil->material_array_num;
 
-  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
-  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob, use_fill);
+  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob);
 
   /* We don't need the intermediate font/curve data ID any more. */
   BKE_id_delete(info.bmain, legacy_curve_id);
@@ -4094,7 +4155,7 @@ static Object *convert_curves_legacy_to_grease_pencil(Base &base,
   Object *newob = get_object_for_conversion(base, info, r_new_base);
   BLI_assert(newob->type == OB_CURVES_LEGACY);
 
-  Curve *legacy_curve_id = static_cast<Curve *>(newob->data);
+  Curve *legacy_curve_id = id_cast<Curve *>(newob->data);
   Curves *curves_nomain = bke::curve_legacy_to_curves(*legacy_curve_id);
 
   GreasePencil *grease_pencil = BKE_grease_pencil_add(info.bmain,
@@ -4105,22 +4166,28 @@ static Object *convert_curves_legacy_to_grease_pencil(Base &base,
 
   bke::greasepencil::Drawing *drawing = grease_pencil->insert_frame(layer, current_frame);
 
-  blender::bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
+  bke::CurvesGeometry &curves = curves_nomain->geometry.wrap();
 
   drawing->strokes_for_write() = std::move(curves);
   /* Default radius (1.0 unit) is too thick for converted strokes. */
-  drawing->radii_for_write().fill(0.01f);
+  bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+  attributes.remove("radius");
+  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
   drawing->tag_positions_changed();
 
-  newob->data = grease_pencil;
+  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
+  if (use_fill) {
+    create_grease_pencil_fills(*drawing);
+  }
+
+  newob->data = id_cast<ID *>(grease_pencil);
   newob->type = OB_GREASE_PENCIL;
 
   /* Some functions like #BKE_id_material_len_p still uses Object::totcol so this value must be in
    * sync. */
   newob->totcol = grease_pencil->material_array_num;
 
-  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
-  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob, use_fill);
+  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob);
 
   /* For some reason this must be called, otherwise evaluated id_cow will still be the original
    * curves id (and that seems to only happen if "Keep Original" is enabled, and only with this
@@ -4162,7 +4229,7 @@ static Object *convert_mball_to_mesh(Base &base,
   base.flag &= ~BASE_SELECTED;
   base.object->base_flag &= ~BASE_SELECTED;
 
-  baseob = BKE_mball_basis_find(info.scene, ob);
+  baseob = BKE_mball_basis_find(*info.bmain, info.scene, ob);
 
   if (ob != baseob) {
     /* If mother-ball is converting it would be marked as done later. */
@@ -4174,7 +4241,7 @@ static Object *convert_mball_to_mesh(Base &base,
         info.bmain, info.depsgraph, info.scene, info.view_layer, &base, baseob);
     newob = (*r_new_base)->object;
 
-    MetaBall *mb = static_cast<MetaBall *>(newob->data);
+    MetaBall *mb = id_cast<MetaBall *>(newob->data);
     id_us_min(&mb->id);
 
     /* Find the evaluated mesh of the basis metaball object. */
@@ -4182,8 +4249,10 @@ static Object *convert_mball_to_mesh(Base &base,
     Mesh *mesh = BKE_mesh_new_from_object_to_bmain(info.bmain, info.depsgraph, object_eval, true);
 
     id_us_plus(&mesh->id);
-    newob->data = mesh;
+    newob->data = id_cast<ID *>(mesh);
     newob->type = OB_MESH;
+
+    bke::mesh_ensure_active_uv_map(*mesh);
 
     if (info.obact && (info.obact->type == OB_MBALL)) {
       *r_act_base = *r_new_base;
@@ -4266,7 +4335,7 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
    * This could be supported in the future, but it's a rare corner case
    * typically triggered only by Python scripts, see #147387. */
   for (const PointerRNA &ptr : selected_editable_bases) {
-    const Object *ob = ((const Base *)ptr.data)->object;
+    const Object *ob = (static_cast<const Base *>(ptr.data))->object;
     if (ob->mode & OB_MODE_EDIT) {
       BKE_report(
           op->reports, RPT_ERROR, "Cannot convert selected objects while they are in edit mode");
@@ -4282,14 +4351,14 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
 
       /* flag data that's not been edited (only needed for !keep_original) */
       if (ob->data) {
-        ((ID *)ob->data)->tag |= ID_TAG_DOIT;
+        ob->data->tag |= ID_TAG_DOIT;
       }
 
       /* possible metaball basis is not in this scene */
       if (ob->type == OB_MBALL && target == OB_MESH) {
         if (BKE_mball_is_basis(ob) == false) {
           Object *ob_basis;
-          ob_basis = BKE_mball_basis_find(scene, ob);
+          ob_basis = BKE_mball_basis_find(*bmain, scene, ob);
           if (ob_basis) {
             ob_basis->flag &= ~OB_DONE;
           }
@@ -4327,7 +4396,7 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
        * so that will be for later.
        * But at the very least, do not do that with linked IDs! */
       if ((!BKE_id_is_editable(bmain, &ob->id) ||
-           (ob->data && !BKE_id_is_editable(bmain, static_cast<ID *>(ob->data)))) &&
+           (ob->data && !BKE_id_is_editable(bmain, ob->data))) &&
           !keep_original)
       {
         keep_original = true;
@@ -4403,7 +4472,7 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
 
     /* Ensure new object has consistent material data with its new obdata. */
     if (newob) {
-      BKE_object_materials_sync_length(bmain, newob, static_cast<ID *>(newob->data));
+      BKE_object_materials_sync_length(bmain, newob, newob->data);
     }
 
     /* tag obdata if it was been changed */
@@ -4424,7 +4493,7 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
        * It is not enough to tag only geometry and rely on the curve parenting relations because
        * this relation is lost when curve is converted to mesh. */
       DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_TRANSFORM);
-      ((ID *)ob->data)->tag &= ~ID_TAG_DOIT; /* flag not to convert this datablock again */
+      ob->data->tag &= ~ID_TAG_DOIT; /* flag not to convert this datablock again */
     }
   }
 
@@ -4436,7 +4505,8 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
         if (ob_mball->type == OB_MBALL) {
           Object *ob_basis = nullptr;
           if (!BKE_mball_is_basis(ob_mball) &&
-              ((ob_basis = BKE_mball_basis_find(scene, ob_mball)) && (ob_basis->flag & OB_DONE)))
+              ((ob_basis = BKE_mball_basis_find(*bmain, scene, ob_mball)) &&
+               (ob_basis->flag & OB_DONE)))
           {
             base_free_and_unlink(bmain, scene, ob_mball);
           }
@@ -4465,7 +4535,7 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
     view_layer->basact = act_base;
   }
   else {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     if (Object *object = BKE_view_layer_active_object_get(view_layer)) {
       if (object->flag & OB_DONE) {
         WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, object);
@@ -4604,9 +4674,9 @@ static void object_add_sync_rigid_body(Main *bmain, Object *object_src, Object *
    */
   /* XXX: is 2) really a good measure here? */
   if (object_src->rigidbody_object || object_src->rigidbody_constraint) {
-    LISTBASE_FOREACH (Collection *, collection, &bmain->collections) {
-      if (BKE_collection_has_object(collection, object_src)) {
-        BKE_collection_object_add(bmain, collection, object_new);
+    for (Collection &collection : bmain->collections) {
+      if (BKE_collection_has_object(&collection, object_src)) {
+        BKE_collection_object_add(bmain, &collection, object_new);
       }
     }
   }
@@ -4651,10 +4721,10 @@ static Base *object_add_duplicate_internal(Main *bmain,
     return nullptr;
   }
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *base_src = BKE_view_layer_base_find(view_layer, ob);
   object_add_sync_base_collection(bmain, scene, view_layer, base_src, object_new);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *base_new = BKE_view_layer_base_find(view_layer, object_new);
   if (base_src && base_new) {
     object_add_sync_local_view(base_src, base_new);
@@ -4693,7 +4763,7 @@ Base *add_duplicate(
   // DAG_relations_tag_update(bmain);
 
   if (ob->data != nullptr) {
-    DEG_id_tag_update_ex(bmain, (ID *)ob->data, ID_RECALC_EDITORS);
+    DEG_id_tag_update_ex(bmain, ob->data, ID_RECALC_EDITORS);
   }
 
   BKE_main_id_newptr_and_tag_clear(bmain);
@@ -4708,7 +4778,7 @@ static wmOperatorStatus duplicate_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool linked = RNA_boolean_get(op->ptr, "linked");
-  const eDupli_ID_Flags dupflag = (linked) ? (eDupli_ID_Flags)0 : (eDupli_ID_Flags)U.dupflag;
+  const eDupli_ID_Flags dupflag = (linked) ? eDupli_ID_Flags(0) : eDupli_ID_Flags(U.dupflag);
 
   /* We need to handle that here ourselves, because we may duplicate several objects, in which case
    * we also want to remap pointers between those... */
@@ -4757,7 +4827,7 @@ static wmOperatorStatus duplicate_exec(bContext *C, wmOperator *op)
   }
 
   /* Sync the view layer. Everything else should not tag the view_layer out of sync. */
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   const Base *active_base = BKE_view_layer_active_base_get(view_layer);
   for (DuplicateObjectLink &link : object_base_links) {
     if (!link.object_new) {
@@ -4772,7 +4842,7 @@ static wmOperatorStatus duplicate_exec(bContext *C, wmOperator *op)
     }
 
     if (link.object_new->data) {
-      DEG_id_tag_update(static_cast<ID *>(link.object_new->data), 0);
+      DEG_id_tag_update(link.object_new->data, 0);
     }
 
     object_add_sync_local_view(link.base_src, base_new);
@@ -4819,7 +4889,7 @@ void OBJECT_OT_duplicate(wmOperatorType *ot)
   prop = RNA_def_enum(ot->srna,
                       "mode",
                       rna_enum_transform_mode_type_items,
-                      blender::ed::transform::TFM_TRANSLATION,
+                      ed::transform::TFM_TRANSLATION,
                       "Mode",
                       "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
@@ -4839,7 +4909,7 @@ static wmOperatorStatus object_add_named_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool linked = RNA_boolean_get(op->ptr, "linked");
-  const eDupli_ID_Flags dupflag = (linked) ? (eDupli_ID_Flags)0 : (eDupli_ID_Flags)U.dupflag;
+  const eDupli_ID_Flags dupflag = (linked) ? eDupli_ID_Flags(0) : eDupli_ID_Flags(U.dupflag);
 
   /* Find object, create fake base. */
 
@@ -4877,7 +4947,7 @@ static wmOperatorStatus object_add_named_exec(bContext *C, wmOperator *op)
 
   /* #object_add_duplicate_internal() doesn't deselect other objects,
    * unlike #object_add_common() or #BKE_view_layer_base_deselect_all(). */
-  base_deselect_all(scene, view_layer, nullptr, SEL_DESELECT);
+  base_deselect_all(*bmain, scene, view_layer, nullptr, SEL_DESELECT);
   base_select(basen, BA_SELECT);
   base_activate(C, basen);
 
@@ -4962,7 +5032,7 @@ static wmOperatorStatus object_transform_to_mouse_exec(bContext *C, wmOperator *
       WM_operator_properties_id_lookup_from_name_or_session_uid(bmain, op->ptr, ID_OB));
 
   if (!ob) {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     ob = BKE_view_layer_active_object_get(view_layer);
   }
 
@@ -5274,4 +5344,5 @@ void OBJECT_OT_update_shapes(wmOperatorType *ot)
 
 /** \} */
 
-}  // namespace blender::ed::object
+}  // namespace ed::object
+}  // namespace blender

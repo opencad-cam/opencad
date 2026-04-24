@@ -10,7 +10,11 @@
 
 #include <cstdio>
 
+namespace blender {
+
 struct ImFileColorSpace;
+
+extern const char *imb_file_extensions_openexr[];
 
 void imb_initopenexr();
 void imb_exitopenexr();
@@ -34,3 +38,5 @@ struct ImBuf *imb_load_filepath_thumbnail_openexr(const char *filepath,
                                                   ImFileColorSpace &r_colorspace,
                                                   size_t *r_width,
                                                   size_t *r_height);
+
+}  // namespace blender

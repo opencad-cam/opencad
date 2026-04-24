@@ -57,12 +57,11 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::clog
   PRIVATE bf::windowmanager
-  extern_curve_fit_nd
-  extern_fmtlib
+  PRIVATE bf::extern::curve_fit_nd
 )
 
 blender_add_lib(bf_editor_grease_pencil "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-add_dependencies(bf_editor_curves bf_rna)
+add_dependencies(bf_editor_grease_pencil bf_rna)
 
 if(WITH_GTESTS)
   set(TEST_SRC

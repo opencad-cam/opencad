@@ -26,7 +26,7 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
   endif()
 endif()
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 
 if(NOT EXECUTABLE_OUTPUT_PATH)
   set(FIRST_RUN TRUE)
@@ -57,42 +57,10 @@ endif()
 # -----------------------------------------------------------------------------
 # Set policy
 
-# see "cmake --help-policy CMP0003"
-# So library linking is more sane
-cmake_policy(SET CMP0003 NEW)
-
-# So BUILDINFO and BLENDERPATH strings are automatically quoted
-cmake_policy(SET CMP0005 NEW)
-
-# So syntax problems are errors
-cmake_policy(SET CMP0010 NEW)
-
-# Input directories must have CMakeLists.txt
-cmake_policy(SET CMP0014 NEW)
-
-# Silence draco warning on macOS, new policy works fine.
-if(POLICY CMP0068)
-  cmake_policy(SET CMP0068 NEW)
-endif()
-
-# find_package() uses <PackageName>_ROOT variables.
-if(POLICY CMP0074)
-  cmake_policy(SET CMP0074 NEW)
-endif()
 
 # find_package() uses uppercase <PackageName>_ROOT variables.
 if(POLICY CMP0144)
   cmake_policy(SET CMP0144 NEW)
-endif()
-
-# Install CODE|SCRIPT allow the use of generator expressions.
-if(POLICY CMP0087)
-  cmake_policy(SET CMP0087 NEW)
-endif()
-
-# Allow to specify language per file.
-if(POLICY CMP0119)
-  cmake_policy(SET CMP0119 NEW)
 endif()
 
 # Install DESTINATION paths are normalized.
@@ -136,33 +104,32 @@ endif()
 #
 # Keep in sync with: https://developer.blender.org/docs/handbook/building_blender/
 
-if(CMAKE_COMPILER_IS_GNUCC)
-  if("${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "11.0.0")
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  if("${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "14.0.0")
     message(FATAL_ERROR
-      "The minimum supported version of GCC is 11.0.0, found C compiler: "
+      "The minimum supported version of GCC is 14.0.0, found C compiler: "
       "${CMAKE_C_COMPILER_VERSION}"
     )
   endif()
-  if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS "11.0.0")
+  if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS "14.0.0")
     message(FATAL_ERROR
-      "The minimum supported version of GCC is 11.0.0, found C++ compiler: "
+      "The minimum supported version of GCC is 14.0.0, found C++ compiler: "
       "${CMAKE_CXX_COMPILER_VERSION}"
     )
   endif()
-elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  if(CMAKE_COMPILER_IS_GNUCC)
-    if("${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "8.0")
-      message(FATAL_ERROR
-        "The minimum supported version of CLANG is 8.0, found C compiler: "
-        "${CMAKE_C_COMPILER_VERSION}"
-      )
-    endif()
-    if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS "8.0")
-      message(FATAL_ERROR
-        "The minimum supported version of CLANG is 8.0, found C++ compiler: "
-        "${CMAKE_CXX_COMPILER_VERSION}"
-      )
-    endif()
+elseif(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_ID MATCHES "AppleClang")
+  # Only check regular clang version; Apple/Xcode clang uses a different versioning scheme
+  if("${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "17.0")
+    message(FATAL_ERROR
+      "The minimum supported version of CLANG is 17.0, found C compiler: "
+      "${CMAKE_C_COMPILER_VERSION}"
+    )
+  endif()
+  if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS "17.0")
+    message(FATAL_ERROR
+      "The minimum supported version of CLANG is 17.0, found C++ compiler: "
+      "${CMAKE_CXX_COMPILER_VERSION}"
+    )
   endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   if(MSVC_VERSION VERSION_LESS "1928")
@@ -209,12 +176,9 @@ if(WIN32)
   )
 endif()
 
-
-if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.19")
-  # This changes the default value from Off to On, but will still allow people to manually change
-  # this setting through their CMakeCache.txt if they desire to do so.
-  set(CMAKE_OPTIMIZE_DEPENDENCIES ON CACHE INTERNAL "")
-endif()
+# This changes the default value from Off to On, but will still allow people to manually change
+# this setting through their CMakeCache.txt if they desire to do so.
+set(CMAKE_OPTIMIZE_DEPENDENCIES ON CACHE INTERNAL "")
 
 # -----------------------------------------------------------------------------
 # Declare Options
@@ -285,7 +249,7 @@ mark_as_advanced(BUILDINFO_OVERRIDE_TIME)
 
 # CMAKE 3.28.2 has issues with the combination of PCH and unity builds, disable for now.
 # upstream ticket https://gitlab.kitware.com/cmake/cmake/-/issues/25650
-if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16" AND NOT ${CMAKE_VERSION} VERSION_EQUAL "3.28.2")
+if(NOT ${CMAKE_VERSION} VERSION_EQUAL "3.28.2")
   option(WITH_UNITY_BUILD "\
 Enable unity build for modules that support it to improve compile times.\n\
 WARNING: this option allows files to be built without all necessary headers!\n
@@ -305,7 +269,7 @@ Use pre-compiled headers to speed up compilation."
   )
   mark_as_advanced(WITH_COMPILER_PRECOMPILED_HEADERS)
 
-  if(WITH_CLANG_TIDY AND (CMAKE_COMPILER_IS_GNUCC OR APPLE))
+  if(WITH_CLANG_TIDY AND ((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR APPLE))
     if(WITH_COMPILER_PRECOMPILED_HEADERS)
       message(STATUS
         "Clang-Tidy and the current compiler's precompiled headers are incompatible, "
@@ -342,19 +306,8 @@ Use the systems bullet library (currently unsupported due to missing features in
   OFF
 )
 mark_as_advanced(WITH_SYSTEM_BULLET)
-option(WITH_OPENCOLORIO "Enable OpenColorIO color management" ON)
 
-set(_option_default ON)
-if(APPLE)
-  # There's no OpenXR runtime in sight for macOS, neither is code well
-  # tested there -> disable it by default.
-  set(_option_default OFF)
-endif()
-option(WITH_XR_OPENXR "Enable VR features through the OpenXR specification" ${_option_default})
-if(APPLE)
-  mark_as_advanced(WITH_XR_OPENXR)
-endif()
-unset(_option_default)
+option(WITH_XR_OPENXR "Enable VR features through the OpenXR specification" ON)
 
 option(WITH_GMP "Enable features depending on GMP (Exact Boolean)" ON)
 option(WITH_MANIFOLD "Enable features depending on Manifold (Fast Robust Boolean)" ON)
@@ -452,10 +405,8 @@ endif()
 
 if(UNIX AND NOT APPLE)
   option(WITH_SYSTEM_FREETYPE "Use the freetype library provided by the operating system" OFF)
-  option(WITH_SYSTEM_EIGEN3 "Use the systems Eigen3 library" OFF)
 else()
   set(WITH_SYSTEM_FREETYPE OFF)
-  set(WITH_SYSTEM_EIGEN3 OFF)
 endif()
 
 if((NOT WITH_PYTHON_MODULE) AND (
@@ -480,7 +431,6 @@ option(WITH_MOD_OCEANSIM "Enable Ocean Modifier" ON)
 option(WITH_UV_SLIM "SLIM UV unwrapping solver" ON)
 
 # Image format support
-option(WITH_IMAGE_OPENEXR "Enable OpenEXR Support (http://www.openexr.com)" ON)
 option(WITH_IMAGE_OPENJPEG "Enable OpenJpeg Support (http://www.openjpeg.org)" ON)
 option(WITH_IMAGE_CINEON "Enable CINEON and DPX Image Support" ON)
 option(WITH_IMAGE_WEBP "Enable WebP Image Support" ON)
@@ -500,6 +450,13 @@ option(WITH_MATERIALX "Enable MaterialX Support" ON)
 
 # Hydra render engine
 option(WITH_HYDRA "Enable Hydra render engine" ON)
+
+# Storm tests (via USD or Hydra)
+option(WITH_STORM_TESTS_VULKAN "\
+Enable Storm tests using the Vulkan backend. Requires WITH_HYDRA."
+  OFF
+)
+mark_as_advanced(WITH_STORM_TESTS_VULKAN)
 
 # RTL Languages, Complex Shaping, OpenType Features
 option(WITH_FRIBIDI "Enable features relying on fribidi" OFF)
@@ -602,7 +559,7 @@ endif()
 option(WITH_PYTHON_INSTALL "Copy system python into the blender install directory" ON)
 
 option(WITH_INSTALL_COPYRIGHT "\
-Copy the official Blender Authors's copyright.txt into the Blender install directory"
+Copy the official Blender Authors copyright.txt into the Blender install directory"
   OFF
 )
 mark_as_advanced(WITH_INSTALL_COPYRIGHT)
@@ -657,6 +614,10 @@ option(WITH_CYCLES_STANDALONE_GUI "Build Cycles standalone with GUI" OFF)
 option(WITH_CYCLES_PRECOMPUTE "Build Cycles data precomputation tool" OFF)
 
 option(WITH_CYCLES_HYDRA_RENDER_DELEGATE "Build Cycles Hydra render delegate" OFF)
+
+option(WITH_CYCLES_PARALLEL_DEVICE_KERNEL_BUILD
+       "Build Cycles kernels of difference devices in parallel (faster, but uses more memory)" OFF)
+mark_as_advanced(WITH_CYCLES_PARALLEL_DEVICE_KERNEL_BUILD)
 
 option(WITH_CYCLES_DEBUG_NAN "\
 Build Cycles with additional asserts for detecting NaNs and invalid values"
@@ -752,25 +713,19 @@ if(NOT APPLE AND NOT (WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64"))
 Enable Ahead-Of-Time compilation for Cycles oneAPI device"
     OFF
   )
-  option(WITH_CYCLES_ONEAPI_HOST_TASK_EXECUTION "\
-Switch target of oneAPI implementation from SYCL devices to Host Task (single thread on CPU). \
-This option is only for debugging purposes."
-    OFF
-  )
 
   # https://www.intel.com/content/www/us/en/develop/documentation/oneapi-dpcpp-cpp-compiler-dev-guide-and-reference/top/compilation/ahead-of-time-compilation.html
   # The supported devices can be retrieved from `ocloc` output when running
   # `ocloc compile --help`.
   # If you have completed optimization work and now want to enable AoT for new Intel devices,
   # update the optimization status in OneapiDevice::architecture_information.
-  set(CYCLES_ONEAPI_INTEL_BINARIES_ARCH dg2 mtl lnl bmg ptl CACHE STRING "\
+  set(CYCLES_ONEAPI_INTEL_BINARIES_ARCH dg2 mtl arl-h bmg lnl ptl CACHE STRING "\
 oneAPI Intel GPU architectures to build binaries for"
   )
   set(CYCLES_ONEAPI_SYCL_TARGETS spir64 spir64_gen CACHE STRING "\
 oneAPI targets to build AOT binaries for"
   )
 
-  mark_as_advanced(WITH_CYCLES_ONEAPI_HOST_TASK_EXECUTION)
   mark_as_advanced(CYCLES_ONEAPI_INTEL_BINARIES_ARCH)
   mark_as_advanced(CYCLES_ONEAPI_SYCL_TARGETS)
 endif()
@@ -784,9 +739,6 @@ option(WITH_LLVM "Use LLVM" OFF)
 option(LLVM_STATIC "Link with LLVM static libraries" OFF)
 mark_as_advanced(LLVM_STATIC)
 option(WITH_CLANG "Use Clang" OFF)
-
-option(WITH_MEM_JEMALLOC "Enable malloc replacement (http://www.canonware.com/jemalloc)" ON)
-mark_as_advanced(WITH_MEM_JEMALLOC)
 
 # currently only used for BLI_mempool
 option(WITH_MEM_VALGRIND "Enable extended valgrind support for better reporting" OFF)
@@ -807,14 +759,15 @@ Use Clang Tidy to analyze the source code \
   mark_as_advanced(WITH_CLANG_TIDY)
 endif()
 
-option(WITH_BOOST "Enable features depending on boost" ON)
 option(WITH_TBB "\
 Enable multi-threading. TBB is also required for features such as Cycles, OpenVDB and USD"
   ON
 )
 
-# TBB malloc is only supported on for windows currently
-if(WIN32 AND NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+# TBB malloc is only supported:
+# - On MS-Windows.
+# - On Unix/Linux.
+if((WIN32 AND NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64") OR (UNIX AND NOT APPLE))
   option(WITH_TBB_MALLOC_PROXY "Enable the TBB malloc replacement" ON)
 endif()
 
@@ -890,6 +843,13 @@ else()
   set(WITH_LINUX_OFFICIAL_RELEASE_TESTS OFF)
 endif()
 
+option(WITH_UI_TESTS_VULKAN "\
+Enable UI tests using the Vulkan backend. \
+Requires WITH_UI_TESTS and WITH_GPU_RENDER_TESTS_VULKAN."
+  ON
+)
+mark_as_advanced(WITH_UI_TESTS_VULKAN)
+
 option(WITH_TESTS_EXPERIMENTAL "\
 Run tests marked as experimental. \
 These tests are labeled as such due to long runtime, flakey results,
@@ -956,16 +916,12 @@ mark_as_advanced(
   WITH_GPU_SHADER_ASSERT
 )
 
-if(POLICY CMP0119)
-  option(WITH_GPU_SHADER_CPP_COMPILATION "\
-  Compiler shaders using C++. \
-  Allows testing Metal compilation on other platform and enable C++ IDE support for shader code"
-    OFF
-  )
-  mark_as_advanced(WITH_GPU_SHADER_CPP_COMPILATION)
-else()
-  set(WITH_GPU_SHADER_CPP_COMPILATION OFF)
-endif()
+option(WITH_GPU_SHADER_CPP_COMPILATION "\
+Compiler shaders using C++. \
+Allows testing shader compilation offline and enable C++ IDE support for shader code"
+  ON
+)
+mark_as_advanced(WITH_GPU_SHADER_CPP_COMPILATION)
 
 
 # OpenGL
@@ -998,7 +954,7 @@ endif()
 
 if(WIN32)
   getDefaultWindowsPrefixBase(CMAKE_GENERIC_PROGRAM_FILES)
-  set(CPACK_INSTALL_PREFIX ${CMAKE_GENERIC_PROGRAM_FILES}/${})
+  set(CPACK_INSTALL_PREFIX ${CMAKE_GENERIC_PROGRAM_FILES}/)
 endif()
 
 option(WITH_STRSIZE_DEBUG "\
@@ -1009,14 +965,10 @@ mark_as_advanced(WITH_STRSIZE_DEBUG)
 
 # Compiler tool-chain.
 if(UNIX AND NOT APPLE)
-  if(CMAKE_COMPILER_IS_GNUCC)
-    option(WITH_LINKER_GOLD "Use ld.gold linker which is usually faster than ld.bfd" ON)
-    mark_as_advanced(WITH_LINKER_GOLD)
-  endif()
-  if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-    option(WITH_LINKER_LLD "Use ld.lld linker which is usually faster than ld.gold" OFF)
+  if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
+    option(WITH_LINKER_LLD "Use ld.lld linker which is usually faster than ld.bfd" ON)
     mark_as_advanced(WITH_LINKER_LLD)
-    option(WITH_LINKER_MOLD "Use ld.mold linker which is usually faster than ld.gold & ld.lld" OFF)
+    option(WITH_LINKER_MOLD "Use ld.mold linker which is usually faster than ld.bfd & ld.lld" ON)
     mark_as_advanced(WITH_LINKER_MOLD)
   endif()
 endif()
@@ -1032,9 +984,9 @@ Can cause linking issues due to too large binary size."
   OFF
 )
 mark_as_advanced(WITH_COMPILER_ASAN_EXTERN)
-set_and_warn_incompatible(WITH_COMPILER_ASAN WITH_MEM_JEMALLOC OFF)
+# Note: Using TBBMALLOC allocator seems to be fully compatible with current sanitizers
+# (both CLANG/LLVM and GCC ones).
 set_and_warn_incompatible(WITH_COMPILER_ASAN WITH_MEM_VALGRIND OFF)
-set_and_warn_incompatible(WITH_COMPILER_ASAN_EXTERN WITH_MEM_JEMALLOC OFF)
 set_and_warn_incompatible(WITH_COMPILER_ASAN_EXTERN WITH_MEM_VALGRIND OFF)
 
 option(WITH_COMPILER_CODE_COVERAGE "\
@@ -1044,7 +996,7 @@ Build and link with code coverage support (only for Debug targets)."
 mark_as_advanced(WITH_COMPILER_CODE_COVERAGE)
 
 if(WITH_COMPILER_CODE_COVERAGE)
-  if(CMAKE_COMPILER_IS_GNUCC)
+  if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     set(_code_coverage_defaults "--coverage")
   elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
     get_filename_component(COMPILER_DIRECTORY ${CMAKE_CXX_COMPILER} DIRECTORY)
@@ -1090,7 +1042,7 @@ if(WITH_COMPILER_CODE_COVERAGE)
   endif()
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
   if(WITH_COMPILER_ASAN)
     set(_asan_defaults "\
 -fsanitize=address \
@@ -1106,6 +1058,9 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
 -fsanitize=vla-bound \
 -fno-sanitize=alignment \
 ")
+    # Make sure we don't omit frame pointers as the leak backtraces might not be able to
+    # correctly track the source otherwise.
+    string(APPEND _asan_defaults " -fno-omit-frame-pointer")
 
     if(MSVC)
       # clang-cl doesn't support all sanitizers, but leak and object-size give errors/warnings.
@@ -1113,13 +1068,13 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
     elseif(APPLE)
       # AppleClang doesn't support all sanitizers, but leak gives error.
       # Build type is not known for multi-config generator, so don't add object-size sanitizer.
-      if(CMAKE_BUILD_TYPE MATCHES "Debug" OR GENERATOR_IS_MULTI_CONFIG)
+      if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR GENERATOR_IS_MULTI_CONFIG)
         # Silence the warning that object-size is not effective in -O0.
         set(_asan_defaults "${_asan_defaults}")
       else()
         string(APPEND _asan_defaults " -fsanitize=object-size")
       endif()
-    elseif(CMAKE_COMPILER_IS_GNUCC)
+    elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
       string(APPEND _asan_defaults " -fsanitize=leak -fsanitize=object-size")
     else()
       string(APPEND _asan_defaults " -fsanitize=leak")
@@ -1155,7 +1110,7 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
       )
       unset(CLANG_LIB_DIR)
       mark_as_advanced(COMPILER_ASAN_LIBRARY)
-    elseif(CMAKE_COMPILER_IS_GNUCC)
+    elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
       find_library(
         COMPILER_ASAN_LIBRARY asan ${CMAKE_C_IMPLICIT_LINK_DIRECTORIES}
       )
@@ -1165,7 +1120,7 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
   endif()
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
   option(WITH_COMPILER_SHORT_FILE_MACRO "\
 Make paths in macros like __FILE__ relative to top level source and build directories."
     ON
@@ -1359,13 +1314,7 @@ set_and_warn_dependency(WITH_PYTHON WITH_CYCLES        OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_DRACO         OFF)
 set_and_warn_dependency(WITH_PYTHON WITH_MOD_FLUID     OFF)
 
-# enable boost for cycles, audaspace or i18n
-# otherwise if the user disabled
-
-set_and_warn_dependency(WITH_BOOST WITH_OPENVDB        OFF)
-set_and_warn_dependency(WITH_BOOST WITH_USD            OFF)
 if(WITH_CYCLES)
-  set_and_warn_dependency(WITH_BOOST   WITH_CYCLES_OSL          OFF)
   set_and_warn_dependency(WITH_PUGIXML WITH_CYCLES_OSL          OFF)
   set_and_warn_dependency(WITH_PUGIXML WITH_CYCLES_STANDALONE   OFF)
   set_and_warn_dependency(WITH_CYCLES_OSL WITH_CYCLES_TEST_OSL  OFF)
@@ -1378,11 +1327,6 @@ set_and_warn_dependency(WITH_TBB WITH_MOD_FLUID         OFF)
 
 # NanoVDB requires OpenVDB to convert the data structure
 set_and_warn_dependency(WITH_OPENVDB WITH_NANOVDB       OFF)
-
-# OpenVDB, Alembic and OSL uses `half` or `imath` from OpenEXR
-set_and_warn_dependency(WITH_IMAGE_OPENEXR WITH_OPENVDB OFF)
-set_and_warn_dependency(WITH_IMAGE_OPENEXR WITH_ALEMBIC OFF)
-set_and_warn_dependency(WITH_IMAGE_OPENEXR WITH_CYCLES_OSL OFF)
 
 # Hydra requires USD.
 set_and_warn_dependency(WITH_USD WITH_HYDRA OFF)
@@ -1426,7 +1370,7 @@ endif()
 if(WITH_AUDASPACE)
   if(NOT WITH_SYSTEM_AUDASPACE)
     set(AUDASPACE_C_INCLUDE_DIRS
-      "${CMAKE_SOURCE_DIR}/extern/audaspace/bindings/C"
+      "${CMAKE_SOURCE_DIR}/extern/audaspace/include"
       "${CMAKE_BINARY_DIR}/extern/audaspace"
     )
     set(AUDASPACE_PY_INCLUDE_DIRS
@@ -1465,11 +1409,13 @@ if(WITH_PYTHON)
   # Do this before main 'platform_*' checks,
   # because UNIX will search for the old Python paths which may not exist.
   # giving errors about missing paths before this case is met.
-  if(DEFINED PYTHON_VERSION AND "${PYTHON_VERSION}" VERSION_LESS "3.11")
-    message(
-      FATAL_ERROR
-      "At least Python 3.11 is required to build, but found Python ${PYTHON_VERSION}"
-    )
+  if(DEFINED PYTHON_VERSION)
+    if("${PYTHON_VERSION}" VERSION_LESS "3.13")
+      message(
+        FATAL_ERROR
+        "At least Python 3.13 is required to build, but found Python ${PYTHON_VERSION}"
+      )
+    endif()
   endif()
 endif()
 
@@ -1484,18 +1430,19 @@ set(WITH_BINRELOC OFF)
 set(EXETYPE "")
 
 # C/C++ flags
-set(PLATFORM_CFLAGS)
+set(PLATFORM_CFLAGS "")
 
 # these are added to later on.
-set(C_WARNINGS)
-set(CXX_WARNINGS)
+set(C_WARNINGS "")
+set(CXX_WARNINGS "")
 
 # NOTE: These flags are intended for situations where it's impractical to
 # suppress warnings by modifying the code or for code which is maintained externally.
 # For GCC this typically means adding `-Wno-*` arguments to negate warnings
 # that are useful in the general case.
-set(C_REMOVE_STRICT_FLAGS)
-set(CXX_REMOVE_STRICT_FLAGS)
+set(C_REMOVE_STRICT_FLAGS "")    # C-only.
+set(CXX_REMOVE_STRICT_FLAGS "")  # C++-only.
+set(C_AND_CXX_REMOVE_STRICT_FLAGS "")   # Shared C & C++.
 
 # Libraries to link to targets in setup_platform_linker_libs
 set(PLATFORM_LINKLIBS "")
@@ -1509,7 +1456,7 @@ set(PLATFORM_LINKFLAGS_RELEASE "")
 set(PLATFORM_LINKFLAGS_EXECUTABLE "")
 
 if(WITH_COMPILER_CODE_COVERAGE)
-  if(CMAKE_COMPILER_IS_GNUCC)
+  if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     # GCC only supports this on debug builds.
     string(APPEND CMAKE_C_FLAGS_DEBUG " ${COMPILER_CODE_COVERAGE_CFLAGS}")
     string(APPEND CMAKE_CXX_FLAGS_DEBUG " ${COMPILER_CODE_COVERAGE_CXXFLAGS}")
@@ -1520,7 +1467,7 @@ if(WITH_COMPILER_CODE_COVERAGE)
   endif()
 endif()
 
-if(NOT CMAKE_BUILD_TYPE MATCHES "Release")
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
   if(WITH_COMPILER_ASAN)
     if(NOT APPLE)
       # Avoid passing address sanitizer compiler flags to `try_compile`.
@@ -1598,10 +1545,10 @@ endif()
 # Add the default compiler SIMD flags if enabled
 #
 if(WITH_COMPILER_SIMD)
-  set(COMPILER_SSE42_FLAG)
-  get_sse_flags(COMPILER_SSE42_FLAG)
-  string(APPEND CMAKE_CXX_FLAGS " ${COMPILER_SSE42_FLAG}")
-  string(APPEND CMAKE_C_FLAGS " ${COMPILER_SSE42_FLAG}")
+  set(COMPILER_SIMD_FLAGS "")
+  get_compiler_simd_flags(COMPILER_SIMD_FLAGS)
+  string(APPEND CMAKE_CXX_FLAGS " ${COMPILER_SIMD_FLAGS}")
+  string(APPEND CMAKE_C_FLAGS " ${COMPILER_SIMD_FLAGS}")
 endif()
 
 # Enable SSE2NEON SIMD support if found.
@@ -1630,18 +1577,18 @@ if(WITH_IMAGE_OPENJPEG)
   endif()
 endif()
 
-if(NOT WITH_SYSTEM_EIGEN3)
-  set(EIGEN3_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/Eigen3)
-endif()
-if (WITH_COMPILER_ASAN AND NOT WITH_COMPILER_ASAN_EXTERN)
+if(WITH_COMPILER_ASAN AND NOT WITH_COMPILER_ASAN_EXTERN)
   # See also:
-  #   - `EIGEN_MALLOC_ALREADY_ALIGNED` definition and usages in extern/Eigen3/Eigen/src/Core/util/Memory.h
-  #   - Report: https://projects.blender.org/blender/blender/issues/152010
+  # - `EIGEN_MALLOC_ALREADY_ALIGNED` definition and usages in
+  #   `./extern/Eigen3/Eigen/src/Core/util/Memory.h`
+  # - Report: https://projects.blender.org/blender/blender/issues/152010
   #
-  # NOTE: It seems to only affect GCC and its sanitizer library - but best be on the safe side here,
-  #       and do that for all compilers and systems.
-  message(DEBUG "Forcing Eigen to use their own allocator code because `WITH_COMPILER_ASAN` is enabled but "
-                "`WITH_COMPILER_ASAN_EXTERN` is disabled, which can cause mismatch usages of Eigen allocators." )
+  # NOTE: It seems to only affect GCC and its sanitizer library - but best
+  #       be on the safe side here, and do that for all compilers and systems.
+  message(DEBUG
+    "Forcing Eigen to use their own allocator code because `WITH_COMPILER_ASAN` is enabled but "
+    "`WITH_COMPILER_ASAN_EXTERN` is disabled, which can cause mismatch usages of Eigen allocators."
+  )
   add_definitions(-DEIGEN_MALLOC_ALREADY_ALIGNED=0)
 endif()
 
@@ -1688,7 +1635,7 @@ if(WITH_LIBMV OR WITH_GTESTS)
       message(FATAL_ERROR "System wide Gflags is requested but was not found")
     endif()
     # `FindGflags` does not define this, and we are not even sure what to use here.
-    set(GFLAGS_DEFINES)
+    set(GFLAGS_DEFINES "")
   else()
     set(GFLAGS_DEFINES
       -DGFLAGS_DLL_DEFINE_FLAG=
@@ -1706,7 +1653,7 @@ if(WITH_LIBMV OR WITH_GTESTS)
       message(FATAL_ERROR "System wide Glog is requested but was not found")
     endif()
     # `FindGlog` does not define this, and we are not even sure what to use here.
-    set(GLOG_DEFINES)
+    set(GLOG_DEFINES "")
   else()
     set(GLOG_DEFINES
       -DGOOGLE_GLOG_DLL_DECL=
@@ -1783,7 +1730,7 @@ Keep at '0' to automatically compute optimal values for each build."
     set(_link_mem 10000)
     if(WITH_COMPILER_ASAN)
       set(_link_mem 30000)
-    elseif("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+    elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
       set(_link_mem 20000)
     endif()
 
@@ -1806,8 +1753,8 @@ Keep at '0' to automatically compute optimal values for each build."
       "  NINJA_MAX_NUM_PARALLEL_LINK_JOBS: "
       "max concurrent linking jobs (computed): ${_link_jobs}"
     )
-    set(_link_mem)
-    set(_link_jobs_max)
+    unset(_link_mem)
+    unset(_link_jobs_max)
   endif()
   set_property(
     GLOBAL APPEND PROPERTY
@@ -1827,10 +1774,16 @@ Keep at '0' to automatically compute optimal values for each build."
     # Heuristics: Maximum amount of memory needed per heavy compile task.
     # Note: These values are purposely over-estimated by 10-15% at least, to account
     #       for other types of jobs' memory usage, other system memory usages, etc.
+    # NOTE: Since CMake 4.2, specific files can be put into specific jobs, which
+    #       allows for a more optimal usage of available RAM & CPU resources.
     set(_compile_heavy_mem 2000)
     if(WITH_COMPILER_ASAN)
-      set(_compile_heavy_mem 15000)
-    elseif("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+      if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.2.0")
+        set(_compile_heavy_mem 6000)
+      else()
+        set(_compile_heavy_mem 15000)
+      endif()
+    elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
       set(_compile_heavy_mem 2000)
     endif()
 
@@ -1857,8 +1810,8 @@ Keep at '0' to automatically compute optimal values for each build."
       "max concurrent heavy compile jobs (computed): ${_compile_heavy_jobs}"
     )
 
-    set(_compile_heavy_mem)
-    set(_compile_heavy_jobs_max)
+    unset(_compile_heavy_mem)
+    unset(_compile_heavy_jobs_max)
   endif()
   set_property(
     GLOBAL APPEND PROPERTY
@@ -1887,10 +1840,16 @@ Keep at '0' to automatically compute optimal values for each build."
     # values in ASAN build cases is the best that can be done.
     # Alternative solution would be to put several whole targets (like `bf_blenkernel`)
     # into the heavy pool, but that is likely even worse of a workaround.
+    # NOTE: Since CMake 4.2, specific files can be put into specific jobs, which
+    #       allows for a more optimal usage of available RAM & CPU resources.
     set(_compile_mem 500)
     if(WITH_COMPILER_ASAN)
-      set(_compile_mem 4000)
-    elseif("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
+     if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.2.0")
+        set(_compile_mem 1000)
+      else()
+        set(_compile_mem 4000)
+      endif()
+    elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
       set(_compile_mem 500)
     endif()
 
@@ -1913,8 +1872,8 @@ Keep at '0' to automatically compute optimal values for each build."
       "  NINJA_MAX_NUM_PARALLEL_COMPILE_JOBS: "
       "max concurrent regular compile jobs (computed): ${_compile_jobs}"
     )
-    set(_compile_mem)
-    set(_compile_jobs_max)
+    unset(_compile_mem)
+    unset(_compile_jobs_max)
   endif()
   set_property(
     GLOBAL APPEND PROPERTY
@@ -1922,18 +1881,18 @@ Keep at '0' to automatically compute optimal values for each build."
   )
   set(CMAKE_JOB_POOL_COMPILE compile_job_pool)
 
-  set(_link_jobs)
-  set(_compile_heavy_jobs)
-  set(_compile_jobs)
-  set(_NUM_CORES)
-  set(_TOT_MEM)
+  unset(_link_jobs)
+  unset(_compile_heavy_jobs)
+  unset(_compile_jobs)
+  unset(_NUM_CORES)
+  unset(_TOT_MEM)
 endif()
 
 
 # -----------------------------------------------------------------------------
 # Extra Compile Flags
 
-if(CMAKE_COMPILER_IS_GNUCC)
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
 
   add_check_c_compiler_flags(
     C_WARNINGS
@@ -2067,18 +2026,18 @@ if(CMAKE_COMPILER_IS_GNUCC)
 
   # flags to undo strict flags
   add_check_c_compiler_flags(
-    C_REMOVE_STRICT_FLAGS
+    C_AND_CXX_REMOVE_STRICT_FLAGS
 
-    C_WARN_NO_DEPRECATED_DECLARATIONS -Wno-deprecated-declarations
-    C_WARN_NO_UNUSED_PARAMETER -Wno-unused-parameter
-    C_WARN_NO_UNUSED_FUNCTION -Wno-unused-function
-    C_WARN_NO_TYPE_LIMITS -Wno-type-limits
-    C_WARN_NO_INT_IN_BOOL_CONTEXT -Wno-int-in-bool-context
-    C_WARN_NO_FORMAT -Wno-format
-    C_WARN_NO_SWITCH -Wno-switch
-    C_WARN_NO_UNUSED_VARIABLE -Wno-unused-variable
-    C_WARN_NO_UNUSED_VARIABLE -Wno-uninitialized
-    C_WARN_NO_IMPLICIT_FALLTHROUGH -Wno-implicit-fallthrough
+    C_AND_CXX_WARN_NO_DEPRECATED_DECLARATIONS -Wno-deprecated-declarations
+    C_AND_CXX_WARN_NO_UNUSED_PARAMETER -Wno-unused-parameter
+    C_AND_CXX_WARN_NO_UNUSED_FUNCTION -Wno-unused-function
+    C_AND_CXX_WARN_NO_TYPE_LIMITS -Wno-type-limits
+    C_AND_CXX_WARN_NO_INT_IN_BOOL_CONTEXT -Wno-int-in-bool-context
+    C_AND_CXX_WARN_NO_FORMAT -Wno-format
+    C_AND_CXX_WARN_NO_SWITCH -Wno-switch
+    C_AND_CXX_WARN_NO_UNUSED_VARIABLE -Wno-unused-variable
+    C_AND_CXX_WARN_NO_UNINITIALIZED -Wno-uninitialized
+    C_AND_CXX_WARN_NO_IMPLICIT_FALLTHROUGH -Wno-implicit-fallthrough
   )
 
 
@@ -2088,27 +2047,46 @@ if(CMAKE_COMPILER_IS_GNUCC)
     CXX_WARN_NO_CLASS_MEMACCESS -Wno-class-memaccess
     CXX_WARN_NO_COMMENT -Wno-comment
     CXX_WARN_NO_UNUSED_TYPEDEFS -Wno-unused-local-typedefs
-    CXX_WARN_NO_UNUSED_VARIABLE -Wno-unused-variable
-    CXX_WARN_NO_UNINITIALIZED -Wno-uninitialized
     CXX_WARN_NO_REORDER -Wno-reorder
   )
 
 
   if(NOT APPLE)
     add_check_c_compiler_flags(
-      C_REMOVE_STRICT_FLAGS
-      C_WARN_NO_ERROR_UNUSED_BUT_SET_VARIABLE -Wno-error=unused-but-set-variable
+      C_AND_CXX_REMOVE_STRICT_FLAGS
+      C_AND_CXX_WARN_NO_ERROR_UNUSED_BUT_SET_VARIABLE -Wno-error=unused-but-set-variable
     )
   endif()
 
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  # Matches both "Clang" & "AppleClang" on macOS.
+  # Matches both "Clang", "AppleClang" on macOS and "clang-cl" on Windows.
+
+  if(MSVC_CLANG)
+    # it's a bit odd to remove this flag and then add it right back in
+    # but order matters here, the C/CXX warn flags come before the standard
+    # W3 flag, which will reset all flags to their default state.
+    remove_c_and_cxx_flag("/W3")
+    # From the clang-cl docs
+    # `/W0                     Disable all warnings`
+    # `/W1                     Enable -Wall`
+    # `/W2                     Enable -Wall`
+    # `/W3                     Enable -Wall`
+    # `/W4                     Enable -Wall and -Wextra`
+    # `/Wall                   Enable -Weverything`
+    #
+    # `-Wall` will turn into /Wall for clang-cl which in turn will enable `-Weverything`
+    # which is just too much, pass /W3 so we end up on the same flag configuration
+    # as the other platforms.
+    set(_Wall_flag /W3)
+  else()
+    set(_Wall_flag -Wall)
+  endif()
 
   add_check_c_compiler_flags(
     C_WARNINGS
 
     # Strange, clang complains these are not supported, but then uses them.
-    C_WARN_ALL -Wall
+    C_WARN_ALL ${_Wall_flag}
     C_WARN_ERROR_IMPLICIT_FUNCTION_DECLARATION -Werror=implicit-function-declaration
     C_WARN_ERROR_RETURN_TYPE -Werror=return-type
     C_WARN_NO_AUTOLOGICAL_COMPARE -Wno-tautological-compare
@@ -2126,9 +2104,7 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
   add_check_cxx_compiler_flags(
     CXX_WARNINGS
 
-    CXX_WARN_ALL -Wall
-    # Using C++20 features while having C++17 as the project language isn't allowed by MSVC.
-    CXX_CXX20_DESIGNATOR -Wc++20-designator
+    CXX_WARN_ALL ${_Wall_flag}
 
     CXX_WARN_NO_AUTOLOGICAL_COMPARE -Wno-tautological-compare
     CXX_WARN_NO_UNKNOWN_PRAGMAS -Wno-unknown-pragmas
@@ -2156,331 +2132,33 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
 
     CXX_WARN_ERROR_UNGUARDED_AVAILABILITY_NEW -Werror=unguarded-availability-new
   )
-  if(MSVC_CLANG)
-    # clang-cl produces an unhealthy amount of warnings in its default
-    # configuration as it for reasons unknown decided to enable all
-    # warnings known to mankind. Resulting in a 5.5GB build log containing
-    # well over 11 million warnings. The code below disables every single
-    # one of them indiscriminately. Someone with time on their hands,
-    # could/should go over these and either fix them or describe why we
-    # would want to disable the warning. The list below contains both C
-    # and C++ warnings for all warnings since clang has seemingly no
-    # easy way to tell if something is a C or C++ specific warning and
-    # manually auditing every single one of them just isn't in the cards
-    # right now.
-
-    # /W3 is being removed, then added back again, this is because order
-    # matters for clang and these flags are being placed before the
-    # CMAKE_[LANGUAGE]_FLAGS which normally contain /W3, so we would
-    # disable certain warnings here only for them to be re-enabled by /W3
-    # later on.
-    remove_cc_flag("/W3")
-
-    add_check_c_compiler_flags(
-      C_WARNINGS
-      C_WARN_CLANG_CL_W3 /W3
-      # The number behind each warn is the number of unique warning were
-      # generated on 2024-04-24 (d2be9cecc28a03ff1f799e8c63f1f9f8eda7cce3)
-      # especially the ones in the single and low double digits are likely
-      # genuine problems that can be investigated.
-      C_WARN_CLANG_CL_C++98_COMPAT -Wno-c++98-compat # 352692
-      C_WARN_CLANG_CL_OLD_STYLE_CAST -Wno-old-style-cast # 178608
-      C_WARN_CLANG_CL_UNSAFE_BUFFER_USAGE -Wno-unsafe-buffer-usage # 89032
-      C_WARN_CLANG_CL_MISSING_PROTOTYPES -Wno-missing-prototypes # 25587
-      C_WARN_CLANG_CL_SIGN_CONVERSION -Wno-sign-conversion # 20109
-      C_WARN_CLANG_CL_MISSING_FIELD_INITIALIZERS -Wno-missing-field-initializers # 20060
-      C_WARN_CLANG_CL_EXTRA_SEMI -Wno-extra-semi # 12513
-      C_WARN_CLANG_CL_LANGUAGE_EXTENSION_TOKEN -Wno-language-extension-token # 11032
-      C_WARN_CLANG_CL_IMPLICIT_FLOAT_CONVERSION -Wno-implicit-float-conversion # 11003
-      C_WARN_CLANG_CL_C++98_COMPAT_PEDANTIC -Wno-c++98-compat-pedantic # 10336
-      C_WARN_CLANG_CL_IMPLICIT_INT_FLOAT_CONVERSION -Wno-implicit-int-float-conversion # 7354
-      C_WARN_CLANG_CL_DOUBLE_PROMOTION -Wno-double-promotion # 7350
-      C_WARN_CLANG_CL_PRE_C++17_COMPAT -Wno-pre-c++17-compat # 7303
-      C_WARN_CLANG_CL_SHORTEN_64_TO_32 -Wno-shorten-64-to-32 # 7085
-      C_WARN_CLANG_CL_C++98_COMPAT_LOCAL_TYPE_TEMPLATE_ARGS -Wno-c++98-compat-local-type-template-args # 6906
-      C_WARN_CLANG_CL_RESERVED_IDENTIFIER -Wno-reserved-identifier # 5886
-      C_WARN_CLANG_CL_CAST_ALIGN -Wno-cast-align # 5513
-      C_WARN_CLANG_CL_DOCUMENTATION -Wno-documentation # 5107
-      C_WARN_CLANG_CL_DISABLED_MACRO_EXPANSION -Wno-disabled-macro-expansion # 4449
-      C_WARN_CLANG_CL_EXTRA_SEMI_STMT -Wno-extra-semi-stmt # 4349
-      C_WARN_CLANG_CL_ZERO_AS_NULL_POINTER_CONSTANT -Wno-zero-as-null-pointer-constant # 3209
-      C_WARN_CLANG_CL_FLOAT_CONVERSION -Wno-float-conversion # 2869
-      C_WARN_CLANG_CL_RESERVED_MACRO_IDENTIFIER -Wno-reserved-macro-identifier # 2862
-      C_WARN_CLANG_CL_CAST_FUNCTION_TYPE_STRICT -Wno-cast-function-type-strict # 2663
-      C_WARN_CLANG_CL_FLOAT_EQUAL -Wno-float-equal # 2153
-      C_WARN_CLANG_CL_IMPLICIT_INT_CONVERSION -Wno-implicit-int-conversion # 2117
-      C_WARN_CLANG_CL_SHADOW -Wno-shadow # 2068
-      C_WARN_CLANG_CL_SHADOW_FIELD_IN_CONSTRUCTOR -Wno-shadow-field-in-constructor # 1829
-      C_WARN_CLANG_CL_CAST_QUAL -Wno-cast-qual # 1742
-      C_WARN_CLANG_CL_PRE_C++14_COMPAT -Wno-pre-c++14-compat # 1569
-      C_WARN_CLANG_CL_GLOBAL_CONSTRUCTORS -Wno-global-constructors # 1402
-      C_WARN_CLANG_CL_SWITCH_ENUM -Wno-switch-enum # 973
-      C_WARN_CLANG_CL_EXIT_TIME_DESTRUCTORS -Wno-exit-time-destructors # 940
-      C_WARN_CLANG_CL_CTAD_MAYBE_UNSUPPORTED -Wno-ctad-maybe-unsupported # 891
-      C_WARN_CLANG_CL_UNDEFINED_FUNC_TEMPLATE -Wno-undefined-func-template # 863
-      C_WARN_CLANG_CL_C++98_COMPAT_EXTRA_SEMI -Wno-c++98-compat-extra-semi # 848
-      C_WARN_CLANG_CL_CAST_FUNCTION_TYPE -Wno-cast-function-type # 807
-      C_WARN_CLANG_CL_NULLABILITY_EXTENSION -Wno-nullability-extension # 602
-      C_WARN_CLANG_CL_SHADOW_FIELD -Wno-shadow-field # 585
-      C_WARN_CLANG_CL_CONDITIONAL_UNINITIALIZED -Wno-conditional-uninitialized # 555
-      C_WARN_CLANG_CL_UNUSED_PARAMETER -Wno-unused-parameter # 539
-      C_WARN_CLANG_CL_SUGGEST_DESTRUCTOR_OVERRIDE -Wno-suggest-destructor-override # 356
-      C_WARN_CLANG_CL_SHADOW_UNCAPTURED_LOCAL -Wno-shadow-uncaptured-local # 355
-      C_WARN_CLANG_CL_UNUSED_MACROS -Wno-unused-macros # 289
-      C_WARN_CLANG_CL_COVERED_SWITCH_DEFAULT -Wno-covered-switch-default # 233
-      C_WARN_CLANG_CL_SIGNED_ENUM_BITFIELD -Wno-signed-enum-bitfield # 229
-      C_WARN_CLANG_CL_DECLARATION_AFTER_STATEMENT -Wno-declaration-after-statement # 228
-      C_WARN_CLANG_CL_IMPLICIT_FALLTHROUGH -Wno-implicit-fallthrough # 164
-      C_WARN_CLANG_CL_NON_VIRTUAL_DTOR -Wno-non-virtual-dtor # 161
-      C_WARN_CLANG_CL_NESTED_ANON_TYPES -Wno-nested-anon-types # 140
-      C_WARN_CLANG_CL_GNU_ZERO_VARIADIC_MACRO_ARGUMENTS -Wno-gnu-zero-variadic-macro-arguments # 132
-      C_WARN_CLANG_CL_UNREACHABLE_CODE_BREAK -Wno-unreachable-code-break # 115
-      C_WARN_CLANG_CL_INCONSISTENT_MISSING_DESTRUCTOR_OVERRIDE -Wno-inconsistent-missing-destructor-override # 104
-      C_WARN_CLANG_CL_FORMAT_PEDANTIC -Wno-format-pedantic # 97
-      C_WARN_CLANG_CL_NONPORTABLE_SYSTEM_INCLUDE_PATH -Wno-nonportable-system-include-path # 95
-      C_WARN_CLANG_CL_UNDEF -Wno-undef # 94
-      C_WARN_CLANG_CL_IGNORED_QUALIFIERS -Wno-ignored-qualifiers # 93
-      C_WARN_CLANG_CL_USED_BUT_MARKED_UNUSED -Wno-used-but-marked-unused # 83
-      C_WARN_CLANG_CL_HEADER_HYGIENE -Wno-header-hygiene # 79
-      C_WARN_CLANG_CL_CHAR_SUBSCRIPTS -Wno-char-subscripts # 76
-      C_WARN_CLANG_CL_UNREACHABLE_CODE_RETURN -Wno-unreachable-code-return # 71
-      C_WARN_CLANG_CL_UNUSED_TEMPLATE -Wno-unused-template # 66
-      C_WARN_CLANG_CL_GNU_ANONYMOUS_STRUCT -Wno-gnu-anonymous-struct # 63
-      C_WARN_CLANG_CL_DEPRECATED_COPY_WITH_USER_PROVIDED_DTOR -Wno-deprecated-copy-with-user-provided-dtor # 62
-      C_WARN_CLANG_CL_INCONSISTENT_MISSING_OVERRIDE -Wno-inconsistent-missing-override # 54
-      C_WARN_CLANG_CL_UNREACHABLE_CODE -Wno-unreachable-code # 52
-      C_WARN_CLANG_CL_DEPRECATED_DYNAMIC_EXCEPTION_SPEC -Wno-deprecated-dynamic-exception-spec # 51
-      C_WARN_CLANG_CL_BAD_FUNCTION_CAST -Wno-bad-function-cast # 50
-      C_WARN_CLANG_CL_MICROSOFT_ENUM_VALUE -Wno-microsoft-enum-value # 47
-      C_WARN_CLANG_CL_DEPRECATED_COPY_WITH_USER_PROVIDED_COPY -Wno-deprecated-copy-with-user-provided-copy # 41
-      C_WARN_CLANG_CL_ZERO_LENGTH_ARRAY -Wno-zero-length-array # 39
-      C_WARN_CLANG_CL_UNUSED_FUNCTION -Wno-unused-function # 38
-      C_WARN_CLANG_CL_PEDANTIC -Wno-pedantic # 38
-      C_WARN_CLANG_CL_DEPRECATED_COPY_WITH_DTOR -Wno-deprecated-copy-with-dtor # 37
-      C_WARN_CLANG_CL_DOCUMENTATION_UNKNOWN_COMMAND -Wno-documentation-unknown-command # 34
-      C_WARN_CLANG_CL_UNDEFINED_REINTERPRET_CAST -Wno-undefined-reinterpret-cast # 33
-      C_WARN_CLANG_CL_FORMAT_NONLITERAL -Wno-format-nonliteral # 29
-      C_WARN_CLANG_CL_COMMA -Wno-comma # 27
-      C_WARN_CLANG_CL_DOCUMENTATION_DEPRECATED_SYNC -Wno-documentation-deprecated-sync # 26
-      C_WARN_CLANG_CL_SHIFT_SIGN_OVERFLOW -Wno-shift-sign-overflow # 24
-      C_WARN_CLANG_CL_PRE_C++17_COMPAT_PEDANTIC -Wno-pre-c++17-compat-pedantic # 24
-      C_WARN_CLANG_CL_C++98_COMPAT_UNNAMED_TYPE_TEMPLATE_ARGS -Wno-c++98-compat-unnamed-type-template-args # 22
-      C_WARN_CLANG_CL_SIGN_COMPARE -Wno-sign-compare # 21
-      C_WARN_CLANG_CL_FORMAT -Wno-format # 21
-      C_WARN_CLANG_CL_C++98_COMPAT_BIND_TO_TEMPORARY_COPY -Wno-c++98-compat-bind-to-temporary-copy # 21
-      C_WARN_CLANG_CL_ENUM_ENUM_CONVERSION -Wno-enum-enum-conversion # 20
-      C_WARN_CLANG_CL_ANON_ENUM_ENUM_CONVERSION -Wno-anon-enum-enum-conversion # 14
-      C_WARN_CLANG_CL_RANGE_LOOP_BIND_REFERENCE -Wno-range-loop-bind-reference # 14
-      C_WARN_CLANG_CL_ENUM_FLOAT_CONVERSION -Wno-enum-float-conversion # 12
-      C_WARN_CLANG_CL_KEYWORD_MACRO -Wno-keyword-macro # 10
-      C_WARN_CLANG_CL_DEPRECATED_COPY -Wno-deprecated-copy # 10
-      C_WARN_CLANG_CL_UNUSED_MEMBER_FUNCTION -Wno-unused-member-function # 9
-      C_WARN_CLANG_CL_MISSING_NORETURN -Wno-missing-noreturn # 8
-      C_WARN_CLANG_CL_MISSING_VARIABLE_DECLARATIONS -Wno-missing-variable-declarations # 8
-      C_WARN_CLANG_CL_DOCUMENTATION_HTML -Wno-documentation-html # 6
-      C_WARN_CLANG_CL_GNU_REDECLARED_ENUM -Wno-gnu-redeclared-enum # 6
-      C_WARN_CLANG_CL_DEPRECATED_DECLARATIONS -Wno-deprecated-declarations # 6
-      C_WARN_CLANG_CL_OVERLOADED_VIRTUAL -Wno-overloaded-virtual # 5
-      C_WARN_CLANG_CL_C++98_C++11_COMPAT_BINARY_LITERAL -Wno-c++98-c++11-compat-binary-literal # 4
-      C_WARN_CLANG_CL_DEPRECATED_REDUNDANT_CONSTEXPR_STATIC_DEF -Wno-deprecated-redundant-constexpr-static-def # 4
-      C_WARN_CLANG_CL_MISSING_BRACES -Wno-missing-braces # 4
-      C_WARN_CLANG_CL_C99_EXTENSIONS -Wno-c99-extensions # 4
-      C_WARN_CLANG_CL_STRICT_PROTOTYPES -Wno-strict-prototypes # 4
-      C_WARN_CLANG_CL_UNREACHABLE_CODE_LOOP_INCREMENT -Wno-unreachable-code-loop-increment # 4
-      C_WARN_CLANG_CL_GNU_CASE_RANGE -Wno-gnu-case-range # 4
-      C_WARN_CLANG_CL_DUPLICATE_ENUM -Wno-duplicate-enum # 3
-      C_WARN_CLANG_CL_NULL_POINTER_SUBTRACTION -Wno-null-pointer-subtraction # 2
-      C_WARN_CLANG_CL_DEPRECATED_LITERAL_OPERATOR -Wno-deprecated-literal-operator # 2
-      C_WARN_CLANG_CL_NEWLINE_EOF -Wno-newline-eof # 2
-      C_WARN_CLANG_CL_MICROSOFT_CAST -Wno-microsoft-cast # 2
-      C_WARN_CLANG_CL_DATE_TIME -Wno-date-time # 2
-      C_WARN_CLANG_CL_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR -Wno-delete-non-abstract-non-virtual-dtor # 2
-      C_WARN_CLANG_CL_UNUSED_PRIVATE_FIELD -Wno-unused-private-field # 2
-      C_WARN_CLANG_CL_FLEXIBLE_ARRAY_EXTENSIONS -Wno-flexible-array-extensions # 2
-      C_WARN_CLANG_CL_STRING_CONVERSION -Wno-string-conversion # 2
-      C_WARN_CLANG_CL_FINAL_DTOR_NON_FINAL_CLASS -Wno-final-dtor-non-final-class # 2
-      C_WARN_CLANG_CL_MICROSOFT_UNQUALIFIED_FRIEND -Wno-microsoft-unqualified-friend # 2
-      C_WARN_CLANG_CL_INVALID_NORETURN -Wno-invalid-noreturn # 1
-      C_WARN_CLANG_CL_INVALID_UTF8 -Wno-invalid-utf8 # 1
-      C_WARN_CLANG_CL_FOUR_CHAR_CONSTANTS -Wno-four-char-constants # 1
-      C_WARN_CLANG_CL_PARENTHESES -Wno-parentheses # 1
-      C_WARN_CLANG_CL_PESSIMIZING_MOVE -Wno-pessimizing-move # 1
-      C_WARN_CLANG_CL_DEPRECATED_NON_PROTOTYPE -Wno-deprecated-non-prototype # 1
-      C_WARN_CLANG_CL_BITFIELD_ENUM_CONVERSION -Wno-bitfield-enum-conversion # 1
-      C_WARN_CLANG_CL_UNUSED_LAMBDA_CAPTURE -Wno-unused-lambda-capture # 1
-      C_WARN_CLANG_CL_SHADOW_FIELD_IN_CONSTRUCTOR_MODIFIED -Wno-shadow-field-in-constructor-modified # 1
-      # And some additional ones that came up when using LLVM 18.1.8 on Windows ARM64
-      C_WARN_CLANG_CL_SWITCH_DEFAULT -Wno-switch-default
-      C_WARN_CLANG_CL_NAN_INFINITY_DISABLED -Wno-nan-infinity-disabled
-      # And another from 19.1.5
-      C_WARN_CLANG_CL_PRE_C11_COMPAT -Wno-pre-c11-compat
-    )
-
-    add_check_cxx_compiler_flags(
-      CXX_WARNINGS
-      CXX_WARN_CLANG_CL_W3 /W3
-      CXX_WARN_CLANG_CL_C++98_COMPAT -Wno-c++98-compat # 352692
-      CXX_WARN_CLANG_CL_OLD_STYLE_CAST -Wno-old-style-cast # 178608
-      CXX_WARN_CLANG_CL_UNSAFE_BUFFER_USAGE -Wno-unsafe-buffer-usage # 89032
-      CXX_WARN_CLANG_CL_MISSING_PROTOTYPES -Wno-missing-prototypes # 25587
-      CXX_WARN_CLANG_CL_SIGN_CONVERSION -Wno-sign-conversion # 20109
-      CXX_WARN_CLANG_CL_MISSING_FIELD_INITIALIZERS -Wno-missing-field-initializers # 20060
-      CXX_WARN_CLANG_CL_EXTRA_SEMI -Wno-extra-semi # 12513
-      CXX_WARN_CLANG_CL_LANGUAGE_EXTENSION_TOKEN -Wno-language-extension-token # 11032
-      CXX_WARN_CLANG_CL_IMPLICIT_FLOAT_CONVERSION -Wno-implicit-float-conversion # 11003
-      CXX_WARN_CLANG_CL_C++98_COMPAT_PEDANTIC -Wno-c++98-compat-pedantic # 10336
-      CXX_WARN_CLANG_CL_IMPLICIT_INT_FLOAT_CONVERSION -Wno-implicit-int-float-conversion # 7354
-      CXX_WARN_CLANG_CL_DOUBLE_PROMOTION -Wno-double-promotion # 7350
-      CXX_WARN_CLANG_CL_PRE_C++17_COMPAT -Wno-pre-c++17-compat # 7303
-      CXX_WARN_CLANG_CL_SHORTEN_64_TO_32 -Wno-shorten-64-to-32 # 7085
-      CXX_WARN_CLANG_CL_C++98_COMPAT_LOCAL_TYPE_TEMPLATE_ARGS -Wno-c++98-compat-local-type-template-args # 6906
-      CXX_WARN_CLANG_CL_RESERVED_IDENTIFIER -Wno-reserved-identifier # 5886
-      CXX_WARN_CLANG_CL_CAST_ALIGN -Wno-cast-align # 5513
-      CXX_WARN_CLANG_CL_DOCUMENTATION -Wno-documentation # 5107
-      CXX_WARN_CLANG_CL_DISABLED_MACRO_EXPANSION -Wno-disabled-macro-expansion # 4449
-      CXX_WARN_CLANG_CL_EXTRA_SEMI_STMT -Wno-extra-semi-stmt # 4349
-      CXX_WARN_CLANG_CL_ZERO_AS_NULL_POINTER_CONSTANT -Wno-zero-as-null-pointer-constant # 3209
-      CXX_WARN_CLANG_CL_FLOAT_CONVERSION -Wno-float-conversion # 2869
-      CXX_WARN_CLANG_CL_RESERVED_MACRO_IDENTIFIER -Wno-reserved-macro-identifier # 2862
-      CXX_WARN_CLANG_CL_CAST_FUNCTION_TYPE_STRICT -Wno-cast-function-type-strict # 2663
-      CXX_WARN_CLANG_CL_FLOAT_EQUAL -Wno-float-equal # 2153
-      CXX_WARN_CLANG_CL_IMPLICIT_INT_CONVERSION -Wno-implicit-int-conversion # 2117
-      CXX_WARN_CLANG_CL_SHADOW -Wno-shadow # 2068
-      CXX_WARN_CLANG_CL_SHADOW_FIELD_IN_CONSTRUCTOR -Wno-shadow-field-in-constructor # 1829
-      CXX_WARN_CLANG_CL_CAST_QUAL -Wno-cast-qual # 1742
-      CXX_WARN_CLANG_CL_PRE_C++14_COMPAT -Wno-pre-c++14-compat # 1569
-      CXX_WARN_CLANG_CL_GLOBAL_CONSTRUCTORS -Wno-global-constructors # 1402
-      CXX_WARN_CLANG_CL_SWITCH_ENUM -Wno-switch-enum # 973
-      CXX_WARN_CLANG_CL_EXIT_TIME_DESTRUCTORS -Wno-exit-time-destructors # 940
-      CXX_WARN_CLANG_CL_CTAD_MAYBE_UNSUPPORTED -Wno-ctad-maybe-unsupported # 891
-      CXX_WARN_CLANG_CL_UNDEFINED_FUNC_TEMPLATE -Wno-undefined-func-template # 863
-      CXX_WARN_CLANG_CL_C++98_COMPAT_EXTRA_SEMI -Wno-c++98-compat-extra-semi # 848
-      CXX_WARN_CLANG_CL_CAST_FUNCTION_TYPE -Wno-cast-function-type # 807
-      CXX_WARN_CLANG_CL_NULLABILITY_EXTENSION -Wno-nullability-extension # 602
-      CXX_WARN_CLANG_CL_SHADOW_FIELD -Wno-shadow-field # 585
-      CXX_WARN_CLANG_CL_CONDITIONAL_UNINITIALIZED -Wno-conditional-uninitialized # 555
-      CXX_WARN_CLANG_CL_UNUSED_PARAMETER -Wno-unused-parameter # 539
-      CXX_WARN_CLANG_CL_SUGGEST_DESTRUCTOR_OVERRIDE -Wno-suggest-destructor-override # 356
-      CXX_WARN_CLANG_CL_SHADOW_UNCAPTURED_LOCAL -Wno-shadow-uncaptured-local # 355
-      CXX_WARN_CLANG_CL_UNUSED_MACROS -Wno-unused-macros # 289
-      CXX_WARN_CLANG_CL_COVERED_SWITCH_DEFAULT -Wno-covered-switch-default # 233
-      CXX_WARN_CLANG_CL_SIGNED_ENUM_BITFIELD -Wno-signed-enum-bitfield # 229
-      CXX_WARN_CLANG_CL_DECLARATION_AFTER_STATEMENT -Wno-declaration-after-statement # 228
-      CXX_WARN_CLANG_CL_IMPLICIT_FALLTHROUGH -Wno-implicit-fallthrough # 164
-      CXX_WARN_CLANG_CL_NON_VIRTUAL_DTOR -Wno-non-virtual-dtor # 161
-      CXX_WARN_CLANG_CL_NESTED_ANON_TYPES -Wno-nested-anon-types # 140
-      CXX_WARN_CLANG_CL_GNU_ZERO_VARIADIC_MACRO_ARGUMENTS -Wno-gnu-zero-variadic-macro-arguments # 132
-      CXX_WARN_CLANG_CL_UNREACHABLE_CODE_BREAK -Wno-unreachable-code-break # 115
-      CXX_WARN_CLANG_CL_INCONSISTENT_MISSING_DESTRUCTOR_OVERRIDE -Wno-inconsistent-missing-destructor-override # 104
-      CXX_WARN_CLANG_CL_FORMAT_PEDANTIC -Wno-format-pedantic # 97
-      CXX_WARN_CLANG_CL_NONPORTABLE_SYSTEM_INCLUDE_PATH -Wno-nonportable-system-include-path # 95
-      CXX_WARN_CLANG_CL_UNDEF -Wno-undef # 94
-      CXX_WARN_CLANG_CL_IGNORED_QUALIFIERS -Wno-ignored-qualifiers # 93
-      CXX_WARN_CLANG_CL_USED_BUT_MARKED_UNUSED -Wno-used-but-marked-unused # 83
-      CXX_WARN_CLANG_CL_HEADER_HYGIENE -Wno-header-hygiene # 79
-      CXX_WARN_CLANG_CL_CHAR_SUBSCRIPTS -Wno-char-subscripts # 76
-      CXX_WARN_CLANG_CL_UNREACHABLE_CODE_RETURN -Wno-unreachable-code-return # 71
-      CXX_WARN_CLANG_CL_UNUSED_TEMPLATE -Wno-unused-template # 66
-      CXX_WARN_CLANG_CL_GNU_ANONYMOUS_STRUCT -Wno-gnu-anonymous-struct # 63
-      CXX_WARN_CLANG_CL_DEPRECATED_COPY_WITH_USER_PROVIDED_DTOR -Wno-deprecated-copy-with-user-provided-dtor # 62
-      CXX_WARN_CLANG_CL_INCONSISTENT_MISSING_OVERRIDE -Wno-inconsistent-missing-override # 54
-      CXX_WARN_CLANG_CL_UNREACHABLE_CODE -Wno-unreachable-code # 52
-      CXX_WARN_CLANG_CL_DEPRECATED_DYNAMIC_EXCEPTION_SPEC -Wno-deprecated-dynamic-exception-spec # 51
-      CXX_WARN_CLANG_CL_BAD_FUNCTION_CAST -Wno-bad-function-cast # 50
-      CXX_WARN_CLANG_CL_MICROSOFT_ENUM_VALUE -Wno-microsoft-enum-value # 47
-      CXX_WARN_CLANG_CL_DEPRECATED_COPY_WITH_USER_PROVIDED_COPY -Wno-deprecated-copy-with-user-provided-copy # 41
-      CXX_WARN_CLANG_CL_ZERO_LENGTH_ARRAY -Wno-zero-length-array # 39
-      CXX_WARN_CLANG_CL_UNUSED_FUNCTION -Wno-unused-function # 38
-      CXX_WARN_CLANG_CL_PEDANTIC -Wno-pedantic # 38
-      CXX_WARN_CLANG_CL_DEPRECATED_COPY_WITH_DTOR -Wno-deprecated-copy-with-dtor # 37
-      CXX_WARN_CLANG_CL_DOCUMENTATION_UNKNOWN_COMMAND -Wno-documentation-unknown-command # 34
-      CXX_WARN_CLANG_CL_UNDEFINED_REINTERPRET_CAST -Wno-undefined-reinterpret-cast # 33
-      CXX_WARN_CLANG_CL_FORMAT_NONLITERAL -Wno-format-nonliteral # 29
-      CXX_WARN_CLANG_CL_COMMA -Wno-comma # 27
-      CXX_WARN_CLANG_CL_DOCUMENTATION_DEPRECATED_SYNC -Wno-documentation-deprecated-sync # 26
-      CXX_WARN_CLANG_CL_SHIFT_SIGN_OVERFLOW -Wno-shift-sign-overflow # 24
-      CXX_WARN_CLANG_CL_PRE_C++17_COMPAT_PEDANTIC -Wno-pre-c++17-compat-pedantic # 24
-      CXX_WARN_CLANG_CL_C++98_COMPAT_UNNAMED_TYPE_TEMPLATE_ARGS -Wno-c++98-compat-unnamed-type-template-args # 22
-      CXX_WARN_CLANG_CL_SIGN_COMPARE -Wno-sign-compare # 21
-      CXX_WARN_CLANG_CL_FORMAT -Wno-format # 21
-      CXX_WARN_CLANG_CL_C++98_COMPAT_BIND_TO_TEMPORARY_COPY -Wno-c++98-compat-bind-to-temporary-copy # 21
-      CXX_WARN_CLANG_CL_ENUM_ENUM_CONVERSION -Wno-enum-enum-conversion # 20
-      CXX_WARN_CLANG_CL_ANON_ENUM_ENUM_CONVERSION -Wno-anon-enum-enum-conversion # 14
-      CXX_WARN_CLANG_CL_RANGE_LOOP_BIND_REFERENCE -Wno-range-loop-bind-reference # 14
-      CXX_WARN_CLANG_CL_ENUM_FLOAT_CONVERSION -Wno-enum-float-conversion # 12
-      CXX_WARN_CLANG_CL_KEYWORD_MACRO -Wno-keyword-macro # 10
-      CXX_WARN_CLANG_CL_DEPRECATED_COPY -Wno-deprecated-copy # 10
-      CXX_WARN_CLANG_CL_UNUSED_MEMBER_FUNCTION -Wno-unused-member-function # 9
-      CXX_WARN_CLANG_CL_MISSING_NORETURN -Wno-missing-noreturn # 8
-      CXX_WARN_CLANG_CL_MISSING_VARIABLE_DECLARATIONS -Wno-missing-variable-declarations # 8
-      CXX_WARN_CLANG_CL_DOCUMENTATION_HTML -Wno-documentation-html # 6
-      CXX_WARN_CLANG_CL_GNU_REDECLARED_ENUM -Wno-gnu-redeclared-enum # 6
-      CXX_WARN_CLANG_CL_DEPRECATED_DECLARATIONS -Wno-deprecated-declarations # 6
-      CXX_WARN_CLANG_CL_OVERLOADED_VIRTUAL -Wno-overloaded-virtual # 5
-      CXX_WARN_CLANG_CL_C++98_C++11_COMPAT_BINARY_LITERAL -Wno-c++98-c++11-compat-binary-literal # 4
-      CXX_WARN_CLANG_CL_DEPRECATED_REDUNDANT_CONSTEXPR_STATIC_DEF -Wno-deprecated-redundant-constexpr-static-def # 4
-      CXX_WARN_CLANG_CL_MISSING_BRACES -Wno-missing-braces # 4
-      CXX_WARN_CLANG_CL_C99_EXTENSIONS -Wno-c99-extensions # 4
-      CXX_WARN_CLANG_CL_STRICT_PROTOTYPES -Wno-strict-prototypes # 4
-      CXX_WARN_CLANG_CL_UNREACHABLE_CODE_LOOP_INCREMENT -Wno-unreachable-code-loop-increment # 4
-      CXX_WARN_CLANG_CL_GNU_CASE_RANGE -Wno-gnu-case-range # 4
-      CXX_WARN_CLANG_CL_DUPLICATE_ENUM -Wno-duplicate-enum # 3
-      CXX_WARN_CLANG_CL_NULL_POINTER_SUBTRACTION -Wno-null-pointer-subtraction # 2
-      CXX_WARN_CLANG_CL_DEPRECATED_LITERAL_OPERATOR -Wno-deprecated-literal-operator # 2
-      CXX_WARN_CLANG_CL_NEWLINE_EOF -Wno-newline-eof # 2
-      CXX_WARN_CLANG_CL_MICROSOFT_CAST -Wno-microsoft-cast # 2
-      CXX_WARN_CLANG_CL_DATE_TIME -Wno-date-time # 2
-      CXX_WARN_CLANG_CL_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR -Wno-delete-non-abstract-non-virtual-dtor # 2
-      CXX_WARN_CLANG_CL_UNUSED_PRIVATE_FIELD -Wno-unused-private-field # 2
-      CXX_WARN_CLANG_CL_FLEXIBLE_ARRAY_EXTENSIONS -Wno-flexible-array-extensions # 2
-      CXX_WARN_CLANG_CL_STRING_CONVERSION -Wno-string-conversion # 2
-      CXX_WARN_CLANG_CL_FINAL_DTOR_NON_FINAL_CLASS -Wno-final-dtor-non-final-class # 2
-      CXX_WARN_CLANG_CL_MICROSOFT_UNQUALIFIED_FRIEND -Wno-microsoft-unqualified-friend # 2
-      CXX_WARN_CLANG_CL_INVALID_NORETURN -Wno-invalid-noreturn # 1
-      CXX_WARN_CLANG_CL_INVALID_UTF8 -Wno-invalid-utf8 # 1
-      CXX_WARN_CLANG_CL_FOUR_CHAR_CONSTANTS -Wno-four-char-constants # 1
-      CXX_WARN_CLANG_CL_PARENTHESES -Wno-parentheses # 1
-      CXX_WARN_CLANG_CL_PESSIMIZING_MOVE -Wno-pessimizing-move # 1
-      CXX_WARN_CLANG_CL_DEPRECATED_NON_PROTOTYPE -Wno-deprecated-non-prototype # 1
-      CXX_WARN_CLANG_CL_BITFIELD_ENUM_CONVERSION -Wno-bitfield-enum-conversion # 1
-      CXX_WARN_CLANG_CL_UNUSED_LAMBDA_CAPTURE -Wno-unused-lambda-capture # 1
-      CXX_WARN_CLANG_CL_SHADOW_FIELD_IN_CONSTRUCTOR_MODIFIED -Wno-shadow-field-in-constructor-modified # 1
-      # And some additional ones that came up when using LLVM 18.1.8 on Windows ARM64
-      CXX_WARN_CLANG_CL_SWITCH_DEFAULT -Wno-switch-default
-      CXX_WARN_CLANG_CL_NAN_INFINITY_DISABLED -Wno-nan-infinity-disabled
-      # And another from 19.1.5
-      CXX_WARN_CLANG_CL_PRE_C11_COMPAT -Wno-pre-c11-compat
-    )
-  endif()
-
-
   # ---------------------
   # Suppress Strict Flags
 
   # flags to undo strict flags
 
   add_check_c_compiler_flags(
-    C_REMOVE_STRICT_FLAGS
+    C_AND_CXX_REMOVE_STRICT_FLAGS
 
-    C_WARN_NO_UNUSED_PARAMETER -Wno-unused-parameter
-    C_WARN_NO_UNUSED_VARIABLE -Wno-unused-variable
-    C_WARN_NO_UNUSED_MACROS -Wno-unused-macros
-    C_WARN_NO_MISLEADING_INDENTATION -Wno-misleading-indentation
+    C_AND_CXX_WARN_NO_UNUSED_PARAMETER -Wno-unused-parameter
+    C_AND_CXX_WARN_NO_UNUSED_VARIABLE -Wno-unused-variable
+    C_AND_CXX_WARN_NO_UNUSED_MACROS -Wno-unused-macros
+    C_AND_CXX_WARN_NO_MISLEADING_INDENTATION -Wno-misleading-indentation
 
-    C_WARN_NO_MISSING_VARIABLE_DECLARATIONS -Wno-missing-variable-declarations
-    C_WARN_NO_INCOMPAT_PTR_DISCARD_QUAL -Wno-incompatible-pointer-types-discards-qualifiers
-    C_WARN_NO_UNUSED_FUNCTION -Wno-unused-function
-    C_WARN_NO_INT_TO_VOID_POINTER_CAST -Wno-int-to-void-pointer-cast
-    C_WARN_NO_MISSING_PROTOTYPES -Wno-missing-prototypes
-    C_WARN_NO_DUPLICATE_ENUM -Wno-duplicate-enum
-    C_WARN_NO_UNDEF -Wno-undef
-    C_WARN_NO_MISSING_NORETURN -Wno-missing-noreturn
-    C_WARN_NO_UNUSED_BUT_SET_VARIABLE -Wno-unused-but-set-variable
-    C_WARN_NO_DEPRECATED_DECLARATIONS -Wno-deprecated-declarations
-    C_WARN_NO_STRICT_PROTOTYPES -Wno-strict-prototypes
-    C_WARN_NO_BITWISE_INSTEAD_OF_LOGICAL -Wno-bitwise-instead-of-logical
-    C_WARN_NO_IMPLICIT_CONST_INT_FLOAT_CONVERSION -Wno-implicit-const-int-float-conversion
-    C_WARN_NO_SINGLE_BIT_BITFIELD_CONSTANT_CONVERSION -Wno-single-bit-bitfield-constant-conversion
+    C_AND_CXX_WARN_NO_MISSING_VARIABLE_DECLARATIONS -Wno-missing-variable-declarations
+    C_AND_CXX_WARN_NO_INCOMPAT_PTR_DISCARD_QUAL -Wno-incompatible-pointer-types-discards-qualifiers
+    C_AND_CXX_WARN_NO_UNUSED_FUNCTION -Wno-unused-function
+    C_AND_CXX_WARN_NO_INT_TO_VOID_POINTER_CAST -Wno-int-to-void-pointer-cast
+    C_AND_CXX_WARN_NO_MISSING_PROTOTYPES -Wno-missing-prototypes
+    C_AND_CXX_WARN_NO_DUPLICATE_ENUM -Wno-duplicate-enum
+    C_AND_CXX_WARN_NO_UNDEF -Wno-undef
+    C_AND_CXX_WARN_NO_MISSING_NORETURN -Wno-missing-noreturn
+    C_AND_CXX_WARN_NO_UNUSED_BUT_SET_VARIABLE -Wno-unused-but-set-variable
+    C_AND_CXX_WARN_NO_DEPRECATED_DECLARATIONS -Wno-deprecated-declarations
+    C_AND_CXX_WARN_NO_STRICT_PROTOTYPES -Wno-strict-prototypes
+    C_AND_CXX_WARN_NO_BITWISE_INSTEAD_OF_LOGICAL -Wno-bitwise-instead-of-logical
+    C_AND_CXX_WARN_NO_IMPLICIT_CONST_INT_FLOAT_CONVERSION -Wno-implicit-const-int-float-conversion
+    C_AND_CXX_WARN_NO_SINGLE_BIT_BITFIELD_CONSTANT_CONVERSION -Wno-single-bit-bitfield-constant-conversion
   )
 
   add_check_cxx_compiler_flags(
@@ -2505,6 +2183,7 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
     CXX_WARN_NO_UNDEF_PREFIX -Wno-undef-prefix
     CXX_WARN_NO_INCONSISTENT_MISSING_OVERRIDE -Wno-inconsistent-missing-override
   )
+  unset(_Wall_flag)
 
 elseif(CMAKE_C_COMPILER_ID STREQUAL "Intel")
 
@@ -2552,7 +2231,6 @@ elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
     "/wd4828"  # The file contains a character that is illegal
     "/wd4996"  # identifier was declared deprecated
     "/wd4661"  # no suitable definition provided for explicit template instantiation request
-    "/wd4848"  # 'no_unique_address' is a vendor extension in C++17
     # errors:
     "/we4013"  # 'function' undefined; assuming extern returning int
     "/we4133"  # incompatible pointer types
@@ -2591,9 +2269,6 @@ if(WITH_PYTHON)
   elseif((WITH_PYTHON_INSTALL AND WITH_PYTHON_INSTALL_NUMPY) OR WITH_PYTHON_NUMPY)
     if(("${PYTHON_NUMPY_PATH}" STREQUAL "") OR (${PYTHON_NUMPY_PATH} MATCHES NOTFOUND))
       set(_numpy_include "_core/include")
-      if(PYTHON_VERSION VERSION_LESS "3.13")
-        set(_numpy_include "core/include")
-      endif()
       find_python_package(numpy "${_numpy_include}")
       unset(_numpy_include)
     endif()
@@ -2612,16 +2287,16 @@ if(WITH_PYTHON)
   endif()
 endif()
 
-# Select C++17 as the standard for C++ projects.
-set(CMAKE_CXX_STANDARD 17)
-# If C++17 is not available, downgrading to an earlier standard is NOT OK.
+# Select C++20 as the standard for C++ projects.
+set(CMAKE_CXX_STANDARD 20)
+# If C++20 is not available, downgrading to an earlier standard is NOT OK.
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Do not enable compiler specific language extensions.
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Visual Studio has all standards it supports available by default
 # Clang on windows copies this behavior and does not support these switches
-if(CMAKE_COMPILER_IS_GNUCC OR
+if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR
    (CMAKE_C_COMPILER_ID MATCHES "Clang" AND (NOT MSVC)) OR
    (CMAKE_C_COMPILER_ID STREQUAL "Intel"))
 
@@ -2630,6 +2305,16 @@ if(CMAKE_COMPILER_IS_GNUCC OR
 endif()
 
 if(WITH_COMPILER_SHORT_FILE_MACRO)
+
+  set(_is_new_c TRUE)
+  if(DEFINED CACHE{C_MACRO_PREFIX_MAP})
+    set(_is_new_c FALSE)
+  endif()
+  set(_is_new_cxx TRUE)
+  if(DEFINED CACHE{CXX_MACRO_PREFIX_MAP})
+    set(_is_new_cxx FALSE)
+  endif()
+
   # Use `-fmacro-prefix-map` for Clang and GCC (MSVC doesn't support this).
   set(C_PREFIX_MAP_FLAGS "")
   set(CXX_PREFIX_MAP_FLAGS "")
@@ -2666,15 +2351,19 @@ if(WITH_COMPILER_SHORT_FILE_MACRO)
       unset(_bin_dir)
     endif()
   else()
-    message(
-      WARNING
-      "-fmacro-prefix-map flag is NOT supported by C/C++ compiler."
-      " Disabling WITH_COMPILER_SHORT_FILE_MACRO."
-    )
+    if(_is_new_c OR _is_new_cxx)
+      message(
+        WARNING
+        "-fmacro-prefix-map flag is NOT supported by C/C++ compiler."
+        " Disabling WITH_COMPILER_SHORT_FILE_MACRO."
+      )
+    endif()
     set(WITH_COMPILER_SHORT_FILE_MACRO OFF)
   endif()
   unset(C_PREFIX_MAP_FLAGS)
   unset(CXX_PREFIX_MAP_FLAGS)
+  unset(_is_new_c)
+  unset(_is_new_cxx)
 endif()
 
 # Include warnings first, so its possible to disable them with user defined flags
@@ -2711,8 +2400,8 @@ endif()
 if(WITH_ASSERT_RELEASE)
   # CMake seemingly be setting the NDEBUG flag on its own already on some configurations
   # therefore we need to remove the flags if they happen to be set.
-  remove_cc_flag("-DNDEBUG") # GCC/CLang
-  remove_cc_flag("/DNDEBUG") # MSVC
+  remove_c_and_cxx_flag("-DNDEBUG") # GCC/CLang
+  remove_c_and_cxx_flag("/DNDEBUG") # MSVC
 else()
   set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS
     $<$<CONFIG:Release>:NDEBUG>
@@ -2799,7 +2488,7 @@ if(FIRST_RUN)
 
     set(_msg "  - ${_setting}")
     string(LENGTH "${_msg}" _len)
-    while("36" GREATER "${_len}")
+    while("40" GREATER "${_len}")
       string(APPEND _msg " ")
       math(EXPR _len "${_len} + 1")
     endwhile()
@@ -2832,7 +2521,6 @@ if(FIRST_RUN)
   info_cfg_option(WITH_INPUT_IME)
   info_cfg_option(WITH_INTERNATIONAL)
   info_cfg_option(WITH_MANIFOLD)
-  info_cfg_option(WITH_OPENCOLORIO)
   info_cfg_option(WITH_OPENIMAGEDENOISE)
   info_cfg_option(WITH_OPENSUBDIV)
   info_cfg_option(WITH_OPENVDB)
@@ -2850,7 +2538,7 @@ if(FIRST_RUN)
 
   info_cfg_text("System Options:")
   info_cfg_option(WITH_INSTALL_PORTABLE)
-  info_cfg_option(WITH_MEM_JEMALLOC)
+  info_cfg_option(WITH_TBB_MALLOC_PROXY)
   info_cfg_option(WITH_MEM_VALGRIND)
 
   info_cfg_text("GHOST Options:")
@@ -2871,7 +2559,6 @@ if(FIRST_RUN)
 
   info_cfg_text("Image Formats:")
   info_cfg_option(WITH_IMAGE_CINEON)
-  info_cfg_option(WITH_IMAGE_OPENEXR)
   info_cfg_option(WITH_IMAGE_OPENJPEG)
 
   info_cfg_text("Audio:")
@@ -2891,8 +2578,10 @@ if(FIRST_RUN)
   if(WITH_PYTHON)
     info_cfg_text("Python:")
     info_cfg_option(WITH_PYTHON_INSTALL)
-    info_cfg_option(WITH_PYTHON_INSTALL_NUMPY)
-    info_cfg_option(WITH_PYTHON_INSTALL_ZSTANDARD)
+    if(WITH_PYTHON_INSTALL)
+      info_cfg_option(WITH_PYTHON_INSTALL_NUMPY)
+      info_cfg_option(WITH_PYTHON_INSTALL_ZSTANDARD)
+    endif()
     info_cfg_option(WITH_PYTHON_MODULE)
     info_cfg_option(WITH_PYTHON_SAFETY)
   endif()
@@ -2921,6 +2610,21 @@ if(FIRST_RUN)
       info_cfg_option(WITH_CYCLES_DEVICE_HIPRT)
     endif()
   endif()
+
+  info_cfg_text("Tests:")
+  info_cfg_option(WITH_GTESTS)
+  info_cfg_option(CYCLES_TEST_DEVICES)
+  info_cfg_option(WITH_CYCLES_TEST_OSL)
+  info_cfg_option(WITH_GPU_RENDER_TESTS)
+  info_cfg_option(WITH_GPU_BACKEND_TESTS)
+  info_cfg_option(WITH_GPU_DRAW_TESTS)
+  info_cfg_option(WITH_GPU_COMPOSITOR_TESTS)
+  info_cfg_option(WITH_GPU_MESH_PAINT_TESTS)
+  info_cfg_option(WITH_UI_TESTS)
+  info_cfg_option(WITH_UI_TESTS_HEADLESS)
+  info_cfg_option(WITH_UI_TESTS_VULKAN)
+  info_cfg_option(WITH_GPU_RENDER_TESTS_VULKAN)
+  info_cfg_option(WITH_LINUX_OFFICIAL_RELEASE_TESTS)
 
   info_cfg_text("")
 

@@ -18,6 +18,8 @@
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
+namespace blender {
+
 using std::initializer_list;
 using std::pair;
 using std::string;
@@ -139,8 +141,8 @@ TEST(string, StrPartition)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_partition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -149,8 +151,8 @@ TEST(string, StrPartition)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_partition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
@@ -198,8 +200,8 @@ TEST(string, StrRPartition)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_rpartition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -208,8 +210,8 @@ TEST(string, StrRPartition)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_rpartition(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
@@ -239,15 +241,15 @@ TEST(string, StrPartitionEx)
     /* "mate.rial" over "mate" -> "mate.rial", nullptr, nullptr, 4 */
     pre_len = BLI_str_partition_ex(str, str + 4, delim, &sep, &suf, true);
     EXPECT_EQ(pre_len, 4);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
 /* BLI_str_partition_utf8 */
 TEST(string, StrPartitionUtf8)
 {
-  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* ying-yang */, '\0'};
+  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* yin-yang */, '\0'};
   const char *sep, *suf;
   size_t pre_len;
 
@@ -288,8 +290,8 @@ TEST(string, StrPartitionUtf8)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_partition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -298,15 +300,15 @@ TEST(string, StrPartitionUtf8)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_partition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
 /* BLI_str_rpartition_utf8 */
 TEST(string, StrRPartitionUtf8)
 {
-  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* ying-yang */, '\0'};
+  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* yin-yang */, '\0'};
   const char *sep, *suf;
   size_t pre_len;
 
@@ -347,8 +349,8 @@ TEST(string, StrRPartitionUtf8)
     /* "" -> "", nullptr, nullptr, 0 */
     pre_len = BLI_str_rpartition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 0);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 
   {
@@ -357,15 +359,15 @@ TEST(string, StrRPartitionUtf8)
     /* "material" -> "material", nullptr, nullptr, 8 */
     pre_len = BLI_str_rpartition_utf8(str, delim, &sep, &suf);
     EXPECT_EQ(pre_len, 8);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
 /* BLI_str_partition_ex_utf8 */
 TEST(string, StrPartitionExUtf8)
 {
-  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* ying-yang */, '\0'};
+  const uint delim[] = {'-', '.', '_', 0x00F1 /* n tilde */, 0x262F /* yin-yang */, '\0'};
   const char *sep, *suf;
   size_t pre_len;
 
@@ -389,8 +391,8 @@ TEST(string, StrPartitionExUtf8)
     /* "mate\xe2\x98\xafrial" over "mate" -> "mate\xe2\x98\xafrial", nullptr, nullptr, 4 */
     pre_len = BLI_str_partition_ex_utf8(str, str + 4, delim, &sep, &suf, true);
     EXPECT_EQ(pre_len, 4);
-    EXPECT_EQ(sep, (void *)nullptr);
-    EXPECT_EQ(suf, (void *)nullptr);
+    EXPECT_EQ(sep, static_cast<void *>(nullptr));
+    EXPECT_EQ(suf, static_cast<void *>(nullptr));
   }
 }
 
@@ -630,7 +632,7 @@ TEST(string, StrFormatDecimalUnits)
   EXPECT_STREQ("-1.0B", size_str);
 
   /* Smallest possible value. */
-  BLI_str_format_decimal_unit(size_str, size = -INT32_MAX);
+  BLI_str_format_decimal_unit(size_str, size = INT32_MIN);
   EXPECT_STREQ("-2.1B", size_str);
 }
 
@@ -727,7 +729,7 @@ TEST(string, StrFormatIntegerUnits)
   EXPECT_STREQ("-1B", size_str);
 
   /* Smallest possible value. */
-  BLI_str_format_integer_unit(size_str, size = -INT32_MAX);
+  BLI_str_format_integer_unit(size_str, size = INT32_MIN);
   EXPECT_STREQ("-2B", size_str);
 }
 
@@ -773,7 +775,7 @@ static void string_join_array_test_truncate(const char *strings[],
   { /* Ensure the allocated version is the same. */
     char *buffer_alloc = BLI_string_join_arrayN(strings, strings_num);
     EXPECT_STREQ(buffer_alloc, buffer);
-    MEM_freeN(buffer_alloc);
+    MEM_delete(buffer_alloc);
   }
 
   for (int dst_size = buffer_len + 1; dst_size > 0; dst_size--) {
@@ -794,7 +796,7 @@ static void string_join_array_with_sep_char_test_truncate(const char *strings[],
   { /* Ensure the allocated version is the same. */
     char *buffer_alloc = BLI_string_join_array_by_sep_charN('|', strings, strings_num);
     EXPECT_STREQ(buffer_alloc, buffer);
-    MEM_freeN(buffer_alloc);
+    MEM_delete(buffer_alloc);
   }
 
   for (int dst_size = buffer_len + 1; dst_size > 0; dst_size--) {
@@ -1058,7 +1060,7 @@ TEST(string, StringStrncasestr)
   EXPECT_EQ(res, str_test0 + 1);
 
   res = BLI_strncasestr(str_test0, "not there", 9);
-  EXPECT_EQ(res, (void *)nullptr);
+  EXPECT_EQ(res, static_cast<void *>(nullptr));
 }
 
 /** \} */
@@ -1442,3 +1444,5 @@ TEST(BLI_string, EndsWith)
   EXPECT_TRUE(BLI_str_endswith("ab", ""));
   EXPECT_TRUE(BLI_str_endswith("", ""));
 }
+
+}  // namespace blender

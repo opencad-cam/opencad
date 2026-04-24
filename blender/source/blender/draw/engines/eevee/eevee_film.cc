@@ -48,8 +48,8 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
     /* Viewport case. */
     if (inst_.v3d->shading.render_pass == EEVEE_RENDER_PASS_AOV) {
       /* AOV display, request only a single AOV. */
-      ViewLayerAOV *aov = (ViewLayerAOV *)BLI_findstring(
-          &inst_.view_layer->aovs, inst_.v3d->shading.aov_name, offsetof(ViewLayerAOV, name));
+      ViewLayerAOV *aov = static_cast<ViewLayerAOV *>(BLI_findstring(
+          &inst_.view_layer->aovs, inst_.v3d->shading.aov_name, offsetof(ViewLayerAOV, name)));
 
       /* AOV found in view layer. */
       if (aov) {
@@ -60,22 +60,22 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
     }
 
     if (inst_.is_viewport_compositor_enabled) {
-      LISTBASE_FOREACH (ViewLayerAOV *, aov, &inst_.view_layer->aovs) {
+      for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
         /* Already added as a display pass. No need to add again. */
-        if (!aovs.is_empty() && aovs.last() == aov) {
+        if (!aovs.is_empty() && aovs.last() == &aov) {
           continue;
         }
 
-        if (passes_used_by_viewport_compositor.contains(aov->name)) {
-          aovs.append(aov);
+        if (passes_used_by_viewport_compositor.contains(aov.name)) {
+          aovs.append(&aov);
         }
       }
     }
   }
   else {
     /* Render case. */
-    LISTBASE_FOREACH (ViewLayerAOV *, aov, &inst_.view_layer->aovs) {
-      aovs.append(aov);
+    for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
+      aovs.append(&aov);
     }
   }
 
@@ -110,7 +110,7 @@ float *Film::read_aov(ViewLayerAOV *aov)
 
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
 
-  return (float *)GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0);
+  return static_cast<float *>(GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0));
 }
 
 gpu::Texture *Film::get_aov_texture(ViewLayerAOV *aov)
@@ -153,7 +153,7 @@ gpu::Texture *Film::get_aov_texture(ViewLayerAOV *aov)
 void Film::sync_mist()
 {
   const CameraData &cam = inst_.camera.data_get();
-  const ::World *world = inst_.scene->world;
+  const blender::World *world = inst_.scene->world;
   float mist_start = world ? world->miststa : cam.clip_near;
   float mist_distance = world ? world->mistdist : fabsf(cam.clip_far - cam.clip_near);
   int mist_type = world ? world->mistype : int(WO_MIST_LINEAR);
@@ -546,9 +546,17 @@ void Film::sync()
    *
    * Compute shader is also used to work around Metal/Intel iGPU issues concerning
    * read write support for array textures. In this case the copy_ps_ is used to
-   * copy the right color/value to the framebuffer. */
+   * copy the right color/value to the framebuffer.
+   *
+   * It is also disabled for Windows on ARM as certain GPU/Driver combinations will cause a driver
+   * compiler crash. There is no way to detect up front when this is the case.
+   *
+   * See #153463
+   */
   use_compute_ = !inst_.is_viewport() ||
-                 GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY);
+                 GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY) ||
+                 GPU_type_matches_ex(
+                     GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY, GPU_BACKEND_VULKAN);
 
   eShaderType shader = use_compute_ ? FILM_COMP : FILM_FRAG;
 
@@ -845,8 +853,7 @@ void Film::accumulate(View &view, gpu::Texture *combined_final_tx)
     GPU_framebuffer_bind(dfbl->default_fb);
     /* Clear when using render borders. */
     if (data_.extent != int2(GPU_texture_width(dtxl->color), GPU_texture_height(dtxl->color))) {
-      float4 clear_color = {0.0f, 0.0f, 0.0f, 0.0f};
-      GPU_framebuffer_clear_color(dfbl->default_fb, clear_color);
+      GPU_framebuffer_clear_color(dfbl->default_fb, double4(0.0));
     }
     GPU_framebuffer_viewport_set(dfbl->default_fb, UNPACK2(data_.offset), UNPACK2(data_.extent));
   }
@@ -906,7 +913,7 @@ float *Film::read_pass(eViewLayerEEVEEPassType pass_type, int layer_offset)
 
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
 
-  float *result = (float *)GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0);
+  float *result = static_cast<float *>(GPU_texture_read(pass_tx, GPU_DATA_FLOAT, 0));
 
   if (pass_is_float3(pass_type)) {
     /* Convert result in place as we cannot do this conversion on GPU. */
@@ -991,13 +998,6 @@ void Film::write_viewport_compositor_passes()
       continue;
     }
 
-    /* The compositor will use the viewport color texture as the combined pass because the viewport
-     * texture will include Grease Pencil, so no need to write the combined pass from the engine
-     * side. */
-    if (pass_type == EEVEE_RENDER_PASS_COMBINED) {
-      continue;
-    }
-
     Vector<std::string> pass_names = Film::pass_to_render_pass_names(pass_type, inst_.view_layer);
     for (const int64_t pass_offset : IndexRange(pass_names.size())) {
       gpu::Texture *pass_texture = this->get_pass_texture(pass_type, pass_offset);
@@ -1028,21 +1028,21 @@ void Film::write_viewport_compositor_passes()
   }
 
   /* Write AOV passes. */
-  LISTBASE_FOREACH (ViewLayerAOV *, aov, &inst_.view_layer->aovs) {
-    if ((aov->flag & AOV_CONFLICT) != 0) {
+  for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
+    if ((aov.flag & AOV_CONFLICT) != 0) {
       continue;
     }
-    gpu::Texture *pass_texture = this->get_aov_texture(aov);
+    gpu::Texture *pass_texture = this->get_aov_texture(&aov);
     if (!pass_texture) {
       continue;
     }
 
     /* See above comment regarding the allocation extent. */
-    draw::TextureFromPool &output_pass_texture = DRW_viewport_pass_texture_get(aov->name);
+    draw::TextureFromPool &output_pass_texture = DRW_viewport_pass_texture_get(aov.name);
     output_pass_texture.acquire(this->display_extent, GPU_texture_format(pass_texture));
 
     PassSimple write_pass_ps = {"Film.WriteViewportCompositorPass"};
-    const eShaderType write_shader_type = get_aov_write_pass_shader_type(aov);
+    const eShaderType write_shader_type = get_aov_write_pass_shader_type(&aov);
     write_pass_ps.shader_set(inst_.shaders.static_shader_get(write_shader_type));
     write_pass_ps.push_constant("offset", data_.offset);
     write_pass_ps.bind_texture("input_tx", pass_texture);

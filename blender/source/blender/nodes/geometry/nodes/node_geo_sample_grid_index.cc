@@ -6,6 +6,7 @@
 
 #include "BKE_type_conversions.hh"
 #include "BKE_volume_grid.hh"
+#include "BKE_volume_grid_process.hh"
 #include "BKE_volume_openvdb.hh"
 
 #include "NOD_rna_define.hh"
@@ -28,12 +29,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   }
   const eNodeSocketDatatype data_type = eNodeSocketDatatype(node->custom1);
 
-  b.add_input(data_type, "Grid").hide_value().structure_type(StructureType::Grid);
-  b.add_input<decl::Int>("X").supports_field().structure_type(StructureType::Dynamic);
-  b.add_input<decl::Int>("Y").supports_field().structure_type(StructureType::Dynamic);
-  b.add_input<decl::Int>("Z").supports_field().structure_type(StructureType::Dynamic);
+  b.add_input(data_type, "Grid"_ustr).hide_value().structure_type(StructureType::Grid);
+  b.add_input<decl::Int>("X"_ustr).supports_field().structure_type(StructureType::Dynamic);
+  b.add_input<decl::Int>("Y"_ustr).supports_field().structure_type(StructureType::Dynamic);
+  b.add_input<decl::Int>("Z"_ustr).supports_field().structure_type(StructureType::Dynamic);
 
-  b.add_output(data_type, "Value").dependent_field({1, 2, 3});
+  b.add_output(data_type, "Value"_ustr).dependent_field({1, 2, 3});
 }
 
 static std::optional<eNodeSocketDatatype> node_type_for_socket_type(const bNodeSocket &socket)
@@ -62,31 +63,31 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
   }
   if (params.in_out() == SOCK_IN) {
     params.add_item(IFACE_("Grid"), [node_type](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeSampleGridIndex");
+      bNode &node = params.add_node("GeometryNodeSampleGridIndex"_ustr);
       node.custom1 = *node_type;
-      params.update_and_connect_available_socket(node, "Grid");
+      params.update_and_connect_available_socket(node, "Grid"_ustr);
     });
     const eNodeSocketDatatype other_type = eNodeSocketDatatype(params.other_socket().type);
     if (params.node_tree().typeinfo->validate_link(other_type, SOCK_INT)) {
       params.add_item(IFACE_("X"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeSampleGridIndex");
-        params.update_and_connect_available_socket(node, "X");
+        bNode &node = params.add_node("GeometryNodeSampleGridIndex"_ustr);
+        params.update_and_connect_available_socket(node, "X"_ustr);
       });
       params.add_item(IFACE_("Y"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeSampleGridIndex");
-        params.update_and_connect_available_socket(node, "Y");
+        bNode &node = params.add_node("GeometryNodeSampleGridIndex"_ustr);
+        params.update_and_connect_available_socket(node, "Y"_ustr);
       });
       params.add_item(IFACE_("Z"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeSampleGridIndex");
-        params.update_and_connect_available_socket(node, "Z");
+        bNode &node = params.add_node("GeometryNodeSampleGridIndex"_ustr);
+        params.update_and_connect_available_socket(node, "Z"_ustr);
       });
     }
   }
   else {
     params.add_item(IFACE_("Value"), [node_type](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeSampleGridIndex");
+      bNode &node = params.add_node("GeometryNodeSampleGridIndex"_ustr);
       node.custom1 = *node_type;
-      params.update_and_connect_available_socket(node, "Value");
+      params.update_and_connect_available_socket(node, "Value"_ustr);
     });
   }
 }
@@ -97,51 +98,6 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 }
 
 #ifdef WITH_OPENVDB
-
-template<typename T>
-void sample_grid(const bke::OpenvdbGridType<T> &grid,
-                 const Span<int> x,
-                 const Span<int> y,
-                 const Span<int> z,
-                 const IndexMask &mask,
-                 MutableSpan<T> dst)
-{
-  using GridType = bke::OpenvdbGridType<T>;
-  using GridValueT = typename GridType::ValueType;
-  using AccessorT = typename GridType::ConstUnsafeAccessor;
-  using TraitsT = typename bke::VolumeGridTraits<T>;
-  /* Can use unsafe accessor because we know that the tree topology is not modified while we access
-   * it here. This reduces a significant amount of overhead. */
-  AccessorT accessor = grid.getConstUnsafeAccessor();
-
-  mask.foreach_index([&](const int64_t i) {
-    GridValueT value = accessor.getValue(openvdb::Coord(x[i], y[i], z[i]));
-    dst[i] = TraitsT::to_blender(value);
-  });
-}
-
-template<typename Fn> void convert_to_static_type(const VolumeGridType type, const Fn &fn)
-{
-  switch (type) {
-    case VOLUME_GRID_BOOLEAN:
-      fn(bool());
-      break;
-    case VOLUME_GRID_FLOAT:
-      fn(float());
-      break;
-    case VOLUME_GRID_INT:
-      fn(int());
-      break;
-    case VOLUME_GRID_MASK:
-      fn(bool());
-      break;
-    case VOLUME_GRID_VECTOR_FLOAT:
-      fn(float3());
-      break;
-    default:
-      break;
-  }
-}
 
 class SampleGridIndexFunction : public mf::MultiFunction {
   bke::GVolumeGrid grid_;
@@ -177,15 +133,7 @@ class SampleGridIndexFunction : public mf::MultiFunction {
     const VArraySpan<int> z = params.readonly_single_input<int>(2, "Z");
     GMutableSpan dst = params.uninitialized_single_output(3, "Value");
 
-    convert_to_static_type(grid_type_, [&](auto dummy) {
-      using T = decltype(dummy);
-      sample_grid<T>(static_cast<const bke::OpenvdbGridType<T> &>(*grid_base_),
-                     x,
-                     y,
-                     z,
-                     mask,
-                     dst.typed<T>());
-    });
+    bke::volume_grid::sample_tree_indices(grid_type_, grid_base_->baseTree(), x, y, z, mask, dst);
   }
 };
 
@@ -194,15 +142,15 @@ class SampleGridIndexFunction : public mf::MultiFunction {
 static void node_geo_exec(GeoNodeExecParams params)
 {
 #ifdef WITH_OPENVDB
-  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid");
+  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid"_ustr);
   if (!grid) {
     params.set_default_remaining_outputs();
     return;
   }
 
-  auto x = params.extract_input<bke::SocketValueVariant>("X");
-  auto y = params.extract_input<bke::SocketValueVariant>("Y");
-  auto z = params.extract_input<bke::SocketValueVariant>("Z");
+  auto x = params.extract_input<bke::SocketValueVariant>("X"_ustr);
+  auto y = params.extract_input<bke::SocketValueVariant>("Y"_ustr);
+  auto z = params.extract_input<bke::SocketValueVariant>("Z"_ustr);
 
   std::string error_message;
   bke::SocketValueVariant output_value;
@@ -218,7 +166,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  params.set_output("Value", std::move(output_value));
+  params.set_output("Value"_ustr, std::move(output_value));
 #else
   node_geo_exec_with_missing_openvdb(params);
 #endif
@@ -243,9 +191,9 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSampleGridIndex", GEO_NODE_SAMPLE_GRID_INDEX);
+  geo_node_type_base(&ntype, "GeometryNodeSampleGridIndex"_ustr, GEO_NODE_SAMPLE_GRID_INDEX);
   ntype.ui_name = "Sample Grid Index";
   ntype.ui_description = "Retrieve volume grid values at specific voxels";
   ntype.enum_name_legacy = "SAMPLE_GRID_INDEX";
@@ -256,7 +204,7 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

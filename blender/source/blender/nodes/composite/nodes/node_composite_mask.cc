@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_base.hh"
 #include "BLI_string_utf8.h"
 
@@ -32,47 +28,49 @@ static const EnumPropertyItem size_source_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static void cmp_node_mask_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
 
-  b.add_output<decl::Float>("Mask").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Mask"_ustr).structure_type(StructureType::Dynamic);
 
   b.add_layout([](ui::Layout &layout, bContext *C, PointerRNA *ptr) {
-    template_id(&layout, C, ptr, "mask", nullptr, nullptr, nullptr);
+    template_id(&layout, C, ptr, "mask", "mask.new", nullptr, nullptr);
   });
 
-  b.add_input<decl::Menu>("Size Source")
+  b.add_input<decl::Menu>("Size Source"_ustr)
       .default_value(MenuValue(0))
       .static_items(size_source_items)
       .optional_label()
       .description("The source where the size of the mask is retrieved");
-  b.add_input<decl::Int>("Size X")
+  b.add_input<decl::Int>("Size X"_ustr)
       .default_value(256)
       .min(1)
-      .usage_by_menu("Size Source",
+      .usage_by_menu("Size Source"_ustr,
                      {CMP_NODE_MASK_FLAG_SIZE_FIXED, CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE})
       .description("The resolution of the mask along the X direction");
-  b.add_input<decl::Int>("Size Y")
+  b.add_input<decl::Int>("Size Y"_ustr)
       .default_value(256)
       .min(1)
-      .usage_by_menu("Size Source",
+      .usage_by_menu("Size Source"_ustr,
                      {CMP_NODE_MASK_FLAG_SIZE_FIXED, CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE})
       .description("The resolution of the mask along the Y direction");
-  b.add_input<decl::Bool>("Feather").default_value(true).description(
-      "Use feather information from the mask");
+  b.add_input<decl::Bool>("Feather"_ustr)
+      .default_value(true)
+      .description("Use feather information from the mask");
 
-  PanelDeclarationBuilder &motion_blur_panel = b.add_panel("Motion Blur").default_closed(true);
-  motion_blur_panel.add_input<decl::Bool>("Motion Blur")
+  PanelDeclarationBuilder &motion_blur_panel =
+      b.add_panel("Motion Blur"_ustr).default_closed(true);
+  motion_blur_panel.add_input<decl::Bool>("Motion Blur"_ustr)
       .default_value(false)
       .panel_toggle()
       .description("Use multi-sampled motion blur of the mask");
-  motion_blur_panel.add_input<decl::Int>("Samples", "Motion Blur Samples")
+  motion_blur_panel.add_input<decl::Int>("Samples"_ustr, "Motion Blur Samples"_ustr)
       .default_value(16)
       .min(1)
       .max(64)
       .description("Number of motion blur samples");
-  motion_blur_panel.add_input<decl::Float>("Shutter", "Motion Blur Shutter")
+  motion_blur_panel.add_input<decl::Float>("Shutter"_ustr, "Motion Blur Shutter"_ustr)
       .default_value(0.5f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -80,10 +78,10 @@ static void cmp_node_mask_declare(NodeDeclarationBuilder &b)
       .description("Exposure for motion blur as a factor of FPS");
 }
 
-static void node_mask_label(const bNodeTree * /*ntree*/,
-                            const bNode *node,
-                            char *label,
-                            int label_maxncpy)
+static void node_label(const bNodeTree * /*ntree*/,
+                       const bNode *node,
+                       char *label,
+                       int label_maxncpy)
 {
   BLI_strncpy_utf8(label, node->id ? node->id->name + 2 : IFACE_("Mask"), label_maxncpy);
 }
@@ -96,9 +94,8 @@ class MaskOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &output_mask = this->get_result("Mask");
     if (!this->get_mask()) {
-      output_mask.allocate_invalid();
+      this->allocate_default_remaining_outputs();
       return;
     }
 
@@ -109,10 +106,13 @@ class MaskOperation : public NodeOperation {
         domain,
         this->get_aspect_ratio(),
         this->get_use_feather(),
+        this->context().get_frame_number(),
         this->get_motion_blur_samples(),
-        this->get_motion_blur_shutter());
+        this->get_motion_blur_shutter(),
+        false);
 
-    output_mask.wrap_external(cached_mask);
+    Result &output_mask = this->get_result("Mask");
+    output_mask.share_data(cached_mask);
   }
 
   Domain compute_domain() override
@@ -184,28 +184,26 @@ class MaskOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new MaskOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_mask_cc
-
-static void register_node_type_cmp_mask()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_mask_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeMask", CMP_NODE_MASK);
+  cmp_node_type_base(&ntype, "CompositorNodeMask"_ustr, CMP_NODE_MASK);
   ntype.ui_name = "Mask";
   ntype.ui_description = "Input mask from a mask data-block, created in the image editor";
   ntype.enum_name_legacy = "MASK";
   ntype.nclass = NODE_CLASS_INPUT;
-  ntype.declare = file_ns::cmp_node_mask_declare;
-  ntype.labelfunc = file_ns::node_mask_label;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.labelfunc = node_label;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_mask)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_mask_cc

@@ -5,19 +5,19 @@
 #pragma once
 
 #include "BLI_string_ref.hh"
+#include "BLI_vector_set.hh"
 
 #include "DNA_node_types.h"
 
-#include "NOD_derived_node_tree.hh"
+#include "BKE_node.hh"
 
 #include "COM_context.hh"
 #include "COM_operation.hh"
 #include "COM_result.hh"
-#include "COM_scheduler.hh"
 
 namespace blender::compositor {
 
-using namespace nodes::derived_node_tree_types;
+struct Schedule;
 
 /* ------------------------------------------------------------------------------------------------
  * Node Operation
@@ -31,12 +31,17 @@ using namespace nodes::derived_node_tree_types;
 class NodeOperation : public Operation {
  private:
   /* The node that this operation represents. */
-  DNode node_;
+  const bNode &node_;
+  /* A node instance key that identifies the node instance in the nested node groups path. */
+  bNodeInstanceKey instance_key_ = bke::NODE_INSTANCE_KEY_NONE;
+  /* A map that associates each node instance identified by its node instance key to its node
+   * preview. This could be nullptr if node previews are not needed. */
+  Map<bNodeInstanceKey, bke::bNodePreview> *node_previews_ = nullptr;
 
  public:
   /* Populate the output results based on the node outputs and populate the input descriptors based
    * on the node inputs. */
-  NodeOperation(Context &context, DNode node);
+  NodeOperation(Context &context, const bNode &node);
 
   /* Calls the evaluate method of the operation, but also measures the execution time and stores it
    * in the context's profile data. */
@@ -48,16 +53,20 @@ class NodeOperation : public Operation {
    * output corresponding to each result. The node execution schedule is given as an input. */
   void compute_results_reference_counts(const Schedule &schedule);
 
+  /* Setter and getter for instance_key_. */
+  void set_instance_key(const bNodeInstanceKey &instance_key);
+  const bNodeInstanceKey &get_instance_key() const;
+
+  /* Setter and getter for node_previews_. */
+  void set_node_previews(Map<bNodeInstanceKey, bke::bNodePreview> *node_previews);
+  Map<bNodeInstanceKey, bke::bNodePreview> *get_node_previews();
+
  protected:
   /* Compute a node preview using the result returned from the get_preview_result method. */
   void compute_preview() override;
 
   /* Returns a reference to the node that this operation represents. */
   const bNode &node() const;
-
-  /* Returns true if the output identified by the given identifier is needed and should be
-   * computed, otherwise returns false. */
-  bool should_compute_output(StringRef identifier);
 
  private:
   /* Get the result which will be previewed in the node, this is chosen as the first linked output

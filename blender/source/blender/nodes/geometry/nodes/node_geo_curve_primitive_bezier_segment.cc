@@ -17,32 +17,32 @@ NODE_STORAGE_FUNCS(NodeGeometryCurvePrimitiveBezierSegment)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Int>("Resolution")
+  b.add_input<decl::Int>("Resolution"_ustr)
       .default_value(16)
       .min(1)
       .max(256)
       .subtype(PROP_UNSIGNED)
       .description("The number of evaluated points on the curve");
-  b.add_input<decl::Vector>("Start")
+  b.add_input<decl::Vector>("Start"_ustr)
       .default_value({-1.0f, 0.0f, 0.0f})
       .subtype(PROP_TRANSLATION)
       .description("Position of the start control point of the curve");
-  b.add_input<decl::Vector>("Start Handle")
+  b.add_input<decl::Vector>("Start Handle"_ustr)
       .default_value({-0.5f, 0.5f, 0.0f})
       .subtype(PROP_TRANSLATION)
       .description(
           "Position of the start handle used to define the shape of the curve. In Offset mode, "
           "relative to Start point");
-  b.add_input<decl::Vector>("End Handle")
+  b.add_input<decl::Vector>("End Handle"_ustr)
       .subtype(PROP_TRANSLATION)
       .description(
           "Position of the end handle used to define the shape of the curve. In Offset mode, "
           "relative to End point");
-  b.add_input<decl::Vector>("End")
+  b.add_input<decl::Vector>("End"_ustr)
       .default_value({1.0f, 0.0f, 0.0f})
       .subtype(PROP_TRANSLATION)
       .description("Position of the end control point of the curve");
-  b.add_output<decl::Geometry>("Curve");
+  b.add_output<decl::Geometry>("Curve"_ustr);
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -52,8 +52,8 @@ static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryCurvePrimitiveBezierSegment *data =
-      MEM_new_for_free<NodeGeometryCurvePrimitiveBezierSegment>(__func__);
+  NodeGeometryCurvePrimitiveBezierSegment *data = MEM_new<NodeGeometryCurvePrimitiveBezierSegment>(
+      __func__);
 
   data->mode = GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT_POSITION;
   node->storage = data;
@@ -102,16 +102,16 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   const NodeGeometryCurvePrimitiveBezierSegment &storage = node_storage(params.node());
   const GeometryNodeCurvePrimitiveBezierSegmentMode mode =
-      (const GeometryNodeCurvePrimitiveBezierSegmentMode)storage.mode;
+      GeometryNodeCurvePrimitiveBezierSegmentMode(storage.mode);
 
   Curves *curves = create_bezier_segment_curve(
-      params.extract_input<float3>("Start"),
-      params.extract_input<float3>("Start Handle"),
-      params.extract_input<float3>("End"),
-      params.extract_input<float3>("End Handle"),
-      std::max(params.extract_input<int>("Resolution"), 1),
+      params.extract_input<float3>("Start"_ustr),
+      params.extract_input<float3>("Start Handle"_ustr),
+      params.extract_input<float3>("End"_ustr),
+      params.extract_input<float3>("End Handle"_ustr),
+      std::max(params.extract_input<int>("Resolution"_ustr), 1),
       mode);
-  params.set_output("Curve", GeometrySet::from_curves(curves));
+  params.set_output("Curve"_ustr, GeometrySet::from_curves(curves));
 }
 
 static void node_rna(StructRNA *srna)
@@ -142,22 +142,23 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(
-      &ntype, "GeometryNodeCurvePrimitiveBezierSegment", GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT);
+  static bke::bNodeType ntype;
+  geo_node_type_base(&ntype,
+                     "GeometryNodeCurvePrimitiveBezierSegment"_ustr,
+                     GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT);
   ntype.ui_name = "Bézier Segment";
   ntype.ui_description = "Generate a 2D Bézier spline from the given control points and handles";
   ntype.enum_name_legacy = "CURVE_PRIMITIVE_BEZIER_SEGMENT";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.initfunc = node_init;
-  blender::bke::node_type_storage(ntype,
-                                  "NodeGeometryCurvePrimitiveBezierSegment",
-                                  node_free_standard_storage,
-                                  node_copy_standard_storage);
+  bke::node_type_storage(ntype,
+                         "NodeGeometryCurvePrimitiveBezierSegment",
+                         node_free_standard_storage,
+                         node_copy_standard_storage);
   ntype.declare = node_declare;
   ntype.draw_buttons = node_layout;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

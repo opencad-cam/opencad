@@ -10,6 +10,8 @@
 
 #include "BLI_math_inline.h"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Defines
  * \{ */
@@ -44,7 +46,7 @@ void cpack_to_rgb(unsigned int col, float *r_r, float *r_g, float *r_b);
 /** \name Conversion to RGBA
  * \{ */
 
-void hex_to_rgba(const char *hexcol, float *r_r, float *r_g, float *r_b, float *r_a);
+bool hex_to_rgba(const char *hexcol, float *r_r, float *r_g, float *r_b, float *r_a);
 
 /** \} */
 
@@ -102,7 +104,7 @@ MINLINE void srgb_to_linearrgb_uchar4_predivide(float linear[4], const unsigned 
 MINLINE void linearrgb_to_srgb_uchar3(unsigned char srgb[3], const float linear[3]);
 MINLINE void linearrgb_to_srgb_uchar4(unsigned char srgb[4], const float linear[4]);
 
-void BLI_init_srgb_conversion(void);
+void BLI_init_srgb_conversion();
 
 /** \} */
 
@@ -179,6 +181,8 @@ MINLINE void rgba_uchar_args_test_set(
 MINLINE void cpack_cpy_3ub(unsigned char r_col[3], unsigned int pack);
 
 /** \} */
+
+}  // namespace blender
 
 #if BLI_MATH_DO_INLINE
 #  include "intern/math_color_inline.cc"

@@ -8,6 +8,9 @@
 
 #pragma once
 
+struct DRWShadingGroup;
+namespace blender {
+
 enum ShaderFxMode {
   eShaderFxMode_Realtime = (1 << 0),
   eShaderFxMode_Render = (1 << 1),
@@ -69,8 +72,6 @@ enum eShadowShaderFx_Flag {
 enum eSwirlShaderFx_Flag {
   FX_SWIRL_MAKE_TRANSPARENT = (1 << 0),
 };
-
-struct DRWShadingGroup;
 
 /* WARNING ALERT! TYPEDEF VALUES ARE WRITTEN IN FILES! SO DO NOT CHANGE!
  * (ONLY ADD NEW ITEMS AT THE END)
@@ -235,3 +236,5 @@ struct WaveShaderFxData {
   char _pad[4] = {};
   ShaderFxData_Runtime runtime;
 };
+
+}  // namespace blender

@@ -49,8 +49,7 @@ static void init_data(ModifierData *md)
   INIT_DEFAULT_STRUCT_AFTER(dmd, modifier);
   modifier::greasepencil::init_influence_data(&dmd->influence, false);
 
-  GreasePencilDashModifierSegment *ds = MEM_new_for_free<GreasePencilDashModifierSegment>(
-      __func__);
+  GreasePencilDashModifierSegment *ds = MEM_new<GreasePencilDashModifierSegment>(__func__);
   STRNCPY_UTF8(ds->name, DATA_("Segment"));
   dmd->segments_array = ds;
   dmd->segments_num = 1;
@@ -67,7 +66,7 @@ static void copy_data(const ModifierData *md, ModifierData *target, const int fl
   modifier::greasepencil::copy_influence_data(&dmd->influence, &tmmd->influence, flag);
 
   tmmd->segments_array = static_cast<GreasePencilDashModifierSegment *>(
-      MEM_dupallocN(dmd->segments_array));
+      MEM_dupalloc(dmd->segments_array));
 }
 
 static void free_data(ModifierData *md)
@@ -75,7 +74,7 @@ static void free_data(ModifierData *md)
   auto *dmd = reinterpret_cast<GreasePencilDashModifierData *>(md);
   modifier::greasepencil::free_influence_data(&dmd->influence);
 
-  MEM_SAFE_FREE(dmd->segments_array);
+  MEM_SAFE_DELETE(dmd->segments_array);
 }
 
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
@@ -213,6 +212,8 @@ static bke::CurvesGeometry create_dashes(const PatternInfo &pattern_info,
       "radius", bke::AttrDomain::Point, 0.01f);
   const VArray<float> src_opacity = *src_attributes.lookup_or_default<float>(
       "opacity", bke::AttrDomain::Point, 1.0f);
+  const VArray<int> src_fill_ids = *src_attributes.lookup_or_default<int>(
+      "fill_id", bke::AttrDomain::Curve, 0);
 
   /* Count new curves and points. */
   int dst_point_num = 0;
@@ -237,6 +238,8 @@ static bke::CurvesGeometry create_dashes(const PatternInfo &pattern_info,
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
   bke::SpanAttributeWriter<bool> dst_cyclic = dst_attributes.lookup_or_add_for_write_span<bool>(
       "cyclic", bke::AttrDomain::Curve);
+  bke::SpanAttributeWriter<int> dst_fill_ids = dst_attributes.lookup_or_add_for_write_span<int>(
+      "fill_id", bke::AttrDomain::Curve);
   bke::SpanAttributeWriter<int> dst_material = dst_attributes.lookup_or_add_for_write_span<int>(
       "material_index", bke::AttrDomain::Curve);
   bke::SpanAttributeWriter<float> dst_radius = dst_attributes.lookup_or_add_for_write_span<float>(
@@ -246,6 +249,9 @@ static bke::CurvesGeometry create_dashes(const PatternInfo &pattern_info,
   /* Map each destination point and curve to its source. */
   Array<int> src_point_indices(dst_point_num);
   Array<int> src_curve_indices(dst_curve_num);
+
+  /* Start at `1` for the new geometry. */
+  int fill_id_to_set = 1;
 
   {
     /* Start at curve offset and add points for each dash. */
@@ -283,6 +289,13 @@ static bke::CurvesGeometry create_dashes(const PatternInfo &pattern_info,
           dst_opacity.span[i] = src_opacity[src_point_indices[i]] * opacity;
         }
       }
+      if (src_fill_ids[src_curve] == 0) {
+        dst_fill_ids.span[dst_curve_i] = 0;
+      }
+      else {
+        dst_fill_ids.span[dst_curve_i] = fill_id_to_set;
+        fill_id_to_set++;
+      }
 
       ++dst_curve_i;
     };
@@ -313,17 +326,19 @@ static bke::CurvesGeometry create_dashes(const PatternInfo &pattern_info,
                          bke::attribute_filter_from_skip_ref({"radius", "opacity"}),
                          src_point_indices,
                          dst_attributes);
-  bke::gather_attributes(src_attributes,
-                         bke::AttrDomain::Curve,
-                         bke::AttrDomain::Curve,
-                         bke::attribute_filter_from_skip_ref({"cyclic", "material_index"}),
-                         src_curve_indices,
-                         dst_attributes);
+  bke::gather_attributes(
+      src_attributes,
+      bke::AttrDomain::Curve,
+      bke::AttrDomain::Curve,
+      bke::attribute_filter_from_skip_ref({"cyclic", "material_index", "fill_id"}),
+      src_curve_indices,
+      dst_attributes);
 
   dst_cyclic.finish();
   dst_material.finish();
   dst_radius.finish();
   dst_opacity.finish();
+  dst_fill_ids.finish();
   dst_curves.update_curve_types();
 
   return dst_curves;
@@ -406,19 +421,19 @@ static void panel_draw(const bContext *C, Panel *panel)
   ui::Layout &row = layout.row(false);
   row.use_property_split_set(false);
 
-  template_list(&row,
-                (bContext *)C,
-                "MOD_UL_grease_pencil_dash_modifier_segments",
-                "",
-                ptr,
-                "segments",
-                ptr,
-                "segment_active_index",
-                nullptr,
-                3,
-                10,
-                0,
-                blender::ui::TEMPLATE_LIST_FLAG_NONE);
+  template_uilist(&row,
+                  const_cast<bContext *>(C),
+                  "MOD_UL_grease_pencil_dash_modifier_segments",
+                  "",
+                  ptr,
+                  "segments",
+                  ptr,
+                  "segment_active_index",
+                  nullptr,
+                  3,
+                  10,
+                  0,
+                  ui::TEMPLATE_LIST_FLAG_NONE);
 
   ui::Layout &col = row.column(false);
   ui::Layout *sub = &col.column(true);
@@ -428,13 +443,13 @@ static void panel_draw(const bContext *C, Panel *panel)
   sub = &col.column(true);
   PointerRNA op_ptr = sub->op(
       "OBJECT_OT_grease_pencil_dash_modifier_segment_move", "", ICON_TRIA_UP);
-  RNA_enum_set(&op_ptr, "type", /* blender::ed::object::DashSegmentMoveDirection::Up */ -1);
+  RNA_enum_set(&op_ptr, "type", /* ed::object::DashSegmentMoveDirection::Up */ -1);
   op_ptr = sub->op("OBJECT_OT_grease_pencil_dash_modifier_segment_move", "", ICON_TRIA_DOWN);
-  RNA_enum_set(&op_ptr, "type", /* blender::ed::object::DashSegmentMoveDirection::Down */ 1);
+  RNA_enum_set(&op_ptr, "type", /* ed::object::DashSegmentMoveDirection::Down */ 1);
 
   if (dmd->segment_active_index >= 0 && dmd->segment_active_index < dmd->segments_num) {
     PointerRNA ds_ptr = RNA_pointer_create_discrete(ptr->owner_id,
-                                                    &RNA_GreasePencilDashModifierSegment,
+                                                    RNA_GreasePencilDashModifierSegment,
                                                     &dmd->segments()[dmd->segment_active_index]);
 
     sub = &layout.column(true);
@@ -470,14 +485,14 @@ static void segment_list_item_draw(uiList * /*ui_list*/,
                                    int /*flt_flag*/)
 {
   ui::Layout &row = layout.row(true);
-  row.prop(itemptr, "name", blender::ui::ITEM_R_NO_BG, "", ICON_NONE);
+  row.prop(itemptr, "name", ui::ITEM_R_NO_BG, "", ICON_NONE);
 }
 
 static void panel_register(ARegionType *region_type)
 {
   modifier_panel_register(region_type, eModifierType_GreasePencilDash, panel_draw);
 
-  uiListType *list_type = MEM_callocN<uiListType>("Grease Pencil Dash modifier segments");
+  uiListType *list_type = MEM_new_zeroed<uiListType>("Grease Pencil Dash modifier segments");
   STRNCPY(list_type->idname, "MOD_UL_grease_pencil_dash_modifier_segments");
   list_type->draw_item = segment_list_item_draw;
   WM_uilisttype_add(list_type);
@@ -490,8 +505,7 @@ static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const Modi
   writer->write_struct(dmd);
   modifier::greasepencil::write_influence_data(writer, &dmd->influence);
 
-  BLO_write_struct_array(
-      writer, GreasePencilDashModifierSegment, dmd->segments_num, dmd->segments_array);
+  writer->write_struct_array(dmd->segments_num, dmd->segments_array);
 }
 
 static void blend_read(BlendDataReader *reader, ModifierData *md)
@@ -504,8 +518,6 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
       reader, GreasePencilDashModifierSegment, dmd->segments_num, &dmd->segments_array);
 }
 
-}  // namespace blender
-
 ModifierTypeInfo modifierType_GreasePencilDash = {
     /*idname*/ "GreasePencilDash",
     /*name*/ N_("Dot Dash"),
@@ -517,36 +529,38 @@ ModifierTypeInfo modifierType_GreasePencilDash = {
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_SupportsMapping,
     /*icon*/ ICON_MOD_DASH,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
-    /*is_disabled*/ blender::is_disabled,
+    /*free_data*/ free_data,
+    /*is_disabled*/ is_disabled,
     /*update_depsgraph*/ nullptr,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
 
-blender::Span<GreasePencilDashModifierSegment> GreasePencilDashModifierData::segments() const
+Span<GreasePencilDashModifierSegment> GreasePencilDashModifierData::segments() const
 {
   return {this->segments_array, this->segments_num};
 }
 
-blender::MutableSpan<GreasePencilDashModifierSegment> GreasePencilDashModifierData::segments()
+MutableSpan<GreasePencilDashModifierSegment> GreasePencilDashModifierData::segments()
 {
   return {this->segments_array, this->segments_num};
 }
+
+}  // namespace blender

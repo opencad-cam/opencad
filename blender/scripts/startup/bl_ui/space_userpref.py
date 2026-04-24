@@ -66,14 +66,26 @@ class USERPREF_PT_navigation_bar(Panel):
 
     def draw(self, context):
         layout = self.layout
+        view = context.space_data
 
         prefs = context.preferences
+
+        layout.prop(view, "search_filter", icon='VIEWZOOM', text="")
+        layout.separator(factor=0.1)
 
         col = layout.column()
 
         col.scale_x = 1.3
         col.scale_y = 1.3
-        col.prop(prefs, "active_section", expand=True)
+        if view.search_filter:
+            col.prop_tabs_enum(
+                prefs,
+                "active_section",
+                data_highlight=view,
+                property_highlight="tab_search_results",
+                expand_as='ROW')
+        else:
+            col.prop(prefs, "active_section", expand=True)
 
 
 class USERPREF_MT_editor_menus(Menu):
@@ -116,14 +128,14 @@ class USERPREF_MT_save_load(Menu):
         layout.operator_context = 'EXEC_AREA'
         if prefs.use_preferences_save:
             layout.operator("wm.save_userpref", text="Save Preferences")
+
+        layout.operator_context = 'INVOKE_AREA'
         sub_revert = layout.column(align=True)
         # NOTE: regarding `factory_startup`. To correctly show the active state of this menu item,
         # the user preferences themselves would need to have a `factory_startup` state.
         # Since showing an active menu item whenever factory-startup is used is not such a problem, leave this as-is.
         sub_revert.active = prefs.is_dirty or bpy.app.factory_startup
         sub_revert.operator("wm.read_userpref", text="Revert to Saved Preferences")
-
-        layout.operator_context = 'INVOKE_AREA'
 
         app_template = prefs.app_template
         if app_template:
@@ -233,6 +245,7 @@ class USERPREF_PT_interface_display(InterfacePanel, CenterAlignMixIn, Panel):
 
         col = layout.column(heading="Search", align=True)
         col.prop(prefs, "use_recent_searches", text="Sort by Most Recent")
+        col.prop(prefs, "show_hidden_ids", text="Show Hidden")
 
 
 class USERPREF_PT_interface_text(InterfacePanel, CenterAlignMixIn, Panel):
@@ -730,10 +743,9 @@ class USERPREF_PT_system_display_graphics(SystemPanel, CenterAlignMixIn, Panel):
             layout.label(text="A restart of Blender is required", icon='INFO')
 
         if system.gpu_backend == 'VULKAN':
-            col = layout.column()
-            col.label(text="Current Vulkan backend limitations:", icon='INFO')
-            col.label(text="\u2022 Low performance in VR", icon='BLANK1')
             if sys.platform == "win32" and gpu.platform.device_type_get() == 'QUALCOMM':
+                col = layout.column()
+                col.label(text="Current Vulkan backend limitations:", icon='INFO')
                 col.label(text="\u2022 Windows on ARM requires driver 31.0.112.0 or higher", icon='BLANK1')
 
 
@@ -845,6 +857,11 @@ class USERPREF_PT_system_memory(SystemPanel, CenterAlignMixIn, Panel):
             col.row().prop(system, "shader_compilation_method", expand=True)
             label = iface_("Threads") if system.shader_compilation_method == 'THREAD' else iface_("Subprocesses")
             col.prop(system, "gpu_shader_workers", text=label, translate=False)
+
+        layout.separator()
+
+        col = layout.column()
+        col.prop(system, "geometry_nodes_stack_limit")
 
 
 class USERPREF_PT_system_video_sequencer(SystemPanel, CenterAlignMixIn, Panel):
@@ -1640,6 +1657,7 @@ class USERPREF_PT_file_paths_render(FilePathsPanel, Panel):
         paths = context.preferences.filepaths
 
         col = self.layout.column()
+        col.prop(paths, "texture_cache_directory", text="Texture Cache")
         col.prop(paths, "render_output_directory", text="Render Output")
         col.prop(paths, "render_cache_directory", text="Render Cache")
 
@@ -1737,51 +1755,6 @@ class USERPREF_PT_saveload_autorun(FilePathsPanel, Panel):
             row.operator("preferences.autoexec_path_remove", text="", icon='X', emboss=False).index = i
 
 
-class USERPREF_PT_file_paths_asset_libraries(FilePathsPanel, Panel):
-    bl_label = "Asset Libraries"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = False
-        layout.use_property_decorate = False
-
-        paths = context.preferences.filepaths
-        active_library_index = paths.active_asset_library
-
-        row = layout.row()
-
-        row.template_list(
-            "USERPREF_UL_asset_libraries", "user_asset_libraries",
-            paths, "asset_libraries",
-            paths, "active_asset_library",
-        )
-
-        col = row.column(align=True)
-        col.operator("preferences.asset_library_add", text="", icon='ADD')
-        props = col.operator("preferences.asset_library_remove", text="", icon='REMOVE')
-        props.index = active_library_index
-
-        try:
-            active_library = None if active_library_index < 0 else paths.asset_libraries[active_library_index]
-        except IndexError:
-            active_library = None
-
-        if active_library is None:
-            return
-
-        layout.separator()
-
-        layout.prop(active_library, "path")
-        layout.prop(active_library, "import_method", text="Import Method")
-        layout.prop(active_library, "use_relative_path")
-
-
-class USERPREF_UL_asset_libraries(UIList):
-    def draw_item(self, _context, layout, _data, item, _icon, _active_data, _active_propname, _index):
-        asset_library = item
-        layout.prop(asset_library, "name", text="", emboss=False)
-
-
 class USERPREF_UL_extension_repos(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
         repo = item
@@ -1837,6 +1810,8 @@ class USERPREF_PT_saveload_blend(SaveLoadPanel, CenterAlignMixIn, Panel):
 
         col = layout.column(heading="Save")
         col.prop(view, "use_save_prompt")
+
+        layout.prop(paths, "save_modified_images")
 
         col = layout.column()
         col.prop(paths, "save_version")
@@ -2722,6 +2697,161 @@ class USERPREF_PT_addons(AddOnPanel, Panel):
 
 
 # -----------------------------------------------------------------------------
+# Asset Panels
+
+class AssetsPanel:
+    bl_space_type = 'PREFERENCES'
+    bl_region_type = 'WINDOW'
+    bl_context = "assets"
+
+
+class USERPREF_PT_assets(AssetsPanel, Panel):
+    bl_label = "Assets"
+    bl_options = {'HIDE_HEADER'}
+
+    def draw(self, context):
+        prefs = context.preferences
+
+        # Check if the "Welcome" panel should be displayed.
+
+        if bpy.app.online_access or prefs.extensions.use_online_access_handled:
+            # Either online access is allowed, or the warning has already been dismissed. No need to draw.
+            return
+
+        has_online_library = any(
+            library.enabled and library.use_remote_url for library in prefs.filepaths.asset_libraries
+        )
+        if not has_online_library:
+            # No online libraries, so no need to draw.
+            return
+
+        layout = self.layout
+        layout_header, layout_panel = layout.panel("advanced", default_closed=False)
+        layout_header.label(text="Internet Access Required", icon='INTERNET_OFFLINE')
+
+        if layout_panel is None:
+            return
+
+        box = layout_panel.box()
+
+        # Text wrapping isn't supported, manually wrap.
+        for line in (
+                rpt_("Internet access is required to browse and download online assets."),
+                rpt_("You can adjust this later from \"System\" preferences."),
+        ):
+            box.label(text=line, translate=False)
+
+        # TODO: Link to the manual?
+        # row.operator(
+        #     "wm.url_open",
+        #     text="",
+        #     icon='URL',
+        #     emboss=False,
+        # ).url = (
+        #     "https://docs.blender.org/manual/"
+        #     "{:s}/{:d}.{:d}/editors/preferences/extensions.html#installing-extensions"
+        # ).format(
+        #     bpy.utils.manual_language_code(),
+        #     *bpy.app.version[:2],
+        # )
+
+        row = box.row()
+        props = row.operator("wm.context_set_boolean", text="Continue Offline", icon='X')
+        props.data_path = "preferences.extensions.use_online_access_handled"
+        props.value = True
+
+        # The only reason to prefer this over `screen.userpref_show`
+        # is it will be disabled when `--offline-mode` is forced with a useful error for why.
+        row.operator("extensions.userpref_allow_online", text="Allow Online Access", icon='CHECKMARK')
+
+
+# The panel is not located in the file paths section anymore and should be renamed. The old name is only kept for
+# compatibility (add-ons extend it). Planned for removal in 6.0, see #153901.
+class USERPREF_PT_file_paths_asset_libraries(AssetsPanel, Panel):
+    bl_label = "Asset Libraries"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = False
+        layout.use_property_decorate = False
+
+        paths = context.preferences.filepaths
+        active_library_index = paths.active_asset_library
+
+        row = layout.row()
+
+        row.template_list(
+            "USERPREF_UL_asset_libraries", "user_asset_libraries",
+            paths, "asset_libraries",
+            paths, "active_asset_library",
+        )
+
+        col = row.column(align=True)
+        if context.preferences.experimental.use_remote_asset_libraries:
+            col.operator_menu_enum("preferences.asset_library_add", "type", text="", icon='ADD')
+        else:
+            col.operator("preferences.asset_library_add", text="", icon='ADD').type = 'LOCAL'
+        props = col.operator("preferences.asset_library_remove", text="", icon='REMOVE')
+        props.index = active_library_index
+
+        try:
+            active_library = None if active_library_index < 0 else paths.asset_libraries[active_library_index]
+        except IndexError:
+            active_library = None
+
+        if active_library is None:
+            return
+
+        layout.separator()
+
+        if active_library.use_remote_url:
+            use_remote_libraries = context.preferences.experimental.use_remote_asset_libraries
+            if use_remote_libraries:
+                row = layout.row()
+                row.alert = active_library.remote_url == ""
+                row.prop(active_library, "remote_url", text="", icon='INTERNET', placeholder="Repository URL")
+
+            layout.prop(active_library, "import_method", text="Import Method")
+        else:
+            layout.prop(active_library, "path")
+            layout.prop(active_library, "import_method", text="Import Method")
+            layout.prop(active_library, "use_relative_path")
+
+
+class USERPREF_UL_asset_libraries(UIList):
+    def draw_item(self, context, layout, _data, item, _icon, _active_data, _active_propname, _index):
+        del context
+        asset_library = item
+
+        icon = 'INTERNET' if asset_library.use_remote_url else 'DISK_DRIVE'
+        row = layout.row(align=True)
+        row.prop(asset_library, "name", text="", icon=icon, emboss=False)
+
+        if asset_library.enabled:
+            if asset_library.use_remote_url and asset_library.remote_url == "":
+                row.label(text="", icon='ERROR')
+
+        row.prop(asset_library, "enabled", text="", emboss=False,
+                 icon='CHECKBOX_HLT' if asset_library.enabled else 'CHECKBOX_DEHLT')
+
+    def filter_items(self, context, data, property):
+        asset_libraries = getattr(data, property)
+
+        # Determine the bitflags for remote & non-remote asset libraries.
+        use_remote_libs = context.preferences.experimental.use_remote_asset_libraries
+        flag_remote = self.bitflag_filter_item if use_remote_libs else self.bitflag_item_never_show
+        flag_nonremote = self.bitflag_filter_item
+
+        # Construct arrays of flags & indices.
+        flags = [
+            flag_remote if asset_library.use_remote_url else flag_nonremote
+            for asset_library in asset_libraries]
+        indices = list(range(len(asset_libraries)))
+
+        return flags, indices
+
+
+# -----------------------------------------------------------------------------
 # Studio Light Panels
 
 
@@ -2953,6 +3083,9 @@ class USERPREF_PT_experimental_new_features(ExperimentalPanel, Panel):
                  ("blender/blender/projects/10", "Pipeline, Assets & IO Project Page")),
                 ({"property": "use_shader_node_previews"}, ("blender/blender/issues/110353", "#110353")),
                 ({"property": "use_geometry_nodes_lists"}, ("blender/blender/issues/140918", "#140918")),
+                ({"property": "use_geometry_bundle"}, ("blender/blender/issues/150574", "#150574")),
+                ({"property": "use_remote_asset_libraries"}, ("blender/blender/issues/134495", "#134495")),
+                ({"property": "use_collection_importer"}, ("blender/blender/issues/132171", "#132171")),
             ),
         )
 
@@ -3057,7 +3190,6 @@ classes = (
 
     USERPREF_PT_file_paths_data,
     USERPREF_PT_file_paths_render,
-    USERPREF_PT_file_paths_asset_libraries,
     USERPREF_PT_file_paths_script_directories,
     USERPREF_PT_file_paths_applications,
     USERPREF_PT_text_editor,
@@ -3085,6 +3217,9 @@ classes = (
 
     USERPREF_PT_extensions,
     USERPREF_PT_addons,
+
+    USERPREF_PT_assets,
+    USERPREF_PT_file_paths_asset_libraries,
 
     USERPREF_MT_extensions_active_repo,
     USERPREF_MT_extensions_active_repo_remove,

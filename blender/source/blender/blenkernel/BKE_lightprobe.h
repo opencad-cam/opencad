@@ -11,6 +11,8 @@
 
 #include "BLI_sys_types.h"
 
+namespace blender {
+
 struct LightProbe;
 struct Main;
 struct BlendWriter;
@@ -31,7 +33,7 @@ void BKE_lightprobe_cache_blend_read(struct BlendDataReader *reader,
 /**
  * Create a single empty irradiance grid cache.
  */
-struct LightProbeGridCacheFrame *BKE_lightprobe_grid_cache_frame_create(void);
+struct LightProbeGridCacheFrame *BKE_lightprobe_grid_cache_frame_create();
 
 /**
  * Create a copy of a cache frame.
@@ -66,3 +68,5 @@ void BKE_lightprobe_cache_free(struct Object *object);
  * This depends on the light cache type.
  */
 int64_t BKE_lightprobe_grid_cache_frame_sample_count(const struct LightProbeGridCacheFrame *cache);
+
+}  // namespace blender

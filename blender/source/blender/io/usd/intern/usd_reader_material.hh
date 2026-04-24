@@ -14,13 +14,15 @@
 
 #include <string>
 
+namespace blender {
+
 struct Main;
 struct Material;
 struct bNode;
 struct bNodeTree;
 struct ReportList;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 using ShaderToNodeMap = Map<std::string, bNode *>;
 
@@ -75,6 +77,10 @@ struct NodePlacementContext {
  * nodes together. */
 struct ExtraLinkInfo {
   bool is_color_corrected = false;
+
+  /* Is the value inverted with respect to Blender.
+   * For example: Opacity 0.85 <-> Transmission Weight 0.15 */
+  bool is_inverted = false;
 
   float opacity_threshold = 0.0f;
 };
@@ -227,4 +233,5 @@ Material *find_existing_material(const pxr::SdfPath &usd_mat_path,
                                  const Map<std::string, Material *> &mat_map,
                                  const Map<pxr::SdfPath, Material *> &usd_path_to_mat);
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

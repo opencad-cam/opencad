@@ -36,7 +36,9 @@
 
 #include "select_engine.hh"
 
-namespace blender::draw::edit_select {
+namespace blender {
+
+namespace draw::edit_select {
 
 #define USE_CAGE_OCCLUSION
 
@@ -67,7 +69,7 @@ struct Instance : public DrawEngine {
  public:
   struct StaticData {
     gpu::FrameBuffer *framebuffer_select_id;
-    blender::gpu::Texture *texture_u32;
+    gpu::Texture *texture_u32;
 
     struct Shaders {
       /* Depth Pre Pass */
@@ -129,6 +131,12 @@ struct Instance : public DrawEngine {
       state |= DRW_STATE_CLIP_PLANES;
     }
 
+    if (draw_ctx->v3d->shading.flag & V3D_SHADING_BACKFACE_CULLING &&
+        draw_ctx->v3d->shading.type == OB_SOLID)
+    {
+      state |= DRW_STATE_CULL_BACK;
+    }
+
     bool retopology_occlusion = RETOPOLOGY_ENABLED(draw_ctx->v3d) && !XRAY_ENABLED(draw_ctx->v3d);
     float retopology_offset = RETOPOLOGY_OFFSET(draw_ctx->v3d);
 
@@ -176,8 +184,7 @@ struct Instance : public DrawEngine {
       select_face_flat = nullptr;
       if (e_data.context.select_mode & SCE_SELECT_FACE) {
         auto &sub = select_face_ps.sub("Face");
-        const float vertex_size = U.pixelsize *
-                                  blender::draw::overlay::Resources::vertex_size_get();
+        const float vertex_size = U.pixelsize * draw::overlay::Resources::vertex_size_get();
         sub.shader_set(sh->select_id_flat);
         sub.push_constant("vertex_size", float(2 * vertex_size));
         sub.push_constant("retopology_offset", retopology_offset);
@@ -206,8 +213,7 @@ struct Instance : public DrawEngine {
       select_id_vert_ps.bind_ubo(DRW_CLIPPING_UBO_SLOT, clip_planes_buf);
       select_vert = nullptr;
       if (e_data.context.select_mode & SCE_SELECT_VERTEX) {
-        const float vertex_size = U.pixelsize *
-                                  blender::draw::overlay::Resources::vertex_size_get();
+        const float vertex_size = U.pixelsize * draw::overlay::Resources::vertex_size_get();
         auto &sub = select_id_vert_ps.sub("Sub");
         sub.state_set(state, clipping_plane_count);
         sub.shader_set(sh->select_id_flat);
@@ -223,7 +229,7 @@ struct Instance : public DrawEngine {
     e_data.context.max_index_drawn_len = 1;
     framebuffer_setup();
     GPU_framebuffer_bind(e_data.framebuffer_select_id);
-    GPU_framebuffer_clear_color_depth(e_data.framebuffer_select_id, blender::float4{0.0f}, 1.0f);
+    GPU_framebuffer_clear_color_depth(e_data.framebuffer_select_id, {0.0, 0.0, 0.0, 0.0}, 1.0f);
   }
 
   ElemIndexRanges edit_mesh_sync(Object *ob,
@@ -234,7 +240,6 @@ struct Instance : public DrawEngine {
                                  const uint initial_index)
   {
     using namespace blender::draw;
-    using namespace blender;
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
 
     ElemIndexRanges ranges{};
@@ -292,7 +297,6 @@ struct Instance : public DrawEngine {
                             const uint initial_index)
   {
     using namespace blender::draw;
-    using namespace blender;
     Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob);
 
     ElemIndexRanges ranges{};
@@ -367,7 +371,7 @@ struct Instance : public DrawEngine {
       if (ob->dt >= OB_SOLID) {
         /* This object is not selectable. It is here to participate in occlusion.
          * This is the case in retopology mode. */
-        blender::gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_surface(
+        gpu::Batch *geom_faces = DRW_mesh_batch_cache_get_surface(
             DRW_object_get_data_for_drawing<Mesh>(*ob));
 
         depth_occlude->draw(geom_faces, manager.unique_handle(ob_ref));
@@ -468,7 +472,7 @@ struct Instance : public DrawEngine {
        * Note this is not working correctly for vertex-paint (yet), but has been discussed
        * in #66645 and there is a solution by @mano-wii in P1032.
        * So OB_MODE_VERTEX_PAINT is already included here [required for P1032 I guess]. */
-      Mesh *me_orig = static_cast<Mesh *>(DEG_get_original(ob)->data);
+      Mesh *me_orig = id_cast<Mesh *>(DEG_get_original(ob)->data);
       if (me_orig->editflag & ME_EDIT_PAINT_VERT_SEL) {
         select_mode = SCE_SELECT_VERTEX;
       }
@@ -524,7 +528,7 @@ void Engine::free_static()
   GPU_FRAMEBUFFER_FREE_SAFE(e_data.framebuffer_select_id);
 }
 
-}  // namespace blender::draw::edit_select
+}  // namespace draw::edit_select
 
 /** \} */
 
@@ -540,16 +544,18 @@ SELECTID_Context *DRW_select_engine_context_get()
   return &e_data.context;
 }
 
-blender::gpu::FrameBuffer *DRW_engine_select_framebuffer_get()
+gpu::FrameBuffer *DRW_engine_select_framebuffer_get()
 {
   Instance::StaticData &e_data = Instance::StaticData::get();
   return e_data.framebuffer_select_id;
 }
 
-blender::gpu::Texture *DRW_engine_select_texture_get()
+gpu::Texture *DRW_engine_select_texture_get()
 {
   Instance::StaticData &e_data = Instance::StaticData::get();
   return e_data.texture_u32;
 }
 
 /** \} */
+
+}  // namespace blender

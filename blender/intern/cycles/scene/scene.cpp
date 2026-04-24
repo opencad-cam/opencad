@@ -62,7 +62,7 @@ Scene ::Scene(const SceneParams &params_, Device *device)
   light_manager = make_unique<LightManager>();
   geometry_manager = make_unique<GeometryManager>();
   object_manager = make_unique<ObjectManager>();
-  image_manager = make_unique<ImageManager>(device->info);
+  image_manager = make_unique<ImageManager>(device->info, params);
   particle_system_manager = make_unique<ParticleSystemManager>();
   bake_manager = make_unique<BakeManager>();
   procedural_manager = make_unique<ProceduralManager>();
@@ -143,10 +143,10 @@ void Scene::free_memory(bool final)
     volume_manager->device_free(&dscene);
 
     if (final) {
-      image_manager->device_free(device);
+      image_manager->device_free(this);
     }
     else {
-      image_manager->device_free_builtin(device);
+      image_manager->device_free_builtin(this);
     }
 
     lookup_tables->device_free(device, &dscene);
@@ -434,9 +434,6 @@ bool Scene::need_global_attribute(AttributeStandard std)
   if (std == ATTR_STD_MOTION_VERTEX_POSITION) {
     return need_motion() != MOTION_NONE;
   }
-  if (std == ATTR_STD_MOTION_VERTEX_NORMAL) {
-    return need_motion() == MOTION_BLUR;
-  }
   if (std == ATTR_STD_VOLUME_VELOCITY || std == ATTR_STD_VOLUME_VELOCITY_X ||
       std == ATTR_STD_VOLUME_VELOCITY_Y || std == ATTR_STD_VOLUME_VELOCITY_Z)
   {
@@ -503,7 +500,7 @@ void Scene::device_free()
 void Scene::collect_statistics(RenderStats *stats)
 {
   geometry_manager->collect_statistics(this, stats);
-  image_manager->collect_statistics(stats);
+  image_manager->collect_statistics(stats, this);
 }
 
 void Scene::enable_update_stats()
@@ -635,15 +632,25 @@ bool Scene::update(Progress &progress)
 
 bool Scene::update_camera_resolution(Progress &progress, int width, int height)
 {
-  if (!camera->set_screen_size(width, height)) {
-    return false;
+  bool update_data = false;
+
+  if (camera->set_screen_size(width, height)) {
+    camera->device_update(device, &dscene, this);
+    update_data = true;
   }
 
-  camera->device_update(device, &dscene, this);
+  if (integrator->get_use_pixel_jitter()) {
+    integrator->tag_use_pixel_jitter_modified();
 
-  progress.set_status("Updating Device", "Writing constant memory");
-  device->const_copy_to("data", &dscene.data, sizeof(dscene.data));
-  return true;
+    integrator->device_update(device, &dscene, this);
+    update_data = true;
+  }
+
+  if (update_data) {
+    progress.set_status("Updating Device", "Writing constant memory");
+    device->const_copy_to("data", &dscene.data, sizeof(dscene.data));
+  }
+  return update_data;
 }
 
 static void log_kernel_features(const uint features)
@@ -814,14 +821,55 @@ void Scene::tag_has_volume_modified()
   has_volume_modified_ = true;
 }
 
-template<> Light *Scene::create_node<Light>()
+bool Scene::use_light_mis() const
 {
-  unique_ptr<Light> node = make_unique<Light>();
-  Light *node_ptr = node.get();
+  for (const Object *object : objects) {
+    if (!object->get_geometry()->is_light()) {
+      continue;
+    }
+
+    const Light *light = static_cast<const Light *>(object->get_geometry());
+    if (light->get_is_enabled() && light->get_use_mis() && light->is_traceable()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+template<class T> T *Scene::create_light_node()
+{
+  unique_ptr<T> node = make_unique<T>();
+  T *node_ptr = node.get();
   node->set_owner(this);
   geometry.push_back(std::move(node));
   light_manager->tag_update(this, LightManager::LIGHT_ADDED);
   return node_ptr;
+}
+
+template<> PointLight *Scene::create_node<PointLight>()
+{
+  return create_light_node<PointLight>();
+}
+
+template<> SpotLight *Scene::create_node<SpotLight>()
+{
+  return create_light_node<SpotLight>();
+}
+
+template<> AreaLight *Scene::create_node<AreaLight>()
+{
+  return create_light_node<AreaLight>();
+}
+
+template<> SunLight *Scene::create_node<SunLight>()
+{
+  return create_light_node<SunLight>();
+}
+
+template<> BackgroundLight *Scene::create_node<BackgroundLight>()
+{
+  return create_light_node<BackgroundLight>();
 }
 
 template<> Mesh *Scene::create_node<Mesh>()
@@ -986,7 +1034,7 @@ template<> void Scene::delete_node(Geometry *node)
   else {
     flag = GeometryManager::MESH_REMOVED;
     if (node->has_volume) {
-      volume_manager->tag_update(node);
+      volume_manager->tag_update({node});
     }
   }
 
@@ -1000,7 +1048,7 @@ template<> void Scene::delete_node(Object *node)
 
   uint flag = ObjectManager::OBJECT_REMOVED;
   if (node->get_geometry()->has_volume) {
-    volume_manager->tag_update(node, flag);
+    volume_manager->tag_update({node}, flag);
   }
 
   objects.erase_by_swap(node);
@@ -1050,6 +1098,7 @@ template<typename T> static void assert_same_owner(const set<T *> &nodes, const 
 template<> void Scene::delete_nodes(const set<Geometry *> &nodes, const NodeOwner *owner)
 {
   assert_same_owner(nodes, owner);
+  volume_manager->tag_update(nodes);
   geometry.erase_in_set(nodes);
   geometry_manager->tag_update(this, GeometryManager::GEOMETRY_REMOVED);
   light_manager->tag_update(this, LightManager::LIGHT_REMOVED);
@@ -1058,6 +1107,7 @@ template<> void Scene::delete_nodes(const set<Geometry *> &nodes, const NodeOwne
 template<> void Scene::delete_nodes(const set<Object *> &nodes, const NodeOwner *owner)
 {
   assert_same_owner(nodes, owner);
+  volume_manager->tag_update(nodes, ObjectManager::OBJECT_REMOVED);
   objects.erase_in_set(nodes);
   object_manager->tag_update(this, ObjectManager::OBJECT_REMOVED);
 }

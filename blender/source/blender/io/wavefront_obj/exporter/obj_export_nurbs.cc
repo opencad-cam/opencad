@@ -26,8 +26,10 @@ namespace blender::io::obj {
 /** \name Utility
  * \{ */
 
-/* Find the multiplicity entry with the valid span occurring on the right side of the related
- * breakpoint/knot. */
+/**
+ * Find the multiplicity entry with the valid span occurring on the right side of the related
+ * break-point/knot.
+ */
 static int find_leftmost_span(const int8_t order, const Span<int> multiplicity)
 {
   int index = -1;
@@ -39,8 +41,10 @@ static int find_leftmost_span(const int8_t order, const Span<int> multiplicity)
   return index;
 }
 
-/* Find the multiplicity entry with the valid span occurring on the left side of the related
- * breakpoint/knot. */
+/**
+ * Find the multiplicity entry with the valid span occurring on the left side of the related
+ * break-point/knot.
+ */
 static int find_rightmost_span(const int8_t order, const Span<int> multiplicity)
 {
   int index = multiplicity.size();
@@ -170,7 +174,7 @@ OBJLegacyCurve::OBJLegacyCurve(const Depsgraph *depsgraph, Object *curve_object)
     : export_object_eval_(curve_object)
 {
   export_object_eval_ = DEG_get_evaluated(depsgraph, curve_object);
-  export_curve_ = static_cast<Curve *>(export_object_eval_->data);
+  export_curve_ = id_cast<Curve *>(export_object_eval_->data);
 }
 
 const Nurb *OBJLegacyCurve::get_spline(const int spline_index) const

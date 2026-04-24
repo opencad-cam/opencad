@@ -22,7 +22,8 @@ ccl_device_inline bool intersection_ray_valid(const ccl_private Ray *ray)
    * Scene intersection may also called with empty rays for conditional trace
    * calls that evaluate to false, so filter those out.
    */
-  return isfinite_safe(ray->P.x) && isfinite_safe(ray->D.x) && len_squared(ray->D) != 0.0f;
+  return isfinite_safe(ray->P.x) && isfinite_safe(ray->D.x) && len_squared(ray->D) != 0.0f &&
+         ray->tmin < FLT_MAX;
 }
 
 /* Offset intersection distance by the smallest possible amount, to skip
@@ -177,8 +178,8 @@ ccl_device_forceinline int intersection_get_shader(
   return intersection_get_shader_from_isect_prim(kg, isect->prim, isect->type);
 }
 
-ccl_device_forceinline int intersection_get_object_flags(
-    KernelGlobals kg, const ccl_private Intersection *ccl_restrict isect)
+ccl_device_forceinline uint
+intersection_get_object_flags(KernelGlobals kg, const ccl_private Intersection *ccl_restrict isect)
 {
   return kernel_data_fetch(object_flag, isect->object);
 }
@@ -296,10 +297,10 @@ ccl_device_inline bool intersection_skip_shadow_link(KernelGlobals kg,
 ccl_device_forceinline bool intersection_skip_shadow_already_recoded(IntegratorShadowState state,
                                                                      const int object,
                                                                      const int prim,
-                                                                     const int num_hits)
+                                                                     const uint num_hits)
 {
-  const int num_recorded_hits = min(num_hits, int(INTEGRATOR_SHADOW_ISECT_SIZE));
-  for (int i = 0; i < num_recorded_hits; ++i) {
+  const uint num_recorded_hits = min(num_hits, INTEGRATOR_SHADOW_ISECT_SIZE);
+  for (uint i = 0; i < num_recorded_hits; ++i) {
     const int isect_object = INTEGRATOR_STATE_ARRAY(state, shadow_isect, i, object);
     const int isect_prim = INTEGRATOR_STATE_ARRAY(state, shadow_isect, i, prim);
     if (object == isect_object && prim == isect_prim) {

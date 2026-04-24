@@ -132,7 +132,7 @@ OperationNode *ComponentNode::add_operation(const DepsEvalOperationCb &op,
   OperationNode *op_node = find_operation(opcode, name, name_tag);
   if (!op_node) {
     DepsNodeFactory *factory = type_get_factory(NodeType::OPERATION);
-    op_node = (OperationNode *)factory->create_node(this->owner->id_orig, "", name);
+    op_node = static_cast<OperationNode *>(factory->create_node(this->owner->id_orig, "", name));
 
     /* register opnode in this component's operation set */
     OperationIDKey key(opcode, op_node->name, name_tag);
@@ -270,7 +270,7 @@ void BoneComponentNode::init(const ID *id, const char *subdata)
   // this->name = subdata;
 
   /* bone-specific node data */
-  Object *object = (Object *)id;
+  Object *object = id_cast<Object *>(const_cast<ID *>(id));
   this->pchan = BKE_pose_channel_find_name(object->pose, subdata);
 }
 
@@ -295,6 +295,7 @@ DEG_COMPONENT_NODE_DEFINE(ParticleSettings, PARTICLE_SETTINGS, 0);
 DEG_COMPONENT_NODE_DEFINE(PointCache, POINT_CACHE, 0);
 DEG_COMPONENT_NODE_DEFINE(Pose, EVAL_POSE, ID_RECALC_GEOMETRY);
 DEG_COMPONENT_NODE_DEFINE(Sequencer, SEQUENCER, 0);
+DEG_COMPONENT_NODE_DEFINE(Compositor, COMPOSITOR, 0);
 DEG_COMPONENT_NODE_DEFINE(Shading, SHADING, ID_RECALC_SHADING);
 DEG_COMPONENT_NODE_DEFINE(Transform, TRANSFORM, ID_RECALC_TRANSFORM);
 DEG_COMPONENT_NODE_DEFINE(ObjectFromLayer, OBJECT_FROM_LAYER, 0);
@@ -331,6 +332,7 @@ void deg_register_component_depsnodes()
   register_node_typeinfo(&DNTI_IMAGE_ANIMATION);
   register_node_typeinfo(&DNTI_EVAL_POSE);
   register_node_typeinfo(&DNTI_SEQUENCER);
+  register_node_typeinfo(&DNTI_COMPOSITOR);
   register_node_typeinfo(&DNTI_SHADING);
   register_node_typeinfo(&DNTI_TRANSFORM);
   register_node_typeinfo(&DNTI_OBJECT_FROM_LAYER);

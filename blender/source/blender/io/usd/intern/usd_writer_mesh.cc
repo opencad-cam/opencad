@@ -42,9 +42,12 @@
 #include "DNA_object_types.h"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
-namespace blender::io::usd {
+namespace io::usd {
 
 USDGenericMeshWriter::USDGenericMeshWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx)
 {
@@ -63,7 +66,7 @@ static const SubsurfModifierData *get_last_subdiv_modifier(eEvaluationMode eval_
   /* Return the subdiv modifier if it is the last modifier and has
    * the required mode enabled. */
 
-  ModifierData *md = (ModifierData *)(obj->modifiers.last);
+  ModifierData *md = static_cast<ModifierData *>(obj->modifiers.last);
 
   if (!md) {
     return nullptr;
@@ -223,7 +226,7 @@ void USDGenericMeshWriter::write_generic_data(const Mesh *mesh,
                                               const bke::AttributeIter &attr)
 {
   const pxr::TfToken pv_name(
-      make_safe_name(attr.name, usd_export_context_.export_params.allow_unicode));
+      make_safe_primvar_name(attr.name, usd_export_context_.export_params.allow_unicode));
   const bool use_color3f_type = pv_name == usdtokens::displayColor;
   const std::optional<pxr::TfToken> pv_interp = convert_blender_domain_to_usd(attr.domain);
   const std::optional<pxr::SdfValueTypeName> pv_type = convert_blender_type_to_usd(
@@ -316,13 +319,18 @@ void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
 
   const pxr::UsdTimeCode time = get_export_time_code();
   const pxr::TfToken pv_name(
-      make_safe_name(name, usd_export_context_.export_params.allow_unicode));
+      make_safe_primvar_name(name, usd_export_context_.export_params.allow_unicode));
   const pxr::UsdGeomPrimvarsAPI pv_api = pxr::UsdGeomPrimvarsAPI(usd_mesh);
 
   pxr::UsdGeomPrimvar pv_uv = pv_api.CreatePrimvar(
       pv_name, pxr::SdfValueTypeNames->TexCoord2fArray, pxr::UsdGeomTokens->faceVarying);
   set_attribute(pv_uv, unique_uvs, time, usd_value_writer_);
-  pv_uv.SetIndices(indices, time);
+
+  pxr::UsdAttribute attr_indices = pv_uv.CreateIndicesAttr();
+  if (!attr_indices.HasValue()) {
+    attr_indices.Set(indices, time);
+  }
+  usd_value_writer_.SetAttribute(attr_indices, pxr::VtValue(indices), time);
 }
 
 void USDGenericMeshWriter::free_export_mesh(Mesh *mesh)
@@ -470,7 +478,7 @@ pxr::TfToken USDGenericMeshWriter::get_subdiv_scheme(const SubsurfModifierData *
 
   if (subsurfData) {
     if (subsurfData->subdivType == SUBSURF_TYPE_CATMULL_CLARK) {
-      if (usd_export_context_.export_params.export_subdiv == USD_SUBDIV_BEST_MATCH) {
+      if (usd_export_context_.export_params.export_subdiv == SubdivExportMode::Match) {
         /* If a subdivision modifier exists, and it uses Catmull-Clark, then apply Catmull-Clark
          * SubD scheme. */
         subdiv_scheme = pxr::UsdGeomTokens->catmullClark;
@@ -732,7 +740,7 @@ void USDGenericMeshWriter::write_surface_velocity(const Mesh *mesh,
   /* Export velocity attribute output by fluid sim, sequence cache modifier
    * and geometry nodes. */
   const VArraySpan velocity = *mesh->attributes().lookup<float3>("velocity",
-                                                                 blender::bke::AttrDomain::Point);
+                                                                 bke::AttrDomain::Point);
   if (velocity.is_empty()) {
     return;
   }
@@ -947,4 +955,5 @@ void USDMeshWriter::add_shape_key_weights_sample(const Object *obj)
   temp_weights_attr.Set(weights, time);
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

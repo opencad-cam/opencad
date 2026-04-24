@@ -4,6 +4,7 @@
 
 #include "device/cpu/device_impl.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -36,12 +37,15 @@
 #include "util/log.h"
 #include "util/progress.h"
 #include "util/task.h"
+#include "util/types_image.h"
 
 CCL_NAMESPACE_BEGIN
 
 CPUDevice::CPUDevice(const DeviceInfo &info_, Stats &stats_, Profiler &profiler_, bool headless_)
-    : Device(info_, stats_, profiler_, headless_), texture_info(this, "texture_info", MEM_GLOBAL)
+    : Device(info_, stats_, profiler_, headless_)
 {
+  image_info = make_unique<device_vector<KernelImageInfo>>(this, "image_info", MEM_GLOBAL);
+
   /* Pick any kernel, all of them are supposed to have same level of microarchitecture
    * optimization. */
   LOG_INFO << "Using " << get_cpu_kernels().integrator_init_from_camera.get_uarch_name()
@@ -54,7 +58,6 @@ CPUDevice::CPUDevice(const DeviceInfo &info_, Stats &stats_, Profiler &profiler_
 #ifdef WITH_EMBREE
   embree_device = rtcNewDevice("verbose=0");
 #endif
-  need_texture_info = false;
 }
 
 CPUDevice::~CPUDevice()
@@ -63,7 +66,7 @@ CPUDevice::~CPUDevice()
   rtcReleaseDevice(embree_device);
 #endif
 
-  texture_info.free();
+  image_info->free();
 }
 
 BVHLayoutMask CPUDevice::get_bvh_layout_mask(uint /*kernel_features*/) const
@@ -75,32 +78,18 @@ BVHLayoutMask CPUDevice::get_bvh_layout_mask(uint /*kernel_features*/) const
   return bvh_layout_mask;
 }
 
-bool CPUDevice::load_texture_info()
-{
-  if (!need_texture_info) {
-    return false;
-  }
-
-  texture_info.copy_to_device();
-  need_texture_info = false;
-
-  return true;
-}
-
 void CPUDevice::mem_alloc(device_memory &mem)
 {
-  if (mem.type == MEM_TEXTURE) {
-    assert(!"mem_alloc not supported for textures.");
+  if (mem.type == MEM_IMAGE_TEXTURE) {
+    assert(!"mem_alloc not supported for images.");
   }
   else if (mem.type == MEM_GLOBAL) {
     assert(!"mem_alloc not supported for global memory.");
   }
   else {
-    if (mem.name) {
-      LOG_DEBUG << "Buffer allocate: " << mem.name << ", "
-                << string_human_readable_number(mem.memory_size()) << " bytes. ("
-                << string_human_readable_size(mem.memory_size()) << ")";
-    }
+    LOG_DEBUG << "Buffer allocate: " << mem.log_name() << ", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
 
     if (mem.type == MEM_DEVICE_ONLY) {
       size_t alignment = MIN_ALIGNMENT_DEVICE_MEMORY;
@@ -123,9 +112,9 @@ void CPUDevice::mem_copy_to(device_memory &mem)
     global_free(mem);
     global_alloc(mem);
   }
-  else if (mem.type == MEM_TEXTURE) {
-    tex_free((device_texture &)mem);
-    tex_alloc((device_texture &)mem);
+  else if (mem.type == MEM_IMAGE_TEXTURE) {
+    image_free((device_image &)mem);
+    image_alloc((device_image &)mem);
   }
   else {
     if (!mem.device_pointer) {
@@ -147,6 +136,11 @@ void CPUDevice::mem_copy_from(
   /* no-op */
 }
 
+void CPUDevice::mem_or_from_device(device_memory & /*mem*/)
+{
+  /* Nothing to do data is already in host buffer. */
+}
+
 void CPUDevice::mem_zero(device_memory &mem)
 {
   if (!mem.device_pointer) {
@@ -163,8 +157,8 @@ void CPUDevice::mem_free(device_memory &mem)
   if (mem.type == MEM_GLOBAL) {
     global_free(mem);
   }
-  else if (mem.type == MEM_TEXTURE) {
-    tex_free((device_texture &)mem);
+  else if (mem.type == MEM_IMAGE_TEXTURE) {
+    image_free((device_image &)mem);
   }
   else if (mem.device_pointer) {
     if (mem.type == MEM_DEVICE_ONLY) {
@@ -194,16 +188,27 @@ void CPUDevice::const_copy_to(const char *name, void *host, const size_t size)
     data->device_bvh = embree_traversable;
   }
 #endif
+
+  /* Update both the main one, and the per-thread globals in case of updates during
+   * render from e.g. the texture cache. */
   kernel_const_copy(&kernel_globals, name, host, size);
+  for (ThreadKernelGlobalsCPU &kg : kernel_thread_globals_) {
+    kernel_const_copy(&kg, name, host, size);
+  }
 }
 
 void CPUDevice::global_alloc(device_memory &mem)
 {
-  LOG_DEBUG << "Global memory allocate: " << mem.name << ", "
+  LOG_DEBUG << "Global memory allocate: " << mem.log_name() << ", "
             << string_human_readable_number(mem.memory_size()) << " bytes. ("
             << string_human_readable_size(mem.memory_size()) << ")";
 
-  kernel_global_memory_copy(&kernel_globals, mem.name, mem.host_pointer, mem.data_size);
+  /* Update both the main one, and the per-thread globals in case of updates during
+   * render from e.g. the texture cache. */
+  kernel_global_memory_copy(&kernel_globals, mem.global_name(), mem.host_pointer, mem.data_size);
+  for (ThreadKernelGlobalsCPU &kg : kernel_thread_globals_) {
+    kernel_global_memory_copy(&kg, mem.global_name(), mem.host_pointer, mem.data_size);
+  }
 
   mem.device_pointer = (device_ptr)mem.host_pointer;
   mem.device_size = mem.memory_size();
@@ -219,9 +224,9 @@ void CPUDevice::global_free(device_memory &mem)
   }
 }
 
-void CPUDevice::tex_alloc(device_texture &mem)
+void CPUDevice::image_alloc(device_image &mem)
 {
-  LOG_DEBUG << "Texture allocate: " << mem.name << ", "
+  LOG_DEBUG << "Texture allocate: " << mem.log_name() << ", "
             << string_human_readable_number(mem.memory_size()) << " bytes. ("
             << string_human_readable_size(mem.memory_size()) << ")";
 
@@ -229,25 +234,43 @@ void CPUDevice::tex_alloc(device_texture &mem)
   mem.device_size = mem.memory_size();
   stats.mem_alloc(mem.device_size);
 
-  const uint slot = mem.slot;
-  if (slot >= texture_info.size()) {
-    /* Allocate some slots in advance, to reduce amount of re-allocations. */
-    texture_info.resize(slot + 128);
+  const uint image_info_id = mem.image_info_id;
+  if (image_info_id >= image_info->size()) {
+    /* Geometric growth to amortize reallocation cost. */
+    const size_t new_size = max(size_t(image_info_id) + 128, image_info->size() * 2);
+
+    unique_ptr<device_vector<KernelImageInfo>> new_info =
+        make_unique<device_vector<KernelImageInfo>>(this, "image_info", MEM_GLOBAL);
+    new_info->resize(new_size);
+
+    if (image_info->size() > 0) {
+      std::copy_n(image_info->data(), image_info->size(), new_info->data());
+    }
+
+    /* Move old vector to backup list to keep memory alive for concurrent access. */
+    old_image_infos.push_back(std::move(image_info));
+    image_info = std::move(new_info);
+
+    /* Update kernel globals pointers immediately. */
+    image_info->copy_to_device();
   }
 
-  texture_info[slot] = mem.info;
-  texture_info[slot].data = (uint64_t)mem.host_pointer;
-  need_texture_info = true;
+  (*image_info)[image_info_id] = mem.info;
+  (*image_info)[image_info_id].data = (uint64_t)mem.host_pointer;
 }
 
-void CPUDevice::tex_free(device_texture &mem)
+void CPUDevice::image_free(device_image &mem)
 {
   if (mem.device_pointer) {
     mem.device_pointer = 0;
     stats.mem_free(mem.device_size);
     mem.device_size = 0;
-    need_texture_info = true;
   }
+}
+
+bool CPUDevice::has_unified_memory() const
+{
+  return true;
 }
 
 void CPUDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
@@ -299,17 +322,23 @@ void *CPUDevice::get_guiding_device() const
 #endif
 }
 
-void CPUDevice::get_cpu_kernel_thread_globals(
-    vector<ThreadKernelGlobalsCPU> &kernel_thread_globals)
+vector<ThreadKernelGlobalsCPU> *CPUDevice::acquire_cpu_kernel_thread_globals()
 {
-  /* Ensure latest texture info is loaded into kernel globals before returning. */
-  load_texture_info();
+  assert(kernel_thread_globals_.empty());
 
-  kernel_thread_globals.clear();
+  kernel_thread_globals_.clear();
   OSLGlobals *osl_globals = get_cpu_osl_memory();
   for (int i = 0; i < info.cpu_threads; i++) {
-    kernel_thread_globals.emplace_back(kernel_globals, osl_globals, profiler, i);
+    kernel_thread_globals_.emplace_back(kernel_globals, osl_globals, profiler, i);
   }
+
+  return &kernel_thread_globals_;
+}
+
+void CPUDevice::release_cpu_kernel_thread_globals()
+{
+  kernel_thread_globals_.clear();
+  old_image_infos.clear();
 }
 
 OSLGlobals *CPUDevice::get_cpu_osl_memory()
@@ -319,6 +348,12 @@ OSLGlobals *CPUDevice::get_cpu_osl_memory()
 #else
   return nullptr;
 #endif
+}
+
+void CPUDevice::set_image_cache_func(KernelImageLoadRequestedCPU image_load_requested_cpu,
+                                     KernelImageLoadRequestedGPU /*image_load_requested_gpu*/)
+{
+  kernel_globals.image_load_requested_cpu = image_load_requested_cpu;
 }
 
 bool CPUDevice::load_kernels(const uint /*kernel_features*/)

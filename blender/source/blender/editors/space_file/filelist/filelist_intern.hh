@@ -17,13 +17,14 @@
 #include "DNA_listBase.h"
 #include "DNA_space_enums.h"
 #include "DNA_space_types.h"
+struct BlendHandle;
+namespace blender {
 
 #define FILEDIR_NBR_ENTRIES_UNSET -1
 
 using FileUID = uint32_t;
 
 struct AssetLibraryReference;
-struct BlendHandle;
 struct FileDirEntry;
 struct FileIndexerType;
 struct GHash;
@@ -32,7 +33,6 @@ struct PreviewImage;
 struct ThreadQueue;
 struct TaskPool;
 
-namespace blender {
 namespace asset_system {
 class AssetLibrary;
 class AssetRepresentation;
@@ -40,7 +40,6 @@ class AssetRepresentation;
 namespace ed::asset_browser {
 class AssetCatalogFilterSettings;
 }
-}  // namespace blender
 
 /* ------------------FILELIST------------------------ */
 
@@ -66,7 +65,7 @@ struct FileListInternEntry {
    * take care of that.
    */
   struct {
-    /** When showing local IDs (FILE_MAIN, FILE_MAIN_ASSET), the ID this file entry represents. */
+    /** When showing local IDs (#FILE_MAIN_ASSET), the ID this file entry represents. */
     ID *id = nullptr;
 
     /* For the few file types that have the preview already in memory. For others, there's delayed
@@ -81,7 +80,7 @@ struct FileListInternEntry {
    *
    * Weak pointer so access is protected in case the asset library gets destructed externally.
    */
-  std::weak_ptr<blender::asset_system::AssetRepresentation> asset;
+  std::weak_ptr<asset_system::AssetRepresentation> asset;
 
   /* See #FILE_ENTRY_BLENDERLIB_NO_PREVIEW. */
   bool blenderlib_has_no_preview = false;
@@ -94,9 +93,9 @@ struct FileListInternEntry {
    * Be careful not to use the returned asset pointer in a context where it might be dangling, e.g.
    * because the file list or the asset library were destroyed.
    */
-  blender::asset_system::AssetRepresentation *get_asset() const
+  asset_system::AssetRepresentation *get_asset() const
   {
-    if (std::shared_ptr<blender::asset_system::AssetRepresentation> asset_ptr = asset.lock()) {
+    if (std::shared_ptr<asset_system::AssetRepresentation> asset_ptr = asset.lock()) {
       /* Returning a raw pointer from a shared pointer and destructing the shared pointer
        * immediately afterwards isn't entirely clean. But it's just a way to get the raw pointer
        * from the weak pointer. Nothing should free the asset in the asset library meanwhile, so
@@ -110,7 +109,7 @@ struct FileListInternEntry {
 
 struct FileListIntern {
   /** FileListInternEntry items. */
-  ListBase entries;
+  ListBaseT<FileListInternEntry> entries;
   FileListInternEntry **filtered;
 
   FileUID curr_uid; /* Used to generate UID during internal listing. */
@@ -123,7 +122,7 @@ struct FileListEntryCache {
   int flags = 0;
 
   /* This one gathers all entries from both block and misc caches. Used for easy bulk-freeing. */
-  ListBase cached_entries = {};
+  ListBaseT<FileDirEntry> cached_entries = {};
 
   /* Block cache: all entries between start and end index.
    * used for part of the list on display. */
@@ -137,10 +136,10 @@ struct FileListEntryCache {
    * NOTE: Not 100% sure we actually need that, time will say. */
   int misc_cursor = 0;
   int *misc_entries_indices = nullptr;
-  blender::Map<int, FileDirEntry *> misc_entries;
+  Map<int, FileDirEntry *> misc_entries;
 
   /* Allows to quickly get a cached entry from its UID. */
-  blender::Map<int, FileDirEntry *> uids;
+  Map<int, FileDirEntry *> uids;
 
   /* Previews handling. */
   TaskPool *previews_pool = nullptr;
@@ -180,7 +179,7 @@ struct FileListFilter {
   char filter_search[66]; /* + 2 for heading/trailing implicit '*' wildcards. */
   short flags;
 
-  blender::ed::asset_browser::AssetCatalogFilterSettings *asset_catalog_filter;
+  ed::asset_browser::AssetCatalogFilterSettings *asset_catalog_filter;
 };
 
 /** #FileListFilter.flags */
@@ -190,6 +189,7 @@ enum {
   FLF_HIDE_PARENT = 1 << 2,
   FLF_HIDE_LIB_DIR = 1 << 3,
   FLF_ASSETS_ONLY = 1 << 4,
+  FLF_ASSETS_HIDE_ONLINE = 1 << 5,
 };
 
 struct FileListReadJob;
@@ -199,7 +199,7 @@ struct FileList {
   eFileSelectType type;
   /* The library this list was created for. Stored here so we know when to re-read. */
   AssetLibraryReference *asset_library_ref;
-  blender::asset_system::AssetLibrary *asset_library; /* Non-owning. */
+  asset_system::AssetLibrary *asset_library; /* Non-owning. */
 
   short flags;
 
@@ -243,6 +243,10 @@ struct FileList {
                        char dirpath[FILE_MAX_LIBEXTRA],
                        const bool do_change);
 
+  /** Called from the main thread when starting the job. */
+  void (*start_job_fn)(FileListReadJob *job_params);
+  /** Called from the main thread in regular intervals. */
+  void (*timer_step_fn)(FileListReadJob *job_params);
   /** Fill `filelist` (to be called by read job). */
   void (*read_job_fn)(FileListReadJob *job_params, bool *stop, bool *do_update, float *progress);
 
@@ -269,6 +273,7 @@ enum {
   /** Trigger a call to #AS_asset_library_load() to update asset catalogs (won't reload the actual
    * assets) */
   FL_RELOAD_ASSET_LIBRARY = 1 << 7,
+  FL_ASSETS_INCLUDE_ONLINE = 1 << 8,
 };
 
 /** #FileList.tags */
@@ -281,6 +286,9 @@ enum FileListTags {
   FILELIST_TAGS_APPLY_FUZZY_SEARCH = (1 << 1),
   /** The file list type is not thread-safe. */
   FILELIST_TAGS_NO_THREADS = (1 << 2),
+  /** The file list is owned by the #ED_asset_list.hh API (global storage to load and store assets
+   * globally), not the Asset Browser. */
+  FILELIST_TAGS_FROM_GLOBAL_ASSET_LIST = 1 << 3,
 };
 
 enum class SpecialFileImages {
@@ -293,6 +301,10 @@ enum class SpecialFileImages {
 
 void filelist_cache_clear(FileListEntryCache *cache, size_t new_size);
 
+FileUID filelist_uid_generate(FileList *filelist);
+
+const char *fileentry_uiname(const char *root, FileListInternEntry *entry, char *buff);
+
 bool filelist_intern_entry_is_main_file(const FileListInternEntry *intern_entry);
 
 void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filter);
@@ -301,10 +313,25 @@ void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filt
 bool is_filtered_file(FileListInternEntry *file, const char * /*root*/, FileListFilter *filter);
 bool is_filtered_asset(FileListInternEntry *file, FileListFilter *filter);
 bool is_filtered_lib(FileListInternEntry *file, const char *root, FileListFilter *filter);
-bool is_filtered_main(FileListInternEntry *file, const char * /*dir*/, FileListFilter *filter);
 bool is_filtered_main_assets(FileListInternEntry *file,
                              const char * /*dir*/,
                              FileListFilter *filter);
 bool is_filtered_asset_library(FileListInternEntry *file,
                                const char *root,
                                FileListFilter *filter);
+
+bool filelist_checkdir_dir(const FileList * /*filelist*/,
+                           char dirpath[FILE_MAX_LIBEXTRA],
+                           const bool do_change);
+bool filelist_checkdir_lib(const FileList * /*filelist*/,
+                           char dirpath[FILE_MAX_LIBEXTRA],
+                           const bool do_change);
+
+void filelist_set_readjob_directories(FileList *filelist);
+void filelist_set_readjob_library(FileList *filelist);
+void filelist_set_readjob_on_disk_asset_library(FileList *filelist);
+void filelist_set_readjob_remote_asset_library(FileList *filelist);
+void filelist_set_readjob_current_file_asset_library(FileList *filelist);
+void filelist_set_readjob_all_asset_library(FileList *filelist);
+
+}  // namespace blender

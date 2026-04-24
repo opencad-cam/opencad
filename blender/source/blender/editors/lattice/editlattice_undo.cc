@@ -41,6 +41,8 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+namespace blender {
+
 /** We only need this locally. */
 static CLG_LogRef LOG = {"undo.lattice"};
 
@@ -58,21 +60,21 @@ struct UndoLattice {
   MDeformVert *dvert;
   int shapenr;
   char vgroup[/*MAX_VGROUP_NAME*/ 64];
-  ListBase vertex_group_names;
+  ListBaseT<bDeformGroup> vertex_group_names;
   int vertex_group_active_index;
   size_t undo_size;
 };
 
 static void undolatt_to_editlatt(UndoLattice *ult,
                                  EditLatt *editlatt,
-                                 ListBase *vertex_group_names,
+                                 ListBaseT<bDeformGroup> *vertex_group_names,
                                  int *vertex_group_active_index)
 {
   const int len_src = ult->pntsu * ult->pntsv * ult->pntsw;
   const int len_dst = editlatt->latt->pntsu * editlatt->latt->pntsv * editlatt->latt->pntsw;
   if (len_src != len_dst) {
-    MEM_freeN(editlatt->latt->def);
-    editlatt->latt->def = static_cast<BPoint *>(MEM_dupallocN(ult->def));
+    MEM_delete(editlatt->latt->def);
+    editlatt->latt->def = MEM_dupalloc(ult->def);
   }
   else {
     memcpy(editlatt->latt->def, ult->def, sizeof(BPoint) * len_src);
@@ -82,7 +84,8 @@ static void undolatt_to_editlatt(UndoLattice *ult,
    * relations to #MDeformWeight might have changed. */
   if (editlatt->latt->dvert && ult->dvert) {
     BKE_defvert_array_free(editlatt->latt->dvert, len_dst);
-    editlatt->latt->dvert = MEM_malloc_arrayN<MDeformVert>(len_src, "Lattice MDeformVert");
+    editlatt->latt->dvert = MEM_new_array_uninitialized<MDeformVert>(len_src,
+                                                                     "Lattice MDeformVert");
     BKE_defvert_array_copy(editlatt->latt->dvert, ult->dvert, len_src);
   }
 
@@ -113,12 +116,12 @@ static void undolatt_to_editlatt(UndoLattice *ult,
 
 static void *undolatt_from_editlatt(UndoLattice *ult,
                                     EditLatt *editlatt,
-                                    const ListBase *vertex_group_names,
+                                    const ListBaseT<bDeformGroup> *vertex_group_names,
                                     int vertex_group_active_index)
 {
   BLI_assert(BLI_array_is_zeroed(ult, 1));
 
-  ult->def = static_cast<BPoint *>(MEM_dupallocN(editlatt->latt->def));
+  ult->def = MEM_dupalloc(editlatt->latt->def);
   ult->pntsu = editlatt->latt->pntsu;
   ult->pntsv = editlatt->latt->pntsv;
   ult->pntsw = editlatt->latt->pntsw;
@@ -144,7 +147,7 @@ static void *undolatt_from_editlatt(UndoLattice *ult,
 
   if (editlatt->latt->dvert) {
     const int tot = ult->pntsu * ult->pntsv * ult->pntsw;
-    ult->dvert = MEM_malloc_arrayN<MDeformVert>(tot, "Undo Lattice MDeformVert");
+    ult->dvert = MEM_new_array_uninitialized<MDeformVert>(tot, "Undo Lattice MDeformVert");
     BKE_defvert_array_copy(ult->dvert, editlatt->latt->dvert, tot);
     ult->undo_size += sizeof(*ult->dvert) * tot;
   }
@@ -157,7 +160,7 @@ static void *undolatt_from_editlatt(UndoLattice *ult,
 static void undolatt_free_data(UndoLattice *ult)
 {
   if (ult->def) {
-    MEM_freeN(ult->def);
+    MEM_delete(ult->def);
   }
   if (ult->dvert) {
     BKE_defvert_array_free(ult->dvert, ult->pntsu * ult->pntsv * ult->pntsw);
@@ -179,12 +182,13 @@ static int validate_undoLatt(void *data, void *edata)
 
 static Object *editlatt_object_from_context(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit && obedit->type == OB_LATTICE) {
-    Lattice *lt = static_cast<Lattice *>(obedit->data);
+    Lattice *lt = id_cast<Lattice *>(obedit->data);
     if (lt->editlatt != nullptr) {
       return obedit;
     }
@@ -221,16 +225,16 @@ static bool lattice_undosys_poll(bContext *C)
 
 static bool lattice_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p)
 {
-  LatticeUndoStep *us = (LatticeUndoStep *)us_p;
+  LatticeUndoStep *us = reinterpret_cast<LatticeUndoStep *>(us_p);
 
   /* Important not to use the 3D view when getting objects because all objects
    * outside of this list will be moved out of edit-mode when reading back undo steps. */
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  blender::Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer);
+  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(*bmain, scene, view_layer);
 
   us->scene_ref.ptr = scene;
-  us->elems = MEM_calloc_arrayN<LatticeUndoStep_Elem>(objects.size(), __func__);
+  us->elems = MEM_new_array_zeroed<LatticeUndoStep_Elem>(objects.size(), __func__);
   us->elems_len = objects.size();
 
   for (uint i = 0; i < objects.size(); i++) {
@@ -238,7 +242,7 @@ static bool lattice_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p
     LatticeUndoStep_Elem *elem = &us->elems[i];
 
     elem->obedit_ref.ptr = ob;
-    Lattice *lt = static_cast<Lattice *>(ob->data);
+    Lattice *lt = id_cast<Lattice *>(ob->data);
     undolatt_from_editlatt(
         &elem->data, lt->editlatt, &lt->vertex_group_names, lt->vertex_group_active_index);
     lt->editlatt->needs_flush_to_id = 1;
@@ -253,7 +257,7 @@ static bool lattice_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p
 static void lattice_undosys_step_decode(
     bContext *C, Main *bmain, UndoStep *us_p, const eUndoStepDir /*dir*/, bool /*is_final*/)
 {
-  LatticeUndoStep *us = (LatticeUndoStep *)us_p;
+  LatticeUndoStep *us = reinterpret_cast<LatticeUndoStep *>(us_p);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -267,7 +271,7 @@ static void lattice_undosys_step_decode(
   for (uint i = 0; i < us->elems_len; i++) {
     LatticeUndoStep_Elem *elem = &us->elems[i];
     Object *obedit = elem->obedit_ref.ptr;
-    Lattice *lt = static_cast<Lattice *>(obedit->data);
+    Lattice *lt = id_cast<Lattice *>(obedit->data);
     if (lt->editlatt == nullptr) {
       /* Should never fail, may not crash but can give odd behavior. */
       CLOG_ERROR(&LOG,
@@ -305,7 +309,7 @@ static void lattice_undosys_step_decode(
 
   /* The first element is always active */
   ED_undo_object_set_active_or_warn(
-      scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
+      *bmain, scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(lattice_undosys_poll(C) || (scene != CTX_data_scene(C)));
@@ -317,25 +321,25 @@ static void lattice_undosys_step_decode(
 
 static void lattice_undosys_step_free(UndoStep *us_p)
 {
-  LatticeUndoStep *us = (LatticeUndoStep *)us_p;
+  LatticeUndoStep *us = reinterpret_cast<LatticeUndoStep *>(us_p);
 
   for (uint i = 0; i < us->elems_len; i++) {
     LatticeUndoStep_Elem *elem = &us->elems[i];
     undolatt_free_data(&elem->data);
   }
-  MEM_freeN(us->elems);
+  MEM_delete(us->elems);
 }
 
 static void lattice_undosys_foreach_ID_ref(UndoStep *us_p,
                                            UndoTypeForEachIDRefFn foreach_ID_ref_fn,
                                            void *user_data)
 {
-  LatticeUndoStep *us = (LatticeUndoStep *)us_p;
+  LatticeUndoStep *us = reinterpret_cast<LatticeUndoStep *>(us_p);
 
-  foreach_ID_ref_fn(user_data, ((UndoRefID *)&us->scene_ref));
+  foreach_ID_ref_fn(user_data, (reinterpret_cast<UndoRefID *>(&us->scene_ref)));
   for (uint i = 0; i < us->elems_len; i++) {
     LatticeUndoStep_Elem *elem = &us->elems[i];
-    foreach_ID_ref_fn(user_data, ((UndoRefID *)&elem->obedit_ref));
+    foreach_ID_ref_fn(user_data, (reinterpret_cast<UndoRefID *>(&elem->obedit_ref)));
   }
 }
 
@@ -355,3 +359,5 @@ void ED_lattice_undosys_type(UndoType *ut)
 }
 
 /** \} */
+
+}  // namespace blender

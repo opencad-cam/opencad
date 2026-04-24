@@ -28,6 +28,7 @@
 
 #include "DNA_cachefile_types.h"
 #include "DNA_collection_types.h"
+#include "DNA_listBase.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -36,6 +37,7 @@
 #include "BKE_global.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_library.hh"
 #include "BKE_object.hh"
 
 #include "DEG_depsgraph.hh"
@@ -56,6 +58,12 @@
 
 #include "WM_api.hh"
 #include "WM_types.hh"
+
+#include "CLG_log.h"
+
+namespace blender {
+
+static CLG_LogRef LOG = {"io.alembic"};
 
 using Alembic::Abc::IV3fArrayProperty;
 using Alembic::Abc::ObjectHeader;
@@ -107,9 +115,9 @@ BLI_INLINE CacheArchiveHandle *handle_from_archive(AlembicArchiveData *archive)
 /* Add the object's path to list of object paths. No duplication is done, callers are
  * responsible for ensuring that only unique paths are added to the list.
  */
-static void add_object_path(ListBase *object_paths, const IObject &object)
+static void add_object_path(ListBaseT<CacheObjectPath> *object_paths, const IObject &object)
 {
-  CacheObjectPath *abc_path = MEM_new_for_free<CacheObjectPath>("CacheObjectPath");
+  CacheObjectPath *abc_path = MEM_new<CacheObjectPath>("CacheObjectPath");
   STRNCPY(abc_path->path, object.getFullName().c_str());
   BLI_addtail(object_paths, abc_path);
 }
@@ -118,7 +126,7 @@ static void add_object_path(ListBase *object_paths, const IObject &object)
 
 /* NOTE: this function is similar to visit_objects below, need to keep them in
  * sync. */
-static bool gather_objects_paths(const IObject &object, ListBase *object_paths)
+static bool gather_objects_paths(const IObject &object, ListBaseT<CacheObjectPath> *object_paths)
 {
   if (!object.valid()) {
     return false;
@@ -170,7 +178,7 @@ static bool gather_objects_paths(const IObject &object, ListBase *object_paths)
 CacheArchiveHandle *ABC_create_handle(const Main *bmain,
                                       const char *filepath,
                                       const CacheFileLayer *layers,
-                                      ListBase *object_paths)
+                                      ListBaseT<CacheObjectPath> *object_paths)
 {
   std::vector<const char *> filepaths;
   filepaths.push_back(filepath);
@@ -308,6 +316,8 @@ static std::pair<bool, AbcObjectReader *> visit_object(
   const MetaData &md = object.getMetaData();
   bool parent_is_part_of_this_object = false;
 
+  const AbcReaderConstructorArgs args = create_reader_constructor_args(object, settings);
+
   if (!object.getParent()) {
     /* The root itself is not an object we should import. */
   }
@@ -328,15 +338,15 @@ static std::pair<bool, AbcObjectReader *> visit_object(
     }
 
     if (create_empty) {
-      reader = new AbcEmptyReader(object, settings);
+      reader = new AbcEmptyReader(args);
     }
   }
   else if (IPolyMesh::matches(md)) {
-    reader = new AbcMeshReader(object, settings);
+    reader = new AbcMeshReader(args);
     parent_is_part_of_this_object = true;
   }
   else if (ISubD::matches(md)) {
-    reader = new AbcSubDReader(object, settings);
+    reader = new AbcSubDReader(args);
     parent_is_part_of_this_object = true;
   }
   else if (INuPatch::matches(md)) {
@@ -347,16 +357,16 @@ static std::pair<bool, AbcObjectReader *> visit_object(
      * Blender. Need to figure out exactly how these points are
      * duplicated, in all cases (cyclic U, cyclic V, and cyclic UV).
      * Until this is fixed, disabling NURBS reading. */
-    reader = new AbcNurbsReader(object, settings);
+    reader = new AbcNurbsReader(args);
     parent_is_part_of_this_object = true;
 #endif
   }
   else if (ICamera::matches(md)) {
-    reader = new AbcCameraReader(object, settings);
+    reader = new AbcCameraReader(args);
     parent_is_part_of_this_object = true;
   }
   else if (IPoints::matches(md)) {
-    reader = new AbcPointsReader(object, settings);
+    reader = new AbcPointsReader(args);
     parent_is_part_of_this_object = true;
   }
   else if (IMaterial::matches(md)) {
@@ -369,7 +379,7 @@ static std::pair<bool, AbcObjectReader *> visit_object(
     /* Pass, those are handled in the mesh reader. */
   }
   else if (ICurves::matches(md)) {
-    reader = new AbcCurveReader(object, settings);
+    reader = new AbcCurveReader(args);
     parent_is_part_of_this_object = true;
   }
   else {
@@ -447,10 +457,10 @@ struct ImportJobData {
 
   ImportSettings settings;
 
-  blender::Vector<ArchiveReader *> archives;
-  blender::Vector<AbcObjectReader *> readers;
+  Vector<ArchiveReader *> archives;
+  Vector<AbcObjectReader *> readers;
 
-  blender::Vector<std::string> paths;
+  Vector<std::string> paths;
 
   /** Min time read from file import. */
   chrono_t min_time = std::numeric_limits<chrono_t>::max();
@@ -465,20 +475,20 @@ struct ImportJobData {
   bool was_cancelled;
   bool import_ok;
   bool is_background_job;
-  blender::timeit::TimePoint start_time;
+  timeit::TimePoint start_time;
 };
 
 static void report_job_duration(const ImportJobData *data)
 {
-  blender::timeit::Nanoseconds duration = blender::timeit::Clock::now() - data->start_time;
+  timeit::Nanoseconds duration = timeit::Clock::now() - data->start_time;
   std::cout << "Alembic import took ";
-  blender::timeit::print_duration(duration);
+  timeit::print_duration(duration);
   std::cout << '\n';
 }
 
-static void sort_readers(blender::MutableSpan<AbcObjectReader *> readers)
+static void sort_readers(MutableSpan<AbcObjectReader *> readers)
 {
-  blender::parallel_sort(
+  parallel_sort(
       readers.begin(), readers.end(), [](const AbcObjectReader *a, const AbcObjectReader *b) {
         const char *na = a->name().c_str();
         const char *nb = b->name().c_str();
@@ -488,7 +498,7 @@ static void sort_readers(blender::MutableSpan<AbcObjectReader *> readers)
 
 static void import_file(ImportJobData *data, const char *filepath, float progress_factor)
 {
-  blender::timeit::TimePoint start_time = blender::timeit::Clock::now();
+  timeit::TimePoint start_time = timeit::Clock::now();
 
   ArchiveReader *archive = ArchiveReader::get(data->bmain, {filepath});
 
@@ -596,9 +606,9 @@ static void import_file(ImportJobData *data, const char *filepath, float progres
       return;
     }
   }
-  blender::timeit::Nanoseconds duration = blender::timeit::Clock::now() - start_time;
+  timeit::Nanoseconds duration = timeit::Clock::now() - start_time;
   std::cout << "Alembic import " << filepath << " took ";
-  blender::timeit::print_duration(duration);
+  timeit::print_duration(duration);
   std::cout << '\n';
 }
 
@@ -626,7 +636,7 @@ static void import_startjob(void *user_data, wmJobWorkerStatus *worker_status)
   data->stop = &worker_status->stop;
   data->do_update = &worker_status->do_update;
   data->progress = &worker_status->progress;
-  data->start_time = blender::timeit::Clock::now();
+  data->start_time = timeit::Clock::now();
 
   WM_locked_interface_set(data->wm, true);
   float file_progress_factor = 1.0f / float(data->paths.size());
@@ -662,24 +672,36 @@ static void import_endjob(void *user_data)
     }
   }
   else {
-    Base *base;
-    LayerCollection *lc;
+    const Main *bmain = data->bmain;
     const Scene *scene = data->scene;
     ViewLayer *view_layer = data->view_layer;
 
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
 
-    lc = BKE_layer_collection_get_active(view_layer);
+    LayerCollection *lc = BKE_layer_collection_get_active_editable(view_layer);
+    if (!ID_IS_EDITABLE(lc->collection)) {
+      WM_global_report(RPT_WARNING,
+                       "Could not find an editable collection in current scene, imported data "
+                       "will not be instantiated");
+    }
 
     for (AbcObjectReader *reader : data->readers) {
       Object *ob = reader->object();
       BKE_collection_object_add(data->bmain, lc->collection, ob);
     }
     /* Sync and do the view layer operations. */
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
+    bool has_instantiated_object = false;
+    bool has_uninstantiated_object = false;
     for (AbcObjectReader *reader : data->readers) {
       Object *ob = reader->object();
-      base = BKE_view_layer_base_find(view_layer, ob);
+      Base *base = BKE_view_layer_base_find(view_layer, ob);
+      if (!base) {
+        /* Object not instantiated in current viewlayer. */
+        has_uninstantiated_object = true;
+        continue;
+      }
+      has_instantiated_object = true;
       /* TODO: is setting active needed? */
       BKE_view_layer_base_select_and_set_active(view_layer, base);
 
@@ -688,6 +710,10 @@ static void import_endjob(void *user_data)
                            &ob->id,
                            ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION |
                                ID_RECALC_BASE_FLAGS);
+    }
+
+    if (has_instantiated_object && has_uninstantiated_object) {
+      CLOG_ERROR(&LOG, "Some imported objects were not instantiated, while others were");
     }
 
     DEG_id_tag_update(&data->scene->id, ID_RECALC_BASE_FLAGS);
@@ -849,7 +875,7 @@ static ISampleSelector sample_selector_for_time(chrono_t time)
 
 void ABC_read_geometry(CacheReader *reader,
                        Object *ob,
-                       blender::bke::GeometrySet &geometry_set,
+                       bke::GeometrySet &geometry_set,
                        const ABCReadParams *params,
                        const char **r_err_str)
 {
@@ -859,12 +885,11 @@ void ABC_read_geometry(CacheReader *reader,
   }
 
   ISampleSelector sample_sel = sample_selector_for_time(params->time);
-  abc_reader->read_geometry(geometry_set,
-                            sample_sel,
-                            params->read_flags,
-                            params->velocity_name,
-                            params->velocity_scale,
-                            r_err_str);
+  AbcReadGeometryParams read_params;
+  read_params.read_flag = params->read_flags;
+  read_params.velocity_name = params->velocity_name ? params->velocity_name : "";
+  read_params.velocity_scale = params->velocity_scale;
+  abc_reader->read_geometry(geometry_set, sample_sel, read_params, r_err_str);
 }
 
 bool ABC_mesh_topology_changed(CacheReader *reader,
@@ -925,7 +950,10 @@ CacheReader *CacheReader_open_alembic_object(CacheArchiveHandle *handle,
   archive_data->settings->blender_archive_version_prior_44 =
       archive->is_blender_archive_version_prior_44();
 
-  AbcObjectReader *abc_reader = create_reader(iobject, *archive_data->settings);
+  const AbcReaderConstructorArgs args = create_reader_constructor_args(iobject,
+                                                                       *archive_data->settings);
+
+  AbcObjectReader *abc_reader = create_reader(args);
   if (abc_reader == nullptr) {
     /* This object is not supported */
     return nullptr;
@@ -935,3 +963,5 @@ CacheReader *CacheReader_open_alembic_object(CacheArchiveHandle *handle,
 
   return reinterpret_cast<CacheReader *>(abc_reader);
 }
+
+}  // namespace blender

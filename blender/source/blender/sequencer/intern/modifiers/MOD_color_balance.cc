@@ -13,6 +13,7 @@
 #include "DNA_sequence_types.h"
 
 #include "SEQ_modifier.hh"
+#include "SEQ_render.hh"
 
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
@@ -20,6 +21,7 @@
 #include "RNA_access.hh"
 
 #include "modifier.hh"
+#include "render.hh"
 
 namespace blender::seq {
 
@@ -238,7 +240,7 @@ struct ColorBalanceApplyOp {
 
 static void colorBalance_init_data(StripModifierData *smd)
 {
-  ColorBalanceModifierData *cbmd = (ColorBalanceModifierData *)smd;
+  ColorBalanceModifierData *cbmd = reinterpret_cast<ColorBalanceModifierData *>(smd);
 
   cbmd->color_multiply = 1.0f;
   cbmd->color_balance.method = 0;
@@ -253,19 +255,25 @@ static void colorBalance_init_data(StripModifierData *smd)
   }
 }
 
-static void colorBalance_apply(ModifierApplyContext &context, StripModifierData *smd, ImBuf *mask)
+static void colorBalance_apply(ModifierApplyContext &context, StripModifierData *smd)
 {
-  const ColorBalanceModifierData *cbmd = (const ColorBalanceModifierData *)smd;
+  ensure_ibuf_is_sequencer_space(context.render_data.scene, context.image, false);
+  ImBuf *mask = modifier_render_mask_input(context, *smd);
+
+  const ColorBalanceModifierData *cbmd = reinterpret_cast<const ColorBalanceModifierData *>(smd);
 
   ColorBalanceApplyOp op;
-  op.init(*cbmd, context.image->byte_buffer.data != nullptr);
+  op.init(*cbmd, context.image->byte_data() != nullptr);
   apply_modifier_op(op, context.image, mask, context.transform);
+  if (mask != nullptr) {
+    IMB_freeImBuf(mask);
+  }
 }
 
 static void colorBalance_panel_draw(const bContext *C, Panel *panel)
 {
   ui::Layout &layout = *panel->layout;
-  PointerRNA *ptr = blender::ui::panel_custom_data_get(panel);
+  PointerRNA *ptr = ui::panel_custom_data_get(panel);
 
   PointerRNA color_balance = RNA_pointer_get(ptr, "color_balance");
   const int correction_method = RNA_enum_get(&color_balance, "correction_method");

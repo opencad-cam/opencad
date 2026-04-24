@@ -33,9 +33,11 @@
 
 #include "node_intern.hh"
 
+namespace blender {
+
 struct Material;
 
-namespace blender::ed::space_node {
+namespace ed::space_node {
 
 static void context_path_add_object_data(Vector<ui::ContextPathItem> &path, Object &object)
 {
@@ -43,16 +45,16 @@ static void context_path_add_object_data(Vector<ui::ContextPathItem> &path, Obje
     return;
   }
   if (object.type == OB_MESH) {
-    ui::context_path_add_generic(path, RNA_Mesh, object.data);
+    ui::context_path_add_generic(path, *RNA_Mesh, object.data);
   }
   else if (object.type == OB_CURVES) {
-    ui::context_path_add_generic(path, RNA_Curves, object.data);
+    ui::context_path_add_generic(path, *RNA_Curves, object.data);
   }
   else if (object.type == OB_LAMP) {
-    ui::context_path_add_generic(path, RNA_Light, object.data);
+    ui::context_path_add_generic(path, *RNA_Light, object.data);
   }
   else if (ELEM(object.type, OB_CURVES_LEGACY, OB_FONT, OB_SURF)) {
-    ui::context_path_add_generic(path, RNA_Curve, object.data);
+    ui::context_path_add_generic(path, *RNA_Curve, object.data);
   }
 }
 
@@ -84,33 +86,33 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
                                                        Vector<ui::ContextPathItem> &path,
                                                        const bool skip_base = false)
 {
-  int i = 0;
-  LISTBASE_FOREACH_INDEX (const bNodeTreePath *, path_item, &snode.treepath, i) {
-    if (skip_base && path_item == snode.treepath.first) {
+
+  for (const auto [i, path_item] : snode.treepath.enumerate()) {
+    if (skip_base && &path_item == snode.treepath.first) {
       continue;
     }
-    if (path_item->nodetree == nullptr) {
+    if (path_item.nodetree == nullptr) {
       continue;
     }
 
     int icon = ICON_NODETREE;
-    if (ID_IS_PACKED(&path_item->nodetree->id)) {
+    if (ID_IS_PACKED(&path_item.nodetree->id)) {
       icon = ICON_PACKAGE;
     }
-    else if (ID_IS_LINKED(&path_item->nodetree->id)) {
+    else if (ID_IS_LINKED(&path_item.nodetree->id)) {
       icon = ICON_LINKED;
     }
-    else if (ID_IS_ASSET(&path_item->nodetree->id)) {
+    else if (ID_IS_ASSET(&path_item.nodetree->id)) {
       icon = ICON_ASSET_MANAGER;
     }
 
-    if (path_item != snode.treepath.last) {
+    if (&path_item != snode.treepath.last) {
       /* We don't need to add handle function to last node-tree. */
       ui::context_path_add_generic(
-          path, RNA_NodeTree, path_item->nodetree, icon, tree_path_handle_func(i));
+          path, *RNA_NodeTree, path_item.nodetree, icon, tree_path_handle_func(i));
     }
     else {
-      ui::context_path_add_generic(path, RNA_NodeTree, path_item->nodetree, icon);
+      ui::context_path_add_generic(path, *RNA_NodeTree, path_item.nodetree, icon);
     }
   }
 }
@@ -122,9 +124,9 @@ static void get_context_path_node_shader(const bContext &C,
   if (snode.flag & SNODE_PIN) {
     if (snode.shaderfrom == SNODE_SHADER_WORLD) {
       Scene *scene = CTX_data_scene(&C);
-      ui::context_path_add_generic(path, RNA_Scene, scene);
+      ui::context_path_add_generic(path, *RNA_Scene, scene);
       if (scene != nullptr) {
-        context_path_add_top_level_shader_node_tree(snode, path, RNA_World, scene->world);
+        context_path_add_top_level_shader_node_tree(snode, path, *RNA_World, scene->world);
       }
       /* Skip the base node tree here, because the world contains a node tree already. */
       context_path_add_node_tree_and_node_groups(snode, path, true);
@@ -136,27 +138,27 @@ static void get_context_path_node_shader(const bContext &C,
   else {
     Object *object = CTX_data_active_object(&C);
     if (snode.shaderfrom == SNODE_SHADER_OBJECT && object != nullptr) {
-      ui::context_path_add_generic(path, RNA_Object, object);
+      ui::context_path_add_generic(path, *RNA_Object, object);
       if (!(object->matbits && object->matbits[object->actcol - 1])) {
         context_path_add_object_data(path, *object);
       }
       Material *material = BKE_object_material_get(object, object->actcol);
-      context_path_add_top_level_shader_node_tree(snode, path, RNA_Material, material);
+      context_path_add_top_level_shader_node_tree(snode, path, *RNA_Material, material);
     }
     else if (snode.shaderfrom == SNODE_SHADER_WORLD) {
       Scene *scene = CTX_data_scene(&C);
-      ui::context_path_add_generic(path, RNA_Scene, scene);
+      ui::context_path_add_generic(path, *RNA_Scene, scene);
       if (scene != nullptr) {
-        context_path_add_top_level_shader_node_tree(snode, path, RNA_World, scene->world);
+        context_path_add_top_level_shader_node_tree(snode, path, *RNA_World, scene->world);
       }
     }
 #ifdef WITH_FREESTYLE
     else if (snode.shaderfrom == SNODE_SHADER_LINESTYLE) {
       ViewLayer *viewlayer = CTX_data_view_layer(&C);
       FreestyleLineStyle *linestyle = BKE_linestyle_active_from_view_layer(viewlayer);
-      ui::context_path_add_generic(path, RNA_ViewLayer, viewlayer);
+      ui::context_path_add_generic(path, *RNA_ViewLayer, viewlayer);
       Material *mat = BKE_object_material_get(object, object->actcol);
-      ui::context_path_add_generic(path, RNA_Material, mat);
+      ui::context_path_add_generic(path, *RNA_Material, mat);
     }
 #endif
     context_path_add_node_tree_and_node_groups(snode, path, true);
@@ -167,52 +169,44 @@ static void get_context_path_node_compositor(const bContext &C,
                                              SpaceNode &snode,
                                              Vector<ui::ContextPathItem> &path)
 {
+  bool skip_base = false;
   if (snode.flag & SNODE_PIN) {
-    context_path_add_node_tree_and_node_groups(snode, path);
+    /* Pinned: nothing extra; will be handled below. */
+  }
+  else if (snode.node_tree_sub_type == SNODE_COMPOSITOR_SEQUENCER) {
+    Scene *sequencer_scene = CTX_data_sequencer_scene(&C);
+    if (sequencer_scene) {
+      ui::context_path_add_generic(path, *RNA_Scene, sequencer_scene, ICON_SCENE);
+      Strip *strip = seq::select_active_get(sequencer_scene);
+      if (strip) {
+        ui::context_path_add_generic(path, *RNA_Strip, strip, ICON_SEQ_STRIP_DUPLICATE);
+        bNodeTree *node_group = nullptr;
+        if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
+          CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
+          node_group = comp_data->node_group;
+        }
+        else {
+          StripModifierData *smd = seq::modifier_get_active(strip);
+          if (smd && smd->type == eSeqModifierType_Compositor) {
+            SequencerCompositorModifierData *scmd =
+                reinterpret_cast<SequencerCompositorModifierData *>(smd);
+            node_group = scmd->node_group;
+          }
+        }
+
+        if (node_group != nullptr) {
+          context_path_add_top_level_shader_node_tree(snode, path, *RNA_NodeTree, node_group);
+          skip_base = true;
+        }
+      }
+    }
   }
   else {
-    if (snode.node_tree_sub_type == SNODE_COMPOSITOR_SEQUENCER) {
-      Scene *sequencer_scene = CTX_data_sequencer_scene(&C);
-      if (!sequencer_scene) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      ui::context_path_add_generic(path, RNA_Scene, sequencer_scene, ICON_SCENE);
-      Editing *ed = seq::editing_get(sequencer_scene);
-      if (!ed) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      Strip *strip = seq::select_active_get(sequencer_scene);
-      if (!strip) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      ui::context_path_add_generic(path, RNA_Strip, strip, ICON_SEQ_STRIP_DUPLICATE);
-      StripModifierData *smd = seq::modifier_get_active(strip);
-      if (!smd) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      if (smd->type != eSeqModifierType_Compositor) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      SequencerCompositorModifierData *scmd = reinterpret_cast<SequencerCompositorModifierData *>(
-          smd);
-      if (scmd->node_group == nullptr) {
-        context_path_add_node_tree_and_node_groups(snode, path);
-        return;
-      }
-      ui::context_path_add_generic(path, RNA_NodeTree, scmd->node_group);
-      context_path_add_node_tree_and_node_groups(snode, path, true);
-    }
-    else {
-      Scene *scene = CTX_data_scene(&C);
-      ui::context_path_add_generic(path, RNA_Scene, scene);
-      context_path_add_node_tree_and_node_groups(snode, path);
-    }
+    Scene *scene = CTX_data_scene(&C);
+    ui::context_path_add_generic(path, *RNA_Scene, scene);
   }
+
+  context_path_add_node_tree_and_node_groups(snode, path, skip_base);
 }
 
 static void get_context_path_node_geometry(const bContext &C,
@@ -228,13 +222,13 @@ static void get_context_path_node_geometry(const bContext &C,
       context_path_add_node_tree_and_node_groups(snode, path);
       return;
     }
-    ui::context_path_add_generic(path, RNA_Object, object);
+    ui::context_path_add_generic(path, *RNA_Object, object);
     ModifierData *modifier = BKE_object_active_modifier(object);
     if (!modifier) {
       context_path_add_node_tree_and_node_groups(snode, path);
       return;
     }
-    ui::context_path_add_generic(path, RNA_Modifier, modifier, ICON_GEOMETRY_NODES);
+    ui::context_path_add_generic(path, *RNA_Modifier, modifier, ICON_GEOMETRY_NODES);
     context_path_add_node_tree_and_node_groups(snode, path);
   }
 }
@@ -261,4 +255,6 @@ Vector<ui::ContextPathItem> context_path_for_space_node(const bContext &C)
   return context_path;
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace ed::space_node
+
+}  // namespace blender

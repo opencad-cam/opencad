@@ -88,7 +88,9 @@ void VolumeModule::world_sync(const WorldHandle &world_handle)
 
 void VolumeModule::object_sync(const ObjectHandle &ob_handle)
 {
-  current_objects_.add(ob_handle.object_key);
+  for (int i : IndexRange(ob_handle.instances_count())) {
+    current_objects_.add(ObjectKey(ob_handle, i));
+  }
 
   if (!use_reprojection_) {
     return;

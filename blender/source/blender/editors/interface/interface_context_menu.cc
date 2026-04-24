@@ -140,7 +140,7 @@ static void shortcut_free_operator_property(IDProperty *prop)
 
 static void but_shortcut_name_func(bContext *C, void *arg1, int /*event*/)
 {
-  Button *but = (Button *)arg1;
+  Button *but = static_cast<Button *>(arg1);
 
   IDProperty *prop;
   const char *idname = shortcut_get_operator_property(C, but, &prop);
@@ -165,7 +165,7 @@ static void but_shortcut_name_func(bContext *C, void *arg1, int /*event*/)
 static Block *menu_change_shortcut(bContext *C, ARegion *region, void *arg)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
-  Button *but = (Button *)arg;
+  Button *but = static_cast<Button *>(arg);
   const uiStyle *style = style_get_dpi();
   IDProperty *prop;
   const char *idname = shortcut_get_operator_property(C, but, &prop);
@@ -182,7 +182,7 @@ static Block *menu_change_shortcut(bContext *C, ARegion *region, void *arg)
 
   BLI_assert(kmi != nullptr);
 
-  PointerRNA ptr = RNA_pointer_create_discrete(&wm->id, &RNA_KeyMapItem, kmi);
+  PointerRNA ptr = RNA_pointer_create_discrete(&wm->id, RNA_KeyMapItem, kmi);
 
   Block *block = block_begin(C, region, "_popup", EmbossType::Emboss);
   block_func_handle_set(block, but_shortcut_name_func, but);
@@ -217,7 +217,7 @@ static int g_kmi_id_hack;
 static Block *menu_add_shortcut(bContext *C, ARegion *region, void *arg)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
-  Button *but = (Button *)arg;
+  Button *but = static_cast<Button *>(arg);
   const uiStyle *style = style_get_dpi();
   IDProperty *prop;
   const char *idname = shortcut_get_operator_property(C, but, &prop);
@@ -243,7 +243,7 @@ static Block *menu_add_shortcut(bContext *C, ARegion *region, void *arg)
   km = WM_keymap_guess_opname(C, idname);
   kmi = WM_keymap_item_find_id(km, kmi_id);
 
-  PointerRNA ptr = RNA_pointer_create_discrete(&wm->id, &RNA_KeyMapItem, kmi);
+  PointerRNA ptr = RNA_pointer_create_discrete(&wm->id, RNA_KeyMapItem, kmi);
 
   Block *block = block_begin(C, region, "_popup", EmbossType::Emboss);
   block_func_handle_set(block, but_shortcut_name_func, but);
@@ -274,7 +274,7 @@ static Block *menu_add_shortcut(bContext *C, ARegion *region, void *arg)
 
 static void menu_add_shortcut_cancel(bContext *C, void *arg1)
 {
-  Button *but = (Button *)arg1;
+  Button *but = static_cast<Button *>(arg1);
 
   IDProperty *prop;
   const char *idname = shortcut_get_operator_property(C, but, &prop);
@@ -315,7 +315,7 @@ static void remove_shortcut_func(bContext *C, Button *but)
   but_shortcut_name_func(C, but, 0);
 }
 
-static bool ui_but_is_user_menu_compatible(bContext *C, Button *but)
+static bool but_is_user_menu_compatible(bContext *C, Button *but)
 {
   bool result = false;
   if (but->optype) {
@@ -339,12 +339,12 @@ static bool ui_but_is_user_menu_compatible(bContext *C, Button *but)
   return result;
 }
 
-static bUserMenuItem *ui_but_user_menu_find(bContext *C, Button *but, bUserMenu *um)
+static bUserMenuItem *but_user_menu_find(bContext *C, Button *but, bUserMenu *um)
 {
   if (but->optype) {
     IDProperty *prop = (but->opptr) ? static_cast<IDProperty *>(but->opptr->data) : nullptr;
-    return (bUserMenuItem *)ED_screen_user_menu_item_find_operator(
-        &um->items, but->optype, prop, "", but->opcontext);
+    return reinterpret_cast<bUserMenuItem *>(
+        ED_screen_user_menu_item_find_operator(&um->items, but->optype, prop, "", but->opcontext));
   }
   if (but->rnaprop) {
     std::optional<std::string> member_id_data_path = WM_context_path_resolve_full(C,
@@ -361,28 +361,28 @@ static bUserMenuItem *ui_but_user_menu_find(bContext *C, Button *but, bUserMenu 
     const std::string prop_id = RNA_property_is_idprop(but->rnaprop) ?
                                     RNA_path_property_py(&but->rnapoin, but->rnaprop, -1) :
                                     RNA_property_identifier(but->rnaprop);
-    bUserMenuItem *umi = (bUserMenuItem *)ED_screen_user_menu_item_find_prop(
-        &um->items, member_id_data_path->c_str(), prop_id.c_str(), but->rnaindex);
+    bUserMenuItem *umi = reinterpret_cast<bUserMenuItem *>(ED_screen_user_menu_item_find_prop(
+        &um->items, member_id_data_path->c_str(), prop_id.c_str(), but->rnaindex));
     return umi;
   }
 
   wmOperatorType *ot = nullptr;
   PropertyRNA *prop_enum = nullptr;
   if ((ot = button_operatortype_get_from_enum_menu(but, &prop_enum))) {
-    return (bUserMenuItem *)ED_screen_user_menu_item_find_operator(
-        &um->items, ot, nullptr, RNA_property_identifier(prop_enum), but->opcontext);
+    return reinterpret_cast<bUserMenuItem *>(ED_screen_user_menu_item_find_operator(
+        &um->items, ot, nullptr, RNA_property_identifier(prop_enum), but->opcontext));
   }
 
   MenuType *mt = button_menutype_get(but);
   if (mt != nullptr) {
-    return (bUserMenuItem *)ED_screen_user_menu_item_find_menu(&um->items, mt);
+    return reinterpret_cast<bUserMenuItem *>(ED_screen_user_menu_item_find_menu(&um->items, mt));
   }
   return nullptr;
 }
 
-static void ui_but_user_menu_add(bContext *C, Button *but, bUserMenu *um)
+static void but_user_menu_add(bContext *C, Button *but, bUserMenu *um)
 {
-  BLI_assert(ui_but_is_user_menu_compatible(C, but));
+  BLI_assert(but_is_user_menu_compatible(C, but));
 
   std::string drawstr = button_drawstr_without_sep_char(but);
 
@@ -410,7 +410,7 @@ static void ui_but_user_menu_add(bContext *C, Button *but, bUserMenu *um)
           char *expr_result = nullptr;
           if (BPY_run_string_as_string(C, expr_imports, expr, nullptr, &expr_result)) {
             drawstr = expr_result;
-            MEM_freeN(expr_result);
+            MEM_delete(expr_result);
           }
           else {
             BLI_assert(0);
@@ -439,7 +439,7 @@ static void ui_but_user_menu_add(bContext *C, Button *but, bUserMenu *um)
     std::optional<std::string> member_id_data_path = WM_context_path_resolve_full(C,
                                                                                   &but->rnapoin);
     if (!member_id_data_path.has_value()) {
-      /* See #ui_but_user_menu_find code-comment. */
+      /* See #but_user_menu_find code-comment. */
       BLI_assert_unreachable();
     }
     else {
@@ -465,7 +465,7 @@ static void ui_but_user_menu_add(bContext *C, Button *but, bUserMenu *um)
   }
 }
 
-static bool ui_but_menu_add_path_operators(Layout &layout, PointerRNA *ptr, PropertyRNA *prop)
+static bool but_menu_add_path_operators(Layout &layout, PointerRNA *ptr, PropertyRNA *prop)
 {
   const PropertySubType subtype = RNA_property_subtype(prop);
   wmOperatorType *ot = WM_operatortype_find("WM_OT_path_open", true);
@@ -520,7 +520,7 @@ static void set_layout_context_from_button(bContext *C, Layout &layout, Button *
 
 bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *event)
 {
-  /* ui_but_is_interactive() may let some buttons through that should not get a context menu - it
+  /* but_is_interactive() may let some buttons through that should not get a context menu - it
    * doesn't make sense for them. */
   if (ELEM(but->type, ButtonType::Label, ButtonType::Image)) {
     return false;
@@ -540,7 +540,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     /* Suppress editing commands. */
   }
   else if (but->type == ButtonType::Tab) {
-    ButtonTab *tab = (ButtonTab *)but;
+    ButtonTab *tab = static_cast<ButtonTab *>(but);
     if (tab->menu) {
       menutype_draw(C, tab->menu, &layout);
       layout.separator();
@@ -634,7 +634,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       }
     }
 
-    if ((but->flag & BUT_ANIMATED) && (but->rnapoin.type != &RNA_NlaStrip)) {
+    if ((but->flag & BUT_ANIMATED) && (but->rnapoin.type != RNA_NlaStrip)) {
       if (is_array_component) {
         PointerRNA op_ptr = layout.op(
             "ANIM_OT_keyframe_clear_button",
@@ -864,6 +864,16 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     layout.separator();
 
     /* Property Operators */
+    /* Swap render X and Y dimensions. */
+    if (but->rnaprop && but->rnapoin.type == RNA_RenderSettings) {
+      const std::string prop_id = RNA_property_identifier(but->rnaprop);
+      if (ELEM(prop_id, "resolution_x", "resolution_y")) {
+        layout.op("RENDER_OT_swap_dimensions",
+                  CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Swap Dimensions"),
+                  ICON_RENDER_SWAP_DIMENSIONS);
+        layout.separator();
+      }
+    }
 
     /* Copy Property Value
      * Paste Property Value */
@@ -935,10 +945,18 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     layout.separator();
 
     if (type == PROP_STRING && ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH)) {
-      if (ui_but_menu_add_path_operators(layout, ptr, prop)) {
+      if (but_menu_add_path_operators(layout, ptr, prop)) {
         layout.separator();
       }
     }
+  }
+  else if (button_opens_link(but)) {
+    std::string link = button_get_link(but, C);
+    layout.button(
+        IFACE_("Copy Link"), ICON_COPYDOWN, [link = std::move(link)](blender::bContext & /*C*/) {
+          WM_clipboard_text_set(link.c_str(), false);
+        });
+    layout.separator();
   }
   else if (but->optype && but->opptr && RNA_struct_property_is_set(but->opptr, "filepath")) {
     /* Operator with "filepath" string property of PROP_FILEPATH subtype. */
@@ -994,8 +1012,8 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       (but->menu_create_func == nullptr))
   {
     /* If the button represents an id, it can set the "id" context pointer. */
-    if (blender::ed::asset::can_mark_single_from_context(C)) {
-      const ID *id = static_cast<const ID *>(CTX_data_pointer_get_type(C, "id", &RNA_ID).data);
+    if (ed::asset::can_mark_single_from_context(C)) {
+      const ID *id = static_cast<const ID *>(CTX_data_pointer_get_type(C, "id", RNA_ID).data);
 
       /* Gray out items depending on if data-block is an asset. Preferably this could be done via
        * operator poll, but that doesn't work since the operator also works with "selected_ids",
@@ -1027,7 +1045,8 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     const PropertyType prop_type = RNA_property_type(but->rnaprop);
     if (((prop_type == PROP_POINTER) ||
          (prop_type == PROP_STRING && but->type == ButtonType::SearchMenu &&
-          ((ButtonSearch *)but)->items_update_fn == rna_collection_search_update_fn)) &&
+          (static_cast<ButtonSearch *>(but))->items_update_fn ==
+              rna_collection_search_update_fn)) &&
         jump_to_target_button_poll(C))
     {
       layout.op("UI_OT_jump_to_target_button",
@@ -1038,7 +1057,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
   }
 
   /* Favorites Menu */
-  if (ui_but_is_user_menu_compatible(C, but)) {
+  if (but_is_user_menu_compatible(C, but)) {
     Block *block = layout.block();
     const int w = layout.width();
     bool item_found = false;
@@ -1050,7 +1069,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       if (um == nullptr) {
         continue;
       }
-      bUserMenuItem *umi = ui_but_user_menu_find(C, but, um);
+      bUserMenuItem *umi = but_user_menu_find(C, but, um);
       if (umi != nullptr) {
         Button *but2 = uiDefIconTextBut(
             block,
@@ -1071,7 +1090,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       }
     }
     if (um_array) {
-      MEM_freeN(um_array);
+      MEM_delete(um_array);
     }
 
     if (!item_found) {
@@ -1089,7 +1108,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       button_func_set(but2, [but](bContext &C) {
         bUserMenu *um = ED_screen_user_menu_ensure(&C);
         U.runtime.is_dirty = true;
-        ui_but_user_menu_add(&C, but, um);
+        but_user_menu_add(&C, but, um);
       });
     }
 
@@ -1250,9 +1269,9 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 
   /* UI List item context menu. Scripts can add items to it, by default there's nothing shown. */
   const ARegion *region = CTX_wm_region_popup(C) ? CTX_wm_region_popup(C) : CTX_wm_region(C);
-  const bool is_inside_listbox = ui_list_find_mouse_over(region, event) != nullptr;
+  const bool is_inside_listbox = listbox_find_mouse_over(region, event) != nullptr;
   const bool is_inside_listrow = is_inside_listbox ?
-                                     list_row_find_mouse_over(region, event->xy) != nullptr :
+                                     listrow_find_mouse_over(region, event->xy) != nullptr :
                                      false;
   if (is_inside_listrow) {
     MenuType *mt = WM_menutype_find("UI_MT_list_item_context_menu", true);
@@ -1288,30 +1307,33 @@ void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
   if (!any_item_visible) {
     return;
   }
-  if (panel->type->parent != nullptr) {
-    return;
-  }
-  if (!panel_can_be_pinned(panel)) {
+  if (panel && panel->type->parent != nullptr) {
     return;
   }
 
-  PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, &RNA_Panel, panel);
+  PointerRNA ptr = RNA_pointer_create_discrete(&screen->id, RNA_Panel, panel);
 
-  PopupMenu *pup = popup_menu_begin(C, IFACE_("Panel"), ICON_NONE);
+  PopupMenu *pup = popup_menu_begin(C, IFACE_("Sidebar"), ICON_NONE);
   Layout &layout = *popup_menu_layout(pup);
 
-  if (has_panel_category) {
+  if (has_panel_category && panel && panel_can_be_pinned(panel)) {
     char tmpstr[80];
-    SNPRINTF_UTF8(tmpstr, "%s" UI_SEP_CHAR_S "%s", IFACE_("Pin"), IFACE_("Shift Left Mouse"));
+    SNPRINTF_UTF8(
+        tmpstr, "%s" UI_SEP_CHAR_S "%s", IFACE_("Pin Panel"), IFACE_("Shift Left Mouse"));
     layout.prop(&ptr, "use_pin", UI_ITEM_NONE, tmpstr, ICON_NONE);
 
     /* evil, force shortcut flag */
     {
       Block *block = layout.block();
-      Button *but = block->buttons.last().get();
+      Button *but = block->buttons_ptrs.last().get();
       but->flag |= BUT_HAS_SEP_CHAR;
     }
+    layout.separator();
   }
+
+  PointerRNA prefs_ptr = RNA_pointer_create_discrete(nullptr, RNA_PreferencesSystem, &U);
+  layout.prop(&prefs_ptr, "show_panel_tabs_compact", UI_ITEM_NONE, "Compact Tabs", ICON_NONE);
+
   popup_menu_end(C, pup);
 }
 

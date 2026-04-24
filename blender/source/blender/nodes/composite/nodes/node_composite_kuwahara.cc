@@ -2,15 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include <limits>
 
 #include "BLI_math_base.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_numbers.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -40,34 +35,36 @@ static const EnumPropertyItem type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static void cmp_node_kuwahara_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Float>("Size")
+  b.add_input<decl::Float>("Size"_ustr)
       .default_value(6.0f)
       .min(0.0f)
       .description("The size of the filter in pixels")
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Menu>("Type")
+  b.add_input<decl::Menu>("Type"_ustr)
       .default_value(CMP_NODE_KUWAHARA_ANISOTROPIC)
       .static_items(type_items)
       .optional_label();
 
-  b.add_input<decl::Int>("Uniformity")
+  b.add_input<decl::Int>("Uniformity"_ustr)
       .default_value(4)
       .min(0)
       .usage_by_single_menu(CMP_NODE_KUWAHARA_ANISOTROPIC)
       .description(
           "Controls the uniformity of the direction of the filter. Higher values produces more "
           "uniform directions");
-  b.add_input<decl::Float>("Sharpness")
+  b.add_input<decl::Float>("Sharpness"_ustr)
       .default_value(1.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -76,7 +73,7 @@ static void cmp_node_kuwahara_declare(NodeDeclarationBuilder &b)
       .description(
           "Controls the sharpness of the filter. 0 means completely smooth while 1 means "
           "completely sharp");
-  b.add_input<decl::Float>("Eccentricity")
+  b.add_input<decl::Float>("Eccentricity"_ustr)
       .default_value(1.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -85,17 +82,17 @@ static void cmp_node_kuwahara_declare(NodeDeclarationBuilder &b)
       .description(
           "Controls how directional the filter is. 0 means the filter is completely "
           "omnidirectional while 2 means it is maximally directed along the edges of the image");
-  b.add_input<decl::Bool>("High Precision")
+  b.add_input<decl::Bool>("High Precision"_ustr)
       .default_value(false)
       .usage_by_single_menu(CMP_NODE_KUWAHARA_CLASSIC)
       .description(
           "Uses a more precise but slower method. Use if the output contains undesirable noise.");
 }
 
-static void node_composit_init_kuwahara(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
   /* Unused, kept for forward compatibility. */
-  NodeKuwaharaData *data = MEM_new_for_free<NodeKuwaharaData>(__func__);
+  NodeKuwaharaData *data = MEM_new<NodeKuwaharaData>(__func__);
   node->storage = data;
 }
 
@@ -513,7 +510,7 @@ class ConvertKuwaharaOperation : public NodeOperation {
        * later in the code. */
       const int number_of_sectors = 8;
       float sector_center_overlap_parameter = 2.0f / radius;
-      float sector_envelope_angle = ((3.0f / 2.0f) * math::numbers::pi_v<float>) /
+      float sector_envelope_angle = ((3.0f / 2.0f) * std::numbers::pi_v<float>) /
                                     number_of_sectors;
       float cross_sector_overlap_parameter = (sector_center_overlap_parameter +
                                               math::cos(sector_envelope_angle)) /
@@ -591,7 +588,7 @@ class ConvertKuwaharaOperation : public NodeOperation {
 
           /* Then we rotate the disk point by 45 degrees, which is a simple expression involving a
            * constant as can be demonstrated by applying a 45 degree rotation matrix. */
-          float2 rotated_disk_point = (1.0f / math::numbers::sqrt2) *
+          float2 rotated_disk_point = (1.0f / std::numbers::sqrt2) *
                                       float2(disk_point.x - disk_point.y,
                                              disk_point.x + disk_point.y);
 
@@ -616,8 +613,7 @@ class ConvertKuwaharaOperation : public NodeOperation {
           float sector_weights_sum = sector_weights[0] + sector_weights[1] + sector_weights[2] +
                                      sector_weights[3] + sector_weights[4] + sector_weights[5] +
                                      sector_weights[6] + sector_weights[7];
-          float radial_gaussian_weight = math::exp(-math::numbers::pi *
-                                                   disk_point_length_squared) /
+          float radial_gaussian_weight = math::exp(-std::numbers::pi * disk_point_length_squared) /
                                          sector_weights_sum;
 
           /* Load the color of the pixel and its mirrored pixel and compute their square. */
@@ -828,32 +824,30 @@ class ConvertKuwaharaOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new ConvertKuwaharaOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_kuwahara_cc
-
-static void register_node_type_cmp_kuwahara()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_kuwahara_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeKuwahara", CMP_NODE_KUWAHARA);
+  cmp_node_type_base(&ntype, "CompositorNodeKuwahara"_ustr, CMP_NODE_KUWAHARA);
   ntype.ui_name = "Kuwahara";
   ntype.ui_description =
       "Apply smoothing filter that preserves edges, for stylized and painterly effects";
   ntype.enum_name_legacy = "KUWAHARA";
   ntype.nclass = NODE_CLASS_OP_FILTER;
-  ntype.declare = file_ns::cmp_node_kuwahara_declare;
-  ntype.initfunc = file_ns::node_composit_init_kuwahara;
-  blender::bke::node_type_storage(
+  ntype.declare = node_declare;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(
       ntype, "NodeKuwaharaData", node_free_standard_storage, node_copy_standard_storage);
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
-  blender::bke::node_type_size(ntype, 150, 140, NODE_DEFAULT_MAX_WIDTH);
+  ntype.get_compositor_operation = get_compositor_operation;
+  bke::node_type_size(ntype, 150, 140, NODE_DEFAULT_MAX_WIDTH);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_kuwahara)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_kuwahara_cc

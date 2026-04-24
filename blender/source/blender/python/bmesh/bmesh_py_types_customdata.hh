@@ -12,6 +12,8 @@
 
 #include "bmesh_py_types.hh"
 
+namespace blender {
+
 struct BMesh;
 
 /* All use #BPy_BMLayerAccess struct. */
@@ -30,14 +32,14 @@ extern PyTypeObject BPy_BMLayerItem_Type;
 
 /** All layers for vert/edge/face/loop. */
 struct BPy_BMLayerAccess {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   char htype;
 };
 
 /** Access different layer types deform/uv/vertex-color. */
 struct BPy_BMLayerCollection {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   char htype;
   int type; /* customdata type - CD_XXX */
@@ -45,7 +47,7 @@ struct BPy_BMLayerCollection {
 
 /** Access a specific layer directly. */
 struct BPy_BMLayerItem {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   char htype;
   int type;  /* customdata type - CD_XXX */
@@ -67,3 +69,5 @@ void BPy_BM_init_types_customdata();
 [[nodiscard]] int BPy_BMLayerItem_SetItem(BPy_BMElem *py_ele,
                                           BPy_BMLayerItem *py_layer,
                                           PyObject *value);
+
+}  // namespace blender

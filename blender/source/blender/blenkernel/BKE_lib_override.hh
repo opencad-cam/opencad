@@ -23,9 +23,12 @@
  *    of IDs in a given Main data-base.
  */
 
+#include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
 
 #include <optional>
+
+namespace blender {
 
 struct BlendFileReadReport;
 struct Collection;
@@ -42,11 +45,36 @@ struct ReportList;
 struct Scene;
 struct ViewLayer;
 
-namespace blender::bke::liboverride {
+namespace bke::liboverride {
 
 bool is_auto_resync_enabled();
 
-}  // namespace blender::bke::liboverride
+}  // namespace bke::liboverride
+
+/** Some runtime-only tags for IDOverrideLibrary struct. */
+enum class IDOverrideLibraryTag {
+  /** This override needs to be reloaded. */
+  TAG_NEEDS_RELOAD = 1 << 0,
+
+  /**
+   * This override contains properties with forbidden changes, which should be restored to their
+   * linked reference value.
+   */
+  TAG_NEEDS_RESTORE = 1 << 1,
+
+  /**
+   * This override is detected as being cut from its hierarchy root. Temporarily used during
+   * resync process.
+   */
+  TAG_RESYNC_ISOLATED_FROM_ROOT = 1 << 2,
+  /**
+   * This override was detected as needing resync outside of the resync process (it is a 'really
+   * need resync' case, not a 'need resync for hierarchy reasons' one). Temporarily used during
+   * resync process.
+   */
+  TAG_NEED_RESYNC_ORIGINAL = 1 << 3,
+};
+ENUM_OPERATORS(IDOverrideLibraryTag);
 
 /**
  * Initialize empty overriding of \a reference_id by \a local_id.
@@ -64,6 +92,10 @@ void BKE_lib_override_library_clear(IDOverrideLibrary *liboverride, bool do_id_u
  * Free given \a liboverride.
  */
 void BKE_lib_override_library_free(IDOverrideLibrary **liboverride, bool do_id_user);
+/** Set or clear runtime-only tags in given \a liboverride. */
+void BKE_lib_override_library_tag_set(IDOverrideLibrary &liboverride,
+                                      IDOverrideLibraryTag tag,
+                                      bool value);
 
 /**
  * Return the actual #IDOverrideLibrary data 'controlling' the given `id`, and the actual ID owning
@@ -233,13 +265,36 @@ bool BKE_lib_override_library_proxy_convert(Main *bmain,
  */
 void BKE_lib_override_library_main_proxy_convert(Main *bmain, BlendFileReadReport *reports);
 
+enum LibOverride_HierarchyRoot_ValidateOptions {
+  /** Only fix cases where a non-isolated liboverride has a null hierarchy root pointer. Ignore
+   * cases where the root pointer is valid, but is not a suitable root.
+   *
+   * Typically used during readfile process, before resyncing liboverrides, as in that case keeping
+   * existing hierarchy root info, even if no more fully valid, is necessary for an optimal resync
+   * reconstruction when linked reference data hierarchy has been modified.
+   */
+  ONLY_PROCESS_NULL_ROOT_POINTERS = 1 << 0,
+  /** Do report nullptr hierarchy roots as errors.
+   *
+   * This is typically only done at readfile time, where this is a fairly bad error.
+   *
+   * When called after some operations like ID deletion etc., getting a nullptr here is typically
+   * expected, and so does not need to be reported.
+   */
+  REPORT_NULL_ROOT_POINTERS = 1 << 16,
+};
+ENUM_OPERATORS(LibOverride_HierarchyRoot_ValidateOptions);
+
 /**
  * Find and set the 'hierarchy root' ID pointer of all library overrides in given `bmain`.
  *
  * NOTE: Cannot be called from `do_versions_after_linking` as this code needs a single complete
  * Main database, not a split-by-libraries one.
  */
-void BKE_lib_override_library_main_hierarchy_root_ensure(Main *bmain);
+void BKE_lib_override_library_main_hierarchy_root_ensure(
+    Main *bmain,
+    LibOverride_HierarchyRoot_ValidateOptions options = {},
+    ReportList *reports = nullptr);
 
 /**
  * Advanced 'smart' function to resync, re-create fully functional overrides up-to-date with linked
@@ -284,7 +339,7 @@ bool BKE_lib_override_library_resync(Main *bmain,
  */
 void BKE_lib_override_library_main_resync(
     Main *bmain,
-    const blender::Map<Library *, Library *> *new_to_old_libraries_map,
+    const Map<Library *, Library *> *new_to_old_libraries_map,
     Scene *scene,
     ViewLayer *view_layer,
     BlendFileReadReport *reports);
@@ -556,3 +611,5 @@ bool BKE_lib_override_library_id_is_user_deletable(Main *bmain, ID *id);
  * Debugging helper to show content of given liboverride data.
  */
 void BKE_lib_override_debug_print(IDOverrideLibrary *liboverride, const char *intro_txt);
+
+}  // namespace blender

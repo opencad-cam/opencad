@@ -28,7 +28,9 @@ set(SRC
   drawnode.cc
   link_drag_search.cc
   node_add.cc
+  node_compositor_job.cc
   node_context_path.cc
+  node_copy_util.cc
   node_draw.cc
   node_edit.cc
   node_geometry_attribute_search.cc
@@ -68,7 +70,6 @@ set(LIB
   PRIVATE bf::imbuf
   PRIVATE bf::intern::guardedalloc
   bf_compositor
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::nodes
   PRIVATE bf::render
   PRIVATE bf::windowmanager
@@ -81,14 +82,6 @@ endif()
 
 if(WITH_OPENSUBDIV)
   add_definitions(-DWITH_OPENSUBDIV)
-endif()
-
-if(WITH_TBB)
-  if(WIN32)
-    # TBB includes `Windows.h` which will define min/max macros
-    # that will collide with the STL versions.
-    add_definitions(-DNOMINMAX)
-  endif()
 endif()
 
 blender_add_lib(bf_editor_space_node "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

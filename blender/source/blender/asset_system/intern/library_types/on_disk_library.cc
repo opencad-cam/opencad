@@ -12,8 +12,9 @@ namespace blender::asset_system {
 
 OnDiskAssetLibrary::OnDiskAssetLibrary(eAssetLibraryType library_type,
                                        StringRef name,
-                                       StringRef root_path)
-    : AssetLibrary(library_type, name, root_path)
+                                       StringRef root_path,
+                                       const bool is_read_only)
+    : AssetLibrary(library_type, /*is_read_only=*/is_read_only, name, root_path)
 {
   this->on_blend_save_handler_register();
 }
@@ -33,9 +34,19 @@ std::optional<AssetLibraryReference> OnDiskAssetLibrary::library_reference() con
   return {};
 }
 
+std::optional<eAssetImportMethod> OnDiskAssetLibrary::import_method() const
+{
+  return {};
+}
+
 void OnDiskAssetLibrary::refresh_catalogs()
 {
   this->catalog_service().reload_catalogs();
+}
+
+bool OnDiskAssetLibrary::is_enabled() const
+{
+  return true;
 }
 
 }  // namespace blender::asset_system

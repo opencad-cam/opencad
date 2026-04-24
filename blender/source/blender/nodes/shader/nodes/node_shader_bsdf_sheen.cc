@@ -7,19 +7,24 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_bsdf_sheen_cc {
+namespace blender {
+
+namespace nodes::node_shader_bsdf_sheen_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({0.8f, 0.8f, 0.8f, 1.0f});
-  b.add_input<decl::Float>("Roughness")
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.add_input<decl::Color>("Color"_ustr).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_input<decl::Float>("Roughness"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_input<decl::Float>("Weight").available(false);
-  b.add_output<decl::Shader>("BSDF");
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Shader>("BSDF"_ustr);
 }
 
 static void node_shader_buts_sheen(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -77,16 +82,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_bsdf_sheen_cc
+}  // namespace nodes::node_shader_bsdf_sheen_cc
 
 /* node type definition */
 void register_node_type_sh_bsdf_sheen()
 {
-  namespace file_ns = blender::nodes::node_shader_bsdf_sheen_cc;
+  namespace file_ns = nodes::node_shader_bsdf_sheen_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeBsdfSheen", SH_NODE_BSDF_SHEEN);
+  sh_node_type_base(&ntype, "ShaderNodeBsdfSheen"_ustr, SH_NODE_BSDF_SHEEN);
   ntype.ui_name = "Sheen BSDF";
   ntype.ui_description =
       "Reflection for materials such as cloth.\nTypically mixed with other shaders (such as a "
@@ -95,10 +100,13 @@ void register_node_type_sh_bsdf_sheen()
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.add_ui_poll = object_cycles_shader_nodes_poll;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.initfunc = file_ns::node_shader_init_sheen;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_sheen;
   ntype.draw_buttons = file_ns::node_shader_buts_sheen;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

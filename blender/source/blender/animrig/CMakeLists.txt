@@ -13,7 +13,6 @@ set(INC
 )
 
 set(INC_SYS
-  ../../../extern/fmtlib/include
 )
 
 set(SRC
@@ -84,6 +83,7 @@ if(WITH_GTESTS)
     intern/action_iterators_test.cc
     intern/action_legacy_test.cc
     intern/action_test.cc
+    intern/anim_rna_test.cc
     intern/bone_collections_test.cc
     intern/evaluation_test.cc
     intern/keyframing_test.cc

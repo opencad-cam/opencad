@@ -76,6 +76,11 @@ void GHOST_System::setWindowCSD_Layout(const GHOST_CSD_Layout &layout)
   window_csd_layout_ = layout;
 }
 
+void GHOST_System::setIconGenerator(const GHOST_IconGenerator *icon_generator)
+{
+  icon_generator_ = icon_generator;
+}
+
 GHOST_ITimerTask *GHOST_System::installTimer(uint64_t delay,
                                              uint64_t interval,
                                              GHOST_TimerProcPtr timer_proc,
@@ -242,6 +247,8 @@ uint32_t GHOST_System::getCursorPreferredLogicalSize() const
 
 GHOST_TSuccess GHOST_System::getModifierKeyState(GHOST_TModifierKey mask, bool &is_down) const
 {
+  is_down = false;
+
   GHOST_ModifierKeys keys;
   /* Get the state of all modifier keys. */
   GHOST_TSuccess success = getModifierKeys(keys);
@@ -254,6 +261,8 @@ GHOST_TSuccess GHOST_System::getModifierKeyState(GHOST_TModifierKey mask, bool &
 
 GHOST_TSuccess GHOST_System::getButtonState(GHOST_TButton mask, bool &is_down) const
 {
+  is_down = false;
+
   GHOST_Buttons buttons;
   /* Get the state of all mouse buttons. */
   GHOST_TSuccess success = getButtons(buttons);

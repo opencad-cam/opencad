@@ -109,7 +109,7 @@ def __gather_extensions(blender_shader_sockets, source, webp_image, image_data, 
             )
             buffer_view = None
             name = source.uri.name
-            image.set_real_uri(uri, export_settings) # Note: image, here, is the imported image python file
+            image.set_real_uri(uri, export_settings)  # Note: image, here, is the imported image python file
 
         else:
             buffer_view = BinaryData(data=new_data)
@@ -190,6 +190,14 @@ def __gather_sampler(blender_shader_sockets, export_settings):
             if id(mat.node_tree) == id(first_valid_shader_node.group_path[0].original):
                 group_path_str += mat.name  # TODO if linked, we can have multiple materials with same name...
                 break
+
+    if group_path_str == "":
+        # Inline node tree ?
+        return gather_sampler(
+            first_valid_shader_node.shader_node,
+            group_path_str,
+            export_settings)
+
     if len(first_valid_shader_node.group_path) > 1:
         for idx, i in enumerate(first_valid_shader_node.group_path[1:]):
             group_path_str += sep_item
@@ -233,7 +241,7 @@ def __gather_source(blender_shader_sockets, use_tile, export_settings):
                 )
                 name = source.uri.name
 
-                image.set_real_uri(uri, export_settings) # Note: image, here, is the imported image python file
+                image.set_real_uri(uri, export_settings)  # Note: image, here, is the imported image python file
 
             else:
                 uri = None

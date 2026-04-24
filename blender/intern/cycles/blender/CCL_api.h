@@ -4,16 +4,24 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
-/* create python module _cycles used by addon */
+struct Image;
 
-void *CCL_python_module_init(void);
+/* Create python module _cycles used by addon. */
+void *CCL_python_module_init();
 
-void CCL_log_init(void);
+void CCL_log_init();
+void CCL_implicit_sharing_init();
 
-#ifdef __cplusplus
-}
-#endif
+/* Texture cache generation. */
+
+bool CCL_has_texture_cache(const Image *image,
+                           const char *filepath,
+                           const char *texture_cache_directory = "");
+
+bool CCL_generate_texture_cache(const Image *image,
+                                const char *filepath,
+                                const char *texture_cache_directory = "");
+
+}  // namespace blender

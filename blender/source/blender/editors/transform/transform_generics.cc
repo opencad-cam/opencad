@@ -70,10 +70,10 @@ static void *t_view_get(TransInfo *t)
 {
   if (t->spacetype == SPACE_VIEW3D) {
     View3D *v3d = static_cast<View3D *>(t->area->spacedata.first);
-    return (void *)v3d;
+    return static_cast<void *>(v3d);
   }
   if (t->region) {
-    return (void *)&t->region->v2d;
+    return static_cast<void *>(&t->region->v2d);
   }
   return nullptr;
 }
@@ -121,9 +121,10 @@ static int t_around_get(TransInfo *t)
 
 void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *event)
 {
+  Main *bmain = CTX_data_main(C);
   Scene *sce = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(sce, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, sce, view_layer);
   Object *obact = BKE_view_layer_active_object_get(view_layer);
   const eObjectMode object_mode = eObjectMode(obact ? obact->mode : OB_MODE_OBJECT);
   ToolSettings *ts = CTX_data_tool_settings(C);
@@ -143,6 +144,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   t->mbus = CTX_wm_message_bus(C);
   t->depsgraph = CTX_data_depsgraph_pointer(C);
+  t->bmain = bmain;
 
   t->area = area;
   t->region = region;
@@ -170,8 +172,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   /* Many kinds of transform only use a single handle. */
   if (t->data_container == nullptr) {
-    t->data_container = static_cast<TransDataContainer *>(
-        MEM_callocN(sizeof(*t->data_container), __func__));
+    t->data_container = MEM_new_zeroed<TransDataContainer>(__func__);
     t->data_container_len = 1;
   }
 
@@ -276,7 +277,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     if ((object_mode & OB_MODE_ALL_PAINT) || (object_mode & OB_MODE_SCULPT_CURVES)) {
       Paint *paint = BKE_paint_get_active_from_context(C);
       Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
-      if (brush && (brush->flag & BRUSH_CURVE)) {
+      if (brush && (brush->stroke_method == BRUSH_STROKE_CURVE)) {
         t->options |= CTX_PAINT_CURVE;
       }
     }
@@ -299,7 +300,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_IMAGE) {
     SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
-    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
     if (ED_space_image_show_uvedit(sima, BKE_view_layer_active_object_get(t->view_layer))) {
       /* UV transform. */
     }
@@ -309,7 +310,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     else if (sima->mode == SI_MODE_PAINT) {
       Paint *paint = &sce->toolsettings->imapaint.paint;
       Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
-      if (brush && (brush->flag & BRUSH_CURVE)) {
+      if (brush && (brush->stroke_method == BRUSH_STROKE_CURVE)) {
         t->options |= CTX_PAINT_CURVE;
       }
     }
@@ -695,13 +696,13 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     wmWindowManager *wm = CTX_wm_manager(C);
     wmKeyMap *keymap = WM_keymap_active(wm, op->type->modalkeymap);
     const wmKeyMapItem *kmi_passthrough = nullptr;
-    LISTBASE_FOREACH (const wmKeyMapItem *, kmi, &keymap->items) {
-      if (kmi->flag & KMI_INACTIVE) {
+    for (const wmKeyMapItem &kmi : keymap->items) {
+      if (kmi.flag & KMI_INACTIVE) {
         continue;
       }
 
-      if (kmi->propvalue == TFM_MODAL_PASSTHROUGH_NAVIGATE) {
-        kmi_passthrough = kmi;
+      if (kmi.propvalue == TFM_MODAL_PASSTHROUGH_NAVIGATE) {
+        kmi_passthrough = &kmi;
         break;
       }
     }
@@ -734,7 +735,7 @@ static void freeTransCustomData(TransInfo *t, TransDataContainer *tc, TransCusto
     BLI_assert(custom_data->data == nullptr);
   }
   else if ((custom_data->data != nullptr) && custom_data->use_free) {
-    MEM_freeN(custom_data->data);
+    MEM_delete_void(custom_data->data);
     custom_data->data = nullptr;
   }
   /* In case modes are switched in the same transform session. */
@@ -790,20 +791,20 @@ void postTrans(bContext *C, TransInfo *t)
         TransData *td = tc->data;
         for (int a = 0; a < tc->data_len; a++, td++) {
           if (td->flag & TD_BEZTRIPLE) {
-            MEM_freeN(td->hdata);
+            MEM_delete(td->hdata);
           }
         }
       }
-      MEM_freeN(tc->data);
+      MEM_delete(tc->data);
 
-      MEM_SAFE_FREE(tc->data_mirror);
-      MEM_SAFE_FREE(tc->data_ext);
-      MEM_SAFE_FREE(tc->data_2d);
-      MEM_SAFE_FREE(tc->sorted_index_map);
+      MEM_SAFE_DELETE(tc->data_mirror);
+      MEM_SAFE_DELETE(tc->data_ext);
+      MEM_SAFE_DELETE(tc->data_2d);
+      MEM_SAFE_DELETE(tc->sorted_index_map);
     }
   }
 
-  MEM_SAFE_FREE(t->data_container);
+  MEM_SAFE_DELETE(t->data_container);
   t->data_container = nullptr;
 
   BLI_freelistN(&t->tsnap.points);
@@ -821,7 +822,7 @@ void postTrans(bContext *C, TransInfo *t)
   }
 
   if (t->mouse.data) {
-    MEM_freeN(t->mouse.data);
+    MEM_delete_void(t->mouse.data);
   }
 
   if (t->rng != nullptr) {
@@ -851,7 +852,7 @@ static void transdata_restore_basic(TransDataBasic *td_basic)
 
 static void restoreElement(TransData *td)
 {
-  transdata_restore_basic((TransDataBasic *)td);
+  transdata_restore_basic(static_cast<TransDataBasic *>(td));
 
   if (td->flag & TD_BEZTRIPLE) {
     *(td->hdata->h1) = td->hdata->ih1;
@@ -872,7 +873,7 @@ void restoreTransObjects(TransInfo *t)
     }
 
     for (tdm = tc->data_mirror; tdm < tc->data_mirror + tc->data_mirror_len; tdm++) {
-      transdata_restore_basic((TransDataBasic *)tdm);
+      transdata_restore_basic(static_cast<TransDataBasic *>(tdm));
     }
 
     if (tc->data_ext) {
@@ -960,17 +961,17 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
   const float *cursor = nullptr;
 
   if (t->spacetype == SPACE_IMAGE) {
-    SpaceImage *sima = (SpaceImage *)t->area->spacedata.first;
+    SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first);
     cursor = sima->cursor;
   }
   if (t->spacetype == SPACE_SEQ) {
-    SpaceSeq *sseq = (SpaceSeq *)t->area->spacedata.first;
+    SpaceSeq *sseq = static_cast<SpaceSeq *>(t->area->spacedata.first);
     const float2 cursor_pixel = seq::image_preview_unit_to_px(t->scene, sseq->cursor);
     copy_v2_v2(cursor_local_buf, cursor_pixel);
     cursor = cursor_local_buf;
   }
   else if (t->spacetype == SPACE_CLIP) {
-    SpaceClip *space_clip = (SpaceClip *)t->area->spacedata.first;
+    SpaceClip *space_clip = static_cast<SpaceClip *>(t->area->spacedata.first);
     cursor = space_clip->cursor;
   }
 
@@ -979,11 +980,11 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
       float co[2];
 
       if (t->spacetype == SPACE_IMAGE) {
-        SpaceImage *sima = (SpaceImage *)t->area->spacedata.first;
+        SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first);
         BKE_mask_coord_from_image(sima->image, &sima->iuser, co, cursor);
       }
       else if (t->spacetype == SPACE_CLIP) {
-        SpaceClip *space_clip = (SpaceClip *)t->area->spacedata.first;
+        SpaceClip *space_clip = static_cast<SpaceClip *>(t->area->spacedata.first);
         BKE_mask_coord_from_movieclip(space_clip->clip, &space_clip->user, co, cursor);
       }
       else {
@@ -1008,7 +1009,7 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
 
 void calculateCenterCursorGraph2D(TransInfo *t, float r_center[2])
 {
-  SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
+  SpaceGraph *sipo = static_cast<SpaceGraph *>(t->area->spacedata.first);
   Scene *scene = t->scene;
 
   /* Cursor is combination of current frame, and graph-editor cursor value. */
@@ -1048,13 +1049,15 @@ void calculateCenterMedian(TransInfo *t, float r_center[3])
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     float center[3];
     for (int i = 0; i < tc->data_len; i++) {
-      if (transdata_center_global_get(tc, (TransDataBasic *)&tc->data[i], center)) {
+      if (transdata_center_global_get(tc, static_cast<TransDataBasic *>(&tc->data[i]), center)) {
         add_v3_v3(partial, center);
         total++;
       }
     }
     for (int i = 0; i < tc->data_mirror_len; i++) {
-      if (transdata_center_global_get(tc, (TransDataBasic *)&tc->data_mirror[i], center)) {
+      if (transdata_center_global_get(
+              tc, static_cast<TransDataBasic *>(&tc->data_mirror[i]), center))
+      {
         add_v3_v3(partial, center);
         total++;
       }
@@ -1074,13 +1077,15 @@ void calculateCenterBound(TransInfo *t, float r_center[3])
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     float center[3];
     for (int i = 0; i < tc->data_len; i++) {
-      if (transdata_center_global_get(tc, (TransDataBasic *)&tc->data[i], center)) {
+      if (transdata_center_global_get(tc, static_cast<TransDataBasic *>(&tc->data[i]), center)) {
         minmax_v3v3_v3(min, max, center);
         changed = true;
       }
     }
     for (int i = 0; i < tc->data_mirror_len; i++) {
-      if (transdata_center_global_get(tc, (TransDataBasic *)&tc->data_mirror[i], center)) {
+      if (transdata_center_global_get(
+              tc, static_cast<TransDataBasic *>(&tc->data_mirror[i]), center))
+      {
         minmax_v3v3_v3(min, max, center);
         changed = true;
       }
@@ -1111,7 +1116,7 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
     }
   }
   else if (t->options & CTX_POSE_BONE) {
-    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
     Object *ob = BKE_view_layer_active_object_get(t->view_layer);
     if (object::calc_active_center_for_posemode(ob, select_only, r_center)) {
       mul_m4_v3(ob->object_to_world().ptr(), r_center);
@@ -1119,7 +1124,7 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
     }
   }
   else if (t->options & CTX_PAINT_CURVE) {
-    Paint *paint = BKE_paint_get_active(t->scene, t->view_layer);
+    Paint *paint = BKE_paint_get_active(*t->bmain, t->scene, t->view_layer);
     Brush *br = BKE_paint_brush(paint);
     PaintCurve *pc = br->paint_curve;
     copy_v3_v3(r_center, pc->points[pc->add_index - 1].bez.vec[1]);
@@ -1129,7 +1134,7 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
   }
   else {
     /* Object mode. */
-    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
     Base *base = BKE_view_layer_active_base_get(t->view_layer);
     if (base && ((!select_only) || ((base->flag & BASE_SELECTED) != 0))) {
       copy_v3_v3(r_center, base->object->object_to_world().location());
@@ -1406,7 +1411,6 @@ void transform_data_ext_rotate(TransData *td,
                                float mat[3][3],
                                bool use_drot)
 {
-  float totmat[3][3];
   float smat[3][3];
   float fmat[3][3];
   float obmat[3][3];
@@ -1414,7 +1418,6 @@ void transform_data_ext_rotate(TransData *td,
   float dmat[3][3]; /* Delta rotation. */
   float dmat_inv[3][3];
 
-  mul_m3_m3m3(totmat, mat, td->mtx);
   mul_m3_m3m3(smat, td->smtx, mat);
 
   /* Logic from #BKE_object_rot_to_mat3. */
@@ -1513,7 +1516,7 @@ Object *transform_object_deform_pose_armature_get(const TransInfo *t, Object *ob
    * Lines below just check is also visible. */
   Object *ob_armature = BKE_modifiers_is_deformed_by_armature(ob);
   if (ob_armature && ob_armature->mode & OB_MODE_POSE) {
-    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
     Base *base_arm = BKE_view_layer_base_find(t->view_layer, ob_armature);
     if (base_arm) {
       View3D *v3d = static_cast<View3D *>(t->view);

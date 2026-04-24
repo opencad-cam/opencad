@@ -174,6 +174,8 @@ class Instance : public DrawEngine {
   bool use_curves = true;
   bool use_volumes = true;
 
+  GPUSamplerFiltering anisotropic_filtering = GPU_SAMPLER_FILTERING_DEFAULT;
+
   /** Debug mode from debug value. */
   eDebugMode debug_mode = eDebugMode::DEBUG_NONE;
 
@@ -207,7 +209,7 @@ class Instance : public DrawEngine {
         volume_probes(*this),
         light_probes(*this),
         volume(*this, uniform_data.data.volumes) {};
-  ~Instance() {};
+  ~Instance() override {};
 
   StringRefNull name_get() final
   {
@@ -347,14 +349,14 @@ class Instance : public DrawEngine {
            ((v3d->shading.type == OB_MATERIAL) && (v3d->overlay.flag & V3D_OVERLAY_LOOK_DEV));
   }
 
-  int get_recalc_flags(const ObjectRef &ob_ref)
+  uint get_recalc_flags(const ObjectRef &ob_ref)
   {
     return ob_ref.recalc_flags(depsgraph_last_update_);
   }
 
-  int get_recalc_flags(const ::World &world)
+  uint get_recalc_flags(const blender::World &world)
   {
-    return world.last_update > depsgraph_last_update_ ? int(ID_RECALC_SHADING) : 0;
+    return world.last_update > depsgraph_last_update_ ? uint(ID_RECALC_SHADING) : 0;
   }
 
  private:
@@ -364,8 +366,6 @@ class Instance : public DrawEngine {
    */
   void render_sample();
   void render_read_result(RenderLayer *render_layer, const char *view_name);
-
-  void mesh_sync(Object *ob, ObjectHandle &ob_handle);
 
   void update_eval_members();
 

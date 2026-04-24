@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -14,6 +10,7 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_camera.h"
+#include "BKE_scene.hh"
 
 #include "RNA_access.hh"
 
@@ -28,26 +25,24 @@
 
 #include "node_composite_util.hh"
 
-/* ************ Defocus Node ****************** */
-
 namespace blender::nodes::node_composite_defocus_cc {
 
 NODE_STORAGE_FUNCS(NodeDefocus)
 
-static void cmp_node_defocus_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Z").default_value(1.0f).min(0.0f).max(1.0f).structure_type(
+  b.add_input<decl::Float>("Z"_ustr).default_value(1.0f).min(0.0f).max(1.0f).structure_type(
       StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 }
 
-static void node_composit_init_defocus(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
   /* defocus node */
-  NodeDefocus *nbd = MEM_new_for_free<NodeDefocus>(__func__);
+  NodeDefocus *nbd = MEM_new<NodeDefocus>(__func__);
   nbd->bktype = 0;
   nbd->rotation = 0.0f;
   nbd->fstop = 128.0f;
@@ -57,7 +52,7 @@ static void node_composit_init_defocus(bNodeTree * /*ntree*/, bNode *node)
   node->storage = nbd;
 }
 
-static void node_composit_buts_defocus(ui::Layout &layout, bContext *C, PointerRNA *ptr)
+static void node_draw_buttons(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
 
   {
@@ -502,7 +497,9 @@ class DefocusOperation : public NodeOperation {
 
   const Object *get_camera_object()
   {
-    return get_scene()->camera;
+    Object *marker_camera = BKE_scene_camera_switch_find(this->get_scene(),
+                                                         this->context().get_frame_number());
+    return marker_camera ? marker_camera : this->get_scene()->camera;
   }
 
   const Scene *get_scene()
@@ -511,31 +508,29 @@ class DefocusOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new DefocusOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_defocus_cc
-
-static void register_node_type_cmp_defocus()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_defocus_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeDefocus", CMP_NODE_DEFOCUS);
+  cmp_node_type_base(&ntype, "CompositorNodeDefocus"_ustr, CMP_NODE_DEFOCUS);
   ntype.ui_name = "Defocus";
   ntype.ui_description = "Apply depth of field in 2D, using a Z depth map or mask";
   ntype.enum_name_legacy = "DEFOCUS";
   ntype.nclass = NODE_CLASS_OP_FILTER;
-  ntype.declare = file_ns::cmp_node_defocus_declare;
-  ntype.draw_buttons = file_ns::node_composit_buts_defocus;
-  ntype.initfunc = file_ns::node_composit_init_defocus;
-  blender::bke::node_type_storage(
+  ntype.declare = node_declare;
+  ntype.draw_buttons = node_draw_buttons;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(
       ntype, "NodeDefocus", node_free_standard_storage, node_copy_standard_storage);
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_defocus)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_defocus_cc

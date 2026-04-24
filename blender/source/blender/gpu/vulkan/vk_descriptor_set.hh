@@ -35,7 +35,7 @@ class VKVertexBuffer;
  * The resources inside a descriptor set can be updated and bound per set.
  *
  * Currently Blender only supports a single descriptor set per shader, but it is planned to be able
- * to use 2 descriptor sets per shader. One for each #blender::gpu::shader::Frequency.
+ * to use 2 descriptor sets per shader. One for each #gpu::shader::Frequency.
  */
 class VKDescriptorSet : NonCopyable {
 
@@ -114,7 +114,6 @@ class VKDescriptorSetUpdator {
                                  VKDescriptorSet::Location location) = 0;
   virtual void bind_buffer(VkDescriptorType vk_descriptor_type,
                            VkBuffer vk_buffer,
-                           VkDeviceAddress vk_device_address,
                            VkDeviceSize buffer_offset,
                            VkDeviceSize size_in_bytes,
                            VKDescriptorSet::Location location) = 0;
@@ -142,7 +141,6 @@ class VKDescriptorSetPoolUpdator : public VKDescriptorSetUpdator {
                          VKDescriptorSet::Location location) override;
   void bind_buffer(VkDescriptorType vk_descriptor_type,
                    VkBuffer vk_buffer,
-                   VkDeviceAddress vk_device_address,
                    VkDeviceSize buffer_offset,
                    VkDeviceSize size_in_bytes,
                    VKDescriptorSet::Location location) override;

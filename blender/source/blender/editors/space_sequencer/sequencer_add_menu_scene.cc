@@ -188,19 +188,23 @@ static void sequencer_add_scene_draw(const bContext *C, Menu *menu)
               wm::OpCallContext::InvokeDefault,
               UI_ITEM_NONE);
   }
+  else if (scenes_len == 1) {
+    layout.label(IFACE_("Scene Strip"), ICON_SCENE_DATA);
+    layout.label(IFACE_("No other scenes."), ICON_NONE);
+  }
   else {
     layout.label(IFACE_("Scene Strip"), ICON_SCENE_DATA);
     const Scene *active_scene = CTX_data_sequencer_scene(C);
-    int i = 0;
-    LISTBASE_FOREACH_INDEX (Scene *, scene, &bmain->scenes, i) {
-      if (scene == active_scene) {
+
+    for (const auto [i, scene] : bmain->scenes.enumerate()) {
+      if (&scene == active_scene) {
         continue;
       }
-      if (scene->id.asset_data) {
+      if (scene.id.asset_data) {
         continue;
       }
       PointerRNA op_ptr = layout.op("SEQUENCER_OT_scene_strip_add",
-                                    scene->id.name + 2,
+                                    scene.id.name + 2,
                                     ICON_NONE,
                                     wm::OpCallContext::InvokeRegionWin,
                                     UI_ITEM_NONE);

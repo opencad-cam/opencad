@@ -17,9 +17,9 @@
 #include "draw_view_lib.glsl"
 #include "eevee_bxdf_diffuse_lib.glsl"
 #include "eevee_bxdf_microfacet_lib.glsl"
-#include "eevee_ray_types_lib.glsl"
-#include "eevee_reverse_z_lib.glsl"
-#include "eevee_thickness_lib.glsl"
+#include "eevee_ray_types_lib.bsl.hh"
+#include "eevee_reverse_z_lib.bsl.hh"
+#include "eevee_thickness_lib.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_math_fast_lib.glsl"
 
@@ -72,7 +72,7 @@ ScreenTraceHitData raytrace_screen(RayTraceData rt_data,
   }
 
   /* NOTE: The 2.0 factor here is because we are applying it in NDC space. */
-  ScreenSpaceRay ssray = raytrace_screenspace_ray_create(
+  ScreenSpaceRay ssray = ScreenSpaceRay::create(
       ray, 2.0f * rt_data.full_resolution_inv, rt_data.thickness);
 
   /* Avoid no iteration. */
@@ -154,8 +154,7 @@ ScreenTraceHitData raytrace_planar(RayTraceData rt_data,
 
   float2 inv_texture_size = 1.0f / float2(textureSize(planar_depth_tx, 0).xy);
   /* NOTE: The 2.0 factor here is because we are applying it in NDC space. */
-  ScreenSpaceRay ssray = raytrace_screenspace_ray_create(
-      ray, planar.winmat, 2.0f * inv_texture_size);
+  ScreenSpaceRay ssray = ScreenSpaceRay::create(ray, planar.winmat, 2.0f * inv_texture_size);
 
   float prev_delta = 0.0f, prev_time = 0.0f;
   float depth_sample = reverse_z::read(
@@ -206,7 +205,7 @@ ScreenTraceHitData raytrace_planar(RayTraceData rt_data,
 
 /* Modify the ray origin before tracing it. We must do this because ray origin is implicitly
  * reconstructed from gbuffer depth which we cannot modify. */
-Ray raytrace_thickness_ray_amend(Ray ray, ClosureUndetermined cl, float3 V, float thickness)
+Ray raytrace_thickness_ray_amend(Ray ray, ClosureUndetermined cl, float3 V, Thickness thickness)
 {
   switch (cl.type) {
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
@@ -220,4 +219,151 @@ Ray raytrace_thickness_ray_amend(Ray ray, ClosureUndetermined cl, float3 V, floa
       break;
   }
   return ray;
+}
+
+bool clip_ray(float3 &start,
+              float3 &end,
+              const float3 direction,
+              const float max_distance,
+              const float4 frustum_planes[6])
+{
+  float min_t = 0.0f;
+  float max_t = max_distance;
+
+  for (int i = 0; i < 6; i++) {
+    /* Make normals point outwards.
+     * This way xyz * w represents a point in the plane surface. */
+    const float3 plane_normal = -frustum_planes[i].xyz;
+    const float plane_distance = frustum_planes[i].w;
+
+    const float NoR = dot(plane_normal, direction);
+    const float NoS = dot(plane_normal, start);
+
+    if (abs(NoR) < 1e-6f) {
+      /* Parallel ray. */
+      if (NoS > plane_distance) {
+        /* Fully outside the Frustum. */
+        return false;
+      }
+      continue;
+    }
+
+    const float plane_t = (plane_distance - NoS) / NoR;
+
+    if (NoR > 0.0f) {
+      /* Ray going outside. */
+      max_t = min(max_t, plane_t);
+    }
+    else {
+      /* Ray going inside. */
+      min_t = max(min_t, plane_t);
+    }
+  }
+
+  end = start + direction * max_t;
+  start = start + direction * min_t;
+
+  return max_t > min_t;
+}
+
+/*
+ * Similar to `raytrace_screen`, but modified to fit the needs of the Ray-cast node:
+ * - Improves the support for rays parallel or nearly parallel to the incoming direction.
+ * - Supports discarding hits against other objects.
+ * - Traverses every single pixel between start and end, unless the number of steps required is
+ *   greater than max_steps, in that case the steps are evenly distributed across the full
+ *   distance.
+ * Expects vs_origin and vs_end to be already clipped to the view frustum (see clip_ray above).
+ * Returns the hit distance, or -1 if no hit was found.
+ */
+float raytrace_screen_2(const float3 vs_origin,
+                        const float3 vs_end,
+                        const float3 vs_direction,
+                        sampler2D hiz_tx,
+                        const float thickness,
+                        const int max_steps,
+                        const float jitter,
+                        usampler2D ob_id_tx,
+                        const uint object_id,
+                        float2 &r_hit_uv)
+{
+  /* Convert ray start and end into NDC for correct interpolation. */
+  float4 start, end;
+  start.xyz = drw_point_view_to_screen(vs_origin);
+  end.xyz = drw_point_view_to_screen(vs_end);
+  /* W stores Z - thickness (Note that view space forward is -Z). */
+  start.w = drw_depth_view_to_screen(min(vs_origin.z + thickness, drw_view_near()));
+  end.w = drw_depth_view_to_screen(min(vs_end.z + thickness, drw_view_near()));
+
+#if 0
+  /* TODO: This should be the correct code but it currently fails when rendering probes.
+   * (The values are always the ones from the main View) */
+  const float2 extent = float2(uniform_buf.film.render_extent);
+  const float2 hiz_uv_scale = uniform_buf.hiz.uv_scale;
+#else
+  const float2 extent = float2(textureSize(ob_id_tx, 0).xy);
+  const float2 hiz_uv_scale = extent / float2(textureSize(hiz_tx, 0));
+#endif
+  const float2 hiz_texel_to_uv = (float2(1.0f) / extent) * hiz_uv_scale;
+
+  const float2 total_pixel_delta = abs(start.xy - end.xy) * extent;
+  /* Number of steps required to trace a fully contiguous line. */
+  int steps = int(max(total_pixel_delta.x, total_pixel_delta.y)) + 1;
+  /* Limit to max steps. */
+  steps = min(steps, max_steps);
+
+  /* Per-step delta. */
+  const float4 delta = (end - start) / float(steps);
+
+  const float max_t = max(steps - 1, 1);
+  const bool forward = end.z > start.z;
+  float previous_step_z = start.z;
+
+  /* Skip the first step to avoid self-occlusion. But iterate at least once. */
+  for (int i = 1; i < steps || i == 1; i++) {
+    /* Ensure we don't go past ray end. */
+    const float step_t = min(float(i) + jitter, max_t);
+    const float4 step = start + delta * step_t;
+
+    const float2 texel = step.xy * extent;
+    if (object_id != 0 && object_id != texelFetch(ob_id_tx, int2(texel), 0).r) {
+      previous_step_z = step.z;
+      continue;
+    }
+
+    /* Trick to prevent depth aliasing,
+     * from "Rendering Tiny Glades With Entirely Too Much Ray Marching":
+     * - Fetch depth using both point and linear sampling.
+     * - Use the furthest one for intersection check.
+     * - Use the closest one for thickness check. */
+    const float hit_depth_point = texelFetch(hiz_tx, int2(texel), 0).r;
+    const float2 gather_uv = round(texel) * hiz_texel_to_uv;
+    const float4 depth4 = textureGather(hiz_tx, gather_uv);
+    const float2 bilinear_coords = fract(texel - 0.5f);
+    const float hit_depth_linear = mix(mix(depth4.w, depth4.z, bilinear_coords.x),
+                                       mix(depth4.x, depth4.y, bilinear_coords.x),
+                                       bilinear_coords.y);
+    const float hit_min_z = min(hit_depth_point, hit_depth_linear);
+    const float hit_max_z = max(hit_depth_point, hit_depth_linear);
+
+    /* Ensure the allowed depth range is not lower than the step delta. */
+    const float min_z = forward ? min(step.w, previous_step_z) : step.w;
+    const float max_z = forward ? step.z : max(step.z, previous_step_z);
+
+    // previous_step_z = step.z;
+    /* Using step.z is more "correct", but step.w mitigates missed hits against planes
+     * with normals symmetrical to the ray direction. */
+    previous_step_z = forward ? step.w : step.z;
+
+    if (max_z >= hit_max_z && min_z <= hit_min_z) {
+      r_hit_uv = step.xy;
+      /* We have a hit. Compute the distance. */
+      const float3 vs_hit_point = drw_point_screen_to_view(float3(step.xy, hit_depth_point));
+      /* Hit point projection along the ray. */
+      return dot(vs_hit_point - vs_origin, vs_direction);
+    }
+  }
+
+  /* No hit was found. Return -1 to signal the failure. */
+  return -1.0f;
 }

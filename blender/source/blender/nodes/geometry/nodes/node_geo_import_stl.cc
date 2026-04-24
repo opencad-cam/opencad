@@ -19,19 +19,19 @@ namespace blender::nodes::node_geo_import_stl {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::String>("Path")
+  b.add_input<decl::String>("Path"_ustr)
       .subtype(PROP_FILEPATH)
       .path_filter("*.stl")
       .optional_label()
       .description("Path to a STL file");
 
-  b.add_output<decl::Geometry>("Mesh");
+  b.add_output<decl::Geometry>("Mesh"_ustr);
 }
 
 class LoadStlCache : public memory_cache::CachedValue {
  public:
   GeometrySet geometry;
-  Vector<geo_eval_log::NodeWarning> warnings;
+  Vector<eval_log::NodeWarning> warnings;
 
   void count_memory(MemoryCounter &counter) const override
   {
@@ -43,7 +43,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
 #ifdef WITH_IO_STL
   const std::optional<std::string> path = params.ensure_absolute_path(
-      params.extract_input<std::string>("Path"));
+      params.extract_input<std::string>("Path"_ustr));
   if (!path) {
     params.set_default_remaining_outputs();
     return;
@@ -67,18 +67,18 @@ static void node_geo_exec(GeoNodeExecParams params)
         auto cached_value = std::make_unique<LoadStlCache>();
         cached_value->geometry = GeometrySet::from_mesh(mesh);
 
-        LISTBASE_FOREACH (Report *, report, &(import_params.reports)->list) {
-          cached_value->warnings.append_as(*report);
+        for (Report &report : (import_params.reports)->list) {
+          cached_value->warnings.append_as(report);
         }
 
         return cached_value;
       });
 
-  for (const geo_eval_log::NodeWarning &warning : cached_value->warnings) {
+  for (const eval_log::NodeWarning &warning : cached_value->warnings) {
     params.error_message_add(warning.type, warning.message);
   }
 
-  params.set_output("Mesh", cached_value->geometry);
+  params.set_output("Mesh"_ustr, cached_value->geometry);
 
 #else
   params.error_message_add(NodeWarningType::Error,
@@ -89,9 +89,9 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeImportSTL", GEO_NODE_IMPORT_STL);
+  geo_node_type_base(&ntype, "GeometryNodeImportSTL"_ustr, GEO_NODE_IMPORT_STL);
   ntype.ui_name = "Import STL";
   ntype.ui_description = "Import a mesh from an STL file";
   ntype.enum_name_legacy = "IMPORT_STL";
@@ -99,7 +99,7 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

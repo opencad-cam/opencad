@@ -5,24 +5,24 @@
 #include "libocio_display.hh"
 #include "OCIO_display.hh"
 
-#if defined(WITH_OPENCOLORIO)
+#include "BLI_index_range.hh"
 
-#  include "BLI_index_range.hh"
+#include "OCIO_config.hh"
 
-#  include "OCIO_config.hh"
+#include "CLG_log.h"
 
-#  include "CLG_log.h"
+#include "../opencolorio.hh"
 
-#  include "../opencolorio.hh"
+#include "error_handling.hh"
+#include "libocio_config.hh"
+#include "libocio_cpu_processor.hh"
+#include "libocio_display_processor.hh"
 
-#  include "error_handling.hh"
-#  include "libocio_config.hh"
-#  include "libocio_cpu_processor.hh"
-#  include "libocio_display_processor.hh"
+namespace blender {
 
 static CLG_LogRef LOG = {"color_management"};
 
-namespace blender::ocio {
+namespace ocio {
 
 static OCIO_NAMESPACE::ConstColorSpaceRcPtr get_display_view_colorspace(
     const OCIO_NAMESPACE::ConstConfigRcPtr &ocio_config, const char *display, const char *view)
@@ -112,10 +112,12 @@ LibOCIODisplay::LibOCIODisplay(const int index, const LibOCIOConfig &config) : c
 
     /* Detect if view is HDR, through encoding of display colorspace. */
     bool view_is_hdr = false;
+    bool view_is_data = false;
     if (ocio_display_colorspace) {
       StringRefNull encoding = ocio_display_colorspace->getEncoding();
       view_is_hdr = encoding == "hdr-video" || encoding == "edr-video";
       is_hdr_ |= view_is_hdr;
+      view_is_data = ocio_display_colorspace->isData();
     }
 
     /* Detect if display emulation is supported. */
@@ -188,6 +190,7 @@ LibOCIODisplay::LibOCIODisplay(const int index, const LibOCIOConfig &config) : c
                      view_name,
                      view_description,
                      view_is_hdr,
+                     view_is_data,
                      view_support_emulation,
                      gamut,
                      transfer_function,
@@ -307,6 +310,5 @@ void LibOCIODisplay::clear_caches()
   from_scene_linear_emulation_cpu_processor_ = CPUProcessorCache();
 }
 
-}  // namespace blender::ocio
-
-#endif
+}  // namespace ocio
+}  // namespace blender

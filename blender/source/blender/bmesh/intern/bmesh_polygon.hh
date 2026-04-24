@@ -8,6 +8,8 @@
  * \ingroup bmesh
  */
 
+namespace blender {
+
 struct Heap;
 
 #include "BLI_compiler_attrs.h"
@@ -48,13 +50,10 @@ float BM_face_calc_normal(const BMFace *f, float r_no[3]) ATTR_NONNULL();
 float BM_face_calc_normal_vcos(const BMesh *bm,
                                const BMFace *f,
                                float r_no[3],
-                               blender::Span<blender::float3> vertexCos) ATTR_NONNULL();
+                               Span<float3> vertexCos) ATTR_NONNULL();
 
 /**
  * Calculate a normal from a vertex cloud.
- *
- * \note We could make a higher quality version that takes all vertices into account.
- * Currently it finds 4 outer most points returning its normal.
  */
 void BM_verts_calc_normal_from_cloud_ex(
     BMVert **varr, int varr_len, float r_normal[3], float r_center[3], int *r_index_tangent);
@@ -144,7 +143,7 @@ void BM_face_calc_center_bounds(const BMFace *f, float r_cent[3]) ATTR_NONNULL()
 void BM_face_calc_center_bounds_vcos(const BMesh *bm,
                                      const BMFace *f,
                                      float r_center[3],
-                                     blender::Span<blender::float3> vert_positions) ATTR_NONNULL();
+                                     Span<float3> vert_positions) ATTR_NONNULL();
 /**
  * computes the center of a face, using the mean average
  */
@@ -153,8 +152,7 @@ void BM_face_calc_center_median(const BMFace *f, float r_center[3]) ATTR_NONNULL
 void BM_face_calc_center_median_vcos(const BMesh *bm,
                                      const BMFace *f,
                                      float r_center[3],
-                                     const blender::Span<blender::float3> vert_positions)
-    ATTR_NONNULL();
+                                     const Span<float3> vert_positions) ATTR_NONNULL();
 /**
  * computes the center of a face, using the mean average
  * weighted by edge length
@@ -304,3 +302,5 @@ void BM_vert_tri_calc_tangent_pair_from_edge(BMVert *verts[3],
  * \param r_tangent: Calculated unit length tangent (return value).
  */
 void BM_vert_tri_calc_tangent_edge_pair(BMVert *verts[3], float r_tangent[3]);
+
+}  // namespace blender

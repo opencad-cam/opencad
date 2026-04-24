@@ -58,21 +58,27 @@ ClosurePacking pack_closure(ClosureUndetermined cl)
   /* Some closures require additional packing. */
   switch (cl_packed.mode) {
 #ifdef GBUFFER_HAS_REFLECTION
-#  ifndef MAT_REFLECTION_COLORLESS
     case GBUF_REFLECTION:
+#  ifdef MAT_REFLECTION_COLORLESS
+      /* Material is colored, but the flag is set to colorless. */
+      assert(false);
+#  else
       gbuffer::Reflection::pack_additional(cl_packed, cl);
-      break;
 #  endif
+      break;
     case GBUF_REFLECTION_COLORLESS:
       gbuffer::ReflectionColorless::pack_additional(cl_packed, cl);
       break;
 #endif
 #ifdef GBUFFER_HAS_REFRACTION
-#  ifndef MAT_REFRACTION_COLORLESS
     case GBUF_REFRACTION:
+#  ifdef MAT_REFRACTION_COLORLESS
+      /* Material is colored, but the flag is set to colorless. */
+      assert(false);
+#  else
       gbuffer::Refraction::pack_additional(cl_packed, cl);
-      break;
 #  endif
+      break;
     case GBUF_REFRACTION_COLORLESS:
       gbuffer::RefractionColorless::pack_additional(cl_packed, cl);
       break;
@@ -263,13 +269,17 @@ struct InputClosures {
 };
 
 /**
-  * surface_N: Fallback normal is there is no closure.
-  * thickness: Additional object information if any closure needs it.
-  float thickness;
-  * use_object_id: True if surface uses a dedicated object id layer. Should only be turned on if
-  needed. */
-Packed pack(
-    InputClosures cl_data, float3 Ng, packed_float3 surface_N, float thickness, bool use_object_id)
+ * - cl_data       : general closure output data.
+ * - Ng            : geometric normal.
+ * - surface_N     : packed surface normal.
+ * - thickness     : object thickness, packed in additional information if a closure needs it.
+ * - use_object_id : if surface uses a dedicated object id layer. Should only be on if needed.
+ */
+Packed pack(InputClosures cl_data,
+            float3 Ng,
+            packed_float3 surface_N,
+            Thickness thickness,
+            bool use_object_id)
 {
   Packer packer;
   packer.header = Header::zero();

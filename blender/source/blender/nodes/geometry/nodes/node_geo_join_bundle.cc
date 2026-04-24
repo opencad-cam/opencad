@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include "NOD_geometry_nodes_bundle.hh"
 
 #include "node_geometry_util.hh"
+#include "shader/node_shader_util.hh"
 
 namespace blender::nodes::node_geo_join_bundle {
 
@@ -14,16 +16,22 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Bundle>("Bundle").multi_input().description(
-      "Bundles to join together on the top level for each bundle. When there are duplicates, only "
-      "the first occurrence is used");
-  b.add_output<decl::Bundle>("Bundle").align_with_previous().propagate_all().reference_pass_all();
+  b.add_input<decl::Bundle>("Bundle"_ustr)
+      .multi_input()
+      .description(
+          "Bundles to join together on the top level for each bundle. When there are duplicates, "
+          "only "
+          "the first occurrence is used");
+  b.add_output<decl::Bundle>("Bundle"_ustr)
+      .align_with_previous()
+      .propagate_all()
+      .reference_pass_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeoNodesMultiInput<BundlePtr> bundles = params.extract_input<GeoNodesMultiInput<BundlePtr>>(
-      "Bundle");
+      "Bundle"_ustr);
 
   if (bundles.values.is_empty()) {
     params.set_default_remaining_outputs();
@@ -45,7 +53,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   Bundle &mutable_output_bundle = output_bundle.ensure_mutable_inplace();
 
-  VectorSet<StringRef> overridden_keys;
+  VectorSet<UString> overridden_keys;
   for (; bundle_i < bundles.values.size(); bundle_i++) {
     BundlePtr &bundle = bundles.values[bundle_i];
     if (!bundle) {
@@ -64,19 +72,19 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.error_message_add(NodeWarningType::Info, std::move(message));
   }
 
-  params.set_output("Bundle", output_bundle);
+  params.set_output("Bundle"_ustr, output_bundle);
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "NodeJoinBundle");
+  static bke::bNodeType ntype;
+  sh_geo_node_type_base(&ntype, "NodeJoinBundle"_ustr);
   ntype.ui_name = "Join Bundle";
   ntype.ui_description = "Join multiple bundles together";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

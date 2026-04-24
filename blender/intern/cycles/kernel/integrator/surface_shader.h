@@ -12,6 +12,7 @@
 #include "kernel/film/light_passes.h"
 
 #include "kernel/integrator/guiding.h"
+#include "kernel/integrator/state_util.h"
 
 #ifdef __SVM__
 #  include "kernel/svm/svm.h"
@@ -206,7 +207,7 @@ ccl_device_inline void surface_shader_prepare_closures(KernelGlobals kg,
 
       /* NOTE: this is a sufficient condition. If `blur_roughness < THRESH < original_roughness`
        * then the flag was already set. */
-      if (sqr(blur_roughness) > BSDF_ROUGHNESS_SQ_THRESH) {
+      if (!roughness_is_almost_specular(blur_roughness, blur_roughness)) {
         sd->flag |= SD_BSDF_HAS_EVAL;
       }
     }
@@ -363,7 +364,7 @@ ccl_device_inline
 #endif
     float
     surface_shader_bsdf_eval(KernelGlobals kg,
-                             IntegratorState state,
+                             ccl_attr_maybe_unused IntegratorState state,
                              ccl_private ShaderData *sd,
                              const float3 wo,
                              ccl_private BsdfEval *bsdf_eval,
@@ -1154,6 +1155,9 @@ ccl_device void surface_shader_eval(KernelGlobals kg,
                                     const uint32_t path_flag,
                                     bool use_caustics_storage = false)
 {
+  /* Initialize additional RNG for BSDFs and image textures. */
+  sd->lcg_state = integrator_state_lcg_init(state, 0xb4bc3953);
+
   /* If path is being terminated, we are tracing a shadow ray or evaluating
    * emission, then we don't need to store closures. The emission and shadow
    * shader data also do not have a closure array to save GPU memory. */
@@ -1184,12 +1188,7 @@ ccl_device void surface_shader_eval(KernelGlobals kg,
       sd->flag |= SD_EMISSION;
     }
     else {
-      ccl_private DiffuseBsdf *bsdf = (ccl_private DiffuseBsdf *)bsdf_alloc(
-          sd, sizeof(DiffuseBsdf), make_spectrum(0.8f));
-      if (bsdf != nullptr) {
-        bsdf->N = sd->N;
-        sd->flag |= bsdf_diffuse_setup(bsdf);
-      }
+      bsdf_diffuse_setup(sd, sd->N, make_spectrum(0.8f));
     }
 #endif
   }

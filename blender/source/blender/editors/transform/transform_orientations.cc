@@ -60,7 +60,7 @@ namespace blender::ed::transform {
 void BIF_clearTransformOrientation(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  ListBase *transform_orientations = &scene->transform_spaces;
+  ListBaseT<TransformOrientation> *transform_orientations = &scene->transform_spaces;
 
   BLI_freelistN(transform_orientations);
 
@@ -73,13 +73,14 @@ void BIF_clearTransformOrientation(bContext *C)
   }
 }
 
-static TransformOrientation *findOrientationName(ListBase *lb, const char *name)
+static TransformOrientation *findOrientationName(ListBaseT<TransformOrientation> *lb,
+                                                 const char *name)
 {
   return static_cast<TransformOrientation *>(
       BLI_findstring(lb, name, offsetof(TransformOrientation, name)));
 }
 
-static void uniqueOrientationName(ListBase *lb, char *name)
+static void uniqueOrientationName(ListBaseT<TransformOrientation> *lb, char *name)
 {
   BLI_uniquename_cb(
       [&](const StringRefNull check_name) {
@@ -162,7 +163,7 @@ static TransformOrientation *createBoneSpace(bContext *C,
   }
 
   if (name[0] == 0) {
-    name = DATA_("Bone");
+    name = DATA_(animrig::bone_default_name);
   }
 
   return addMatrixSpace(C, mat, name, overwrite);
@@ -509,7 +510,7 @@ TransformOrientation *addMatrixSpace(bContext *C,
 {
   TransformOrientation *ts = nullptr;
   Scene *scene = CTX_data_scene(C);
-  ListBase *transform_orientations = &scene->transform_spaces;
+  ListBaseT<TransformOrientation> *transform_orientations = &scene->transform_spaces;
   char name_unique[sizeof(ts->name)];
 
   if (overwrite) {
@@ -523,7 +524,7 @@ TransformOrientation *addMatrixSpace(bContext *C,
 
   /* If not, create a new one. */
   if (ts == nullptr) {
-    ts = MEM_new_for_free<TransformOrientation>("UserTransSpace from matrix");
+    ts = MEM_new<TransformOrientation>("UserTransSpace from matrix");
     BLI_addtail(transform_orientations, ts);
     STRNCPY_UTF8(ts->name, name);
   }
@@ -559,7 +560,7 @@ void BIF_selectTransformOrientation(bContext *C, TransformOrientation *target)
 int BIF_countTransformOrientation(const bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  ListBase *transform_orientations = &scene->transform_spaces;
+  ListBaseT<TransformOrientation> *transform_orientations = &scene->transform_spaces;
   return BLI_listbase_count(transform_orientations);
 }
 
@@ -589,27 +590,25 @@ static int bone_children_clear_transflag(bPose &pose, bPoseChannel &pose_bone)
 /* Updates all `POSE_RUNTIME_TRANSFORM` flags.
  * Returns total number of bones with `POSE_RUNTIME_TRANSFORM`.
  * NOTE: `transform_convert_pose_transflags_update` has a similar logic. */
-static int armature_bone_transflags_update(Object &ob,
-                                           bArmature *arm,
-                                           ListBase /* bPoseChannel */ *lb)
+static int armature_bone_transflags_update(Object &ob, bArmature *arm, ListBaseT<bPoseChannel> *lb)
 {
   int total = 0;
 
-  LISTBASE_FOREACH (bPoseChannel *, pchan, lb) {
-    pchan->runtime.flag &= ~POSE_RUNTIME_TRANSFORM;
-    if (!ANIM_bone_in_visible_collection(arm, pchan->bone)) {
+  for (bPoseChannel &pchan : *lb) {
+    pchan.runtime.flag &= ~POSE_RUNTIME_TRANSFORM;
+    if (!ANIM_bone_in_visible_collection(arm, pchan.bone)) {
       continue;
     }
-    if (pchan->flag & POSE_SELECTED) {
-      pchan->runtime.flag |= POSE_RUNTIME_TRANSFORM;
+    if (pchan.flag & POSE_SELECTED) {
+      pchan.runtime.flag |= POSE_RUNTIME_TRANSFORM;
       total++;
     }
   }
 
   /* No transform on children if any parent bone is selected. */
-  LISTBASE_FOREACH (bPoseChannel *, pchan, lb) {
-    if (pchan->runtime.flag & POSE_RUNTIME_TRANSFORM) {
-      total -= bone_children_clear_transflag(*ob.pose, *pchan);
+  for (bPoseChannel &pchan : *lb) {
+    if (pchan.runtime.flag & POSE_RUNTIME_TRANSFORM) {
+      total -= bone_children_clear_transflag(*ob.pose, pchan);
     }
   }
   return total;
@@ -618,18 +617,19 @@ static int armature_bone_transflags_update(Object &ob,
 void calc_orientation_from_type(const bContext *C, float r_mat[3][3])
 {
   ARegion *region = CTX_wm_region(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *obedit = CTX_data_edit_object(C);
   View3D *v3d = CTX_wm_view3d(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   const short orient_index = BKE_scene_orientation_get_index(scene, SCE_ORIENT_DEFAULT);
   const int pivot_point = scene->toolsettings->transform_pivot_point;
 
   calc_orientation_from_type_ex(
-      scene, view_layer, v3d, rv3d, ob, obedit, orient_index, pivot_point, r_mat);
+      *bmain, scene, view_layer, v3d, rv3d, ob, obedit, orient_index, pivot_point, r_mat);
 }
 
 static void handle_armature_parent_orientation(Object *ob, float r_mat[3][3])
@@ -663,7 +663,8 @@ static void handle_object_parent_orientation(Object *ob, float r_mat[3][3])
   }
 }
 
-short calc_orientation_from_type_ex(const Scene *scene,
+short calc_orientation_from_type_ex(const Main &bmain,
+                                    const Scene *scene,
                                     ViewLayer *view_layer,
                                     const View3D *v3d,
                                     const RegionView3D *rv3d,
@@ -707,7 +708,8 @@ short calc_orientation_from_type_ex(const Scene *scene,
     }
     case V3D_ORIENT_NORMAL: {
       if (obedit || (ob && ob->mode & OB_MODE_POSE)) {
-        ED_getTransformOrientationMatrix(scene, view_layer, v3d, ob, obedit, pivot_point, r_mat);
+        ED_getTransformOrientationMatrix(
+            bmain, scene, view_layer, v3d, ob, obedit, pivot_point, r_mat);
         break;
       }
       /* No break we define 'normal' as 'local' in Object mode. */
@@ -720,7 +722,8 @@ short calc_orientation_from_type_ex(const Scene *scene,
            * use the active bone's axis for display #33575, this works as expected on a single
            * bone and users who select many bones will understand what's going on and what local
            * means when they start transforming. */
-          ED_getTransformOrientationMatrix(scene, view_layer, v3d, ob, obedit, pivot_point, r_mat);
+          ED_getTransformOrientationMatrix(
+              bmain, scene, view_layer, v3d, ob, obedit, pivot_point, r_mat);
         }
         else {
           transform_orientations_create_from_axis(r_mat, UNPACK3(ob->object_to_world().ptr()));
@@ -808,7 +811,7 @@ short transform_orientation_matrix_get(bContext *C,
   }
 
   const short orient_index_result = calc_orientation_from_type_ex(
-      scene, t->view_layer, v3d, rv3d, ob, obedit, orient_index, t->around, r_spacemtx);
+      *t->bmain, scene, t->view_layer, v3d, rv3d, ob, obedit, orient_index, t->around, r_spacemtx);
 
   if (rv3d && (t->options & CTX_PAINT_CURVE)) {
     /* Screen space in the 3d region. */
@@ -879,17 +882,17 @@ static uint bm_mesh_elems_select_get_n__internal(
   if (!BLI_listbase_is_empty(&bm->selected)) {
     /* Quick check. */
     i = 0;
-    LISTBASE_FOREACH_BACKWARD (BMEditSelection *, ese, &bm->selected) {
+    for (BMEditSelection &ese : bm->selected.items_reversed()) {
       /* Shouldn't need this check. */
-      if (BM_elem_flag_test(ese->ele, BM_ELEM_SELECT)) {
+      if (BM_elem_flag_test(ese.ele, BM_ELEM_SELECT)) {
 
         /* Only use contiguous selection. */
-        if (ese->htype != htype) {
+        if (ese.htype != htype) {
           i = 0;
           break;
         }
 
-        elems[i++] = ese->ele;
+        elems[i++] = ese.ele;
         if (n == i) {
           break;
         }
@@ -923,13 +926,19 @@ static uint bm_mesh_elems_select_get_n__internal(
 
 static uint bm_mesh_verts_select_get_n(BMesh *bm, BMVert **elems, const uint n)
 {
-  return bm_mesh_elems_select_get_n__internal(
-      bm, (BMElem **)elems, min_ii(n, bm->totvertsel), BM_VERTS_OF_MESH, BM_VERT);
+  return bm_mesh_elems_select_get_n__internal(bm,
+                                              reinterpret_cast<BMElem **>(elems),
+                                              min_ii(n, bm->totvertsel),
+                                              BM_VERTS_OF_MESH,
+                                              BM_VERT);
 }
 static uint bm_mesh_edges_select_get_n(BMesh *bm, BMEdge **elems, const uint n)
 {
-  return bm_mesh_elems_select_get_n__internal(
-      bm, (BMElem **)elems, min_ii(n, bm->totedgesel), BM_EDGES_OF_MESH, BM_EDGE);
+  return bm_mesh_elems_select_get_n__internal(bm,
+                                              reinterpret_cast<BMElem **>(elems),
+                                              min_ii(n, bm->totedgesel),
+                                              BM_EDGES_OF_MESH,
+                                              BM_EDGE);
 }
 #if 0
 static uint bm_mesh_faces_select_get_n(BMesh *bm, BMVert **elems, const uint n)
@@ -939,7 +948,8 @@ static uint bm_mesh_faces_select_get_n(BMesh *bm, BMVert **elems, const uint n)
 }
 #endif
 
-int getTransformOrientation_ex(const Scene *scene,
+int getTransformOrientation_ex(const Main &bmain,
+                               const Scene *scene,
                                ViewLayer *view_layer,
                                const View3D *v3d,
                                Object *ob,
@@ -1216,10 +1226,10 @@ int getTransformOrientation_ex(const Scene *scene,
 
     } /* End edit-mesh. */
     else if (ELEM(obedit->type, OB_CURVES_LEGACY, OB_SURF)) {
-      Curve *cu = static_cast<Curve *>(obedit->data);
+      Curve *cu = id_cast<Curve *>(obedit->data);
       Nurb *nu = nullptr;
       int a;
-      ListBase *nurbs = BKE_curve_editNurbs_get(cu);
+      ListBaseT<Nurb> *nurbs = BKE_curve_editNurbs_get(cu);
 
       void *vert_act = nullptr;
       if (activeOnly && BKE_curve_nurb_vert_active_get(cu, &nu, &vert_act)) {
@@ -1336,7 +1346,7 @@ int getTransformOrientation_ex(const Scene *scene,
       }
     }
     else if (obedit->type == OB_MBALL) {
-      MetaBall *mb = static_cast<MetaBall *>(obedit->data);
+      MetaBall *mb = id_cast<MetaBall *>(obedit->data);
       MetaElem *ml;
       bool ok = false;
       float tmat[3][3];
@@ -1348,9 +1358,9 @@ int getTransformOrientation_ex(const Scene *scene,
         ok = true;
       }
       else {
-        LISTBASE_FOREACH (MetaElem *, ml, mb->editelems) {
-          if (ml->flag & SELECT) {
-            quat_to_mat3(tmat, ml->quat);
+        for (MetaElem &ml : *mb->editelems) {
+          if (ml.flag & SELECT) {
+            quat_to_mat3(tmat, ml.quat);
             add_v3_v3(r_normal, tmat[2]);
             add_v3_v3(r_plane, tmat[1]);
             ok = true;
@@ -1365,7 +1375,7 @@ int getTransformOrientation_ex(const Scene *scene,
       }
     }
     else if (obedit->type == OB_ARMATURE) {
-      bArmature *arm = static_cast<bArmature *>(obedit->data);
+      bArmature *arm = id_cast<bArmature *>(obedit->data);
       EditBone *ebone;
       bool ok = false;
       float tmat[3][3];
@@ -1385,19 +1395,19 @@ int getTransformOrientation_ex(const Scene *scene,
         zero_v3(fallback_normal);
         zero_v3(fallback_plane);
 
-        LISTBASE_FOREACH (EditBone *, ebone, arm->edbo) {
-          if (blender::animrig::bone_is_visible(arm, ebone)) {
-            if (ebone->flag & BONE_SELECTED) {
-              ED_armature_ebone_to_mat3(ebone, tmat);
+        for (EditBone &ebone : *arm->edbo) {
+          if (animrig::bone_is_visible(arm, &ebone)) {
+            if (ebone.flag & BONE_SELECTED) {
+              ED_armature_ebone_to_mat3(&ebone, tmat);
               add_v3_v3(r_normal, tmat[2]);
               add_v3_v3(r_plane, tmat[1]);
               ok = true;
             }
-            else if ((ok == false) && ((ebone->flag & BONE_TIPSEL) ||
-                                       ((ebone->flag & BONE_ROOTSEL) &&
-                                        (ebone->parent && ebone->flag & BONE_CONNECTED) == false)))
+            else if ((ok == false) && ((ebone.flag & BONE_TIPSEL) ||
+                                       ((ebone.flag & BONE_ROOTSEL) &&
+                                        (ebone.parent && ebone.flag & BONE_CONNECTED) == false)))
             {
-              ED_armature_ebone_to_mat3(ebone, tmat);
+              ED_armature_ebone_to_mat3(&ebone, tmat);
               add_v3_v3(fallback_normal, tmat[2]);
               add_v3_v3(fallback_plane, tmat[1]);
               fallback_ok = true;
@@ -1437,7 +1447,7 @@ int getTransformOrientation_ex(const Scene *scene,
     }
   }
   else if (ob && (ob->mode & OB_MODE_POSE)) {
-    bArmature *arm = static_cast<bArmature *>(ob->data);
+    bArmature *arm = id_cast<bArmature *>(ob->data);
     bPoseChannel *pchan;
     float imat[3][3], mat[3][3];
     bool ok = false;
@@ -1454,10 +1464,10 @@ int getTransformOrientation_ex(const Scene *scene,
       const int transformed_len = armature_bone_transflags_update(*ob, arm, &ob->pose->chanbase);
       if (transformed_len) {
         /* Use channels to get stats. */
-        LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
-          if (pchan->runtime.flag & POSE_RUNTIME_TRANSFORM) {
+        for (bPoseChannel &pchan : ob->pose->chanbase) {
+          if (pchan.runtime.flag & POSE_RUNTIME_TRANSFORM) {
             float pose_mat[3][3];
-            BKE_pose_channel_transform_orientation(arm, pchan, pose_mat);
+            BKE_pose_channel_transform_orientation(arm, &pchan, pose_mat);
 
             add_v3_v3(r_normal, pose_mat[2]);
             add_v3_v3(r_plane, pose_mat[1]);
@@ -1489,7 +1499,7 @@ int getTransformOrientation_ex(const Scene *scene,
         ok = true;
       }
       else {
-        BKE_view_layer_synced_ensure(scene, view_layer);
+        BKE_view_layer_synced_ensure(bmain, scene, view_layer);
         Base *base = BKE_view_layer_base_find(view_layer, ob);
         if (UNLIKELY(base == nullptr)) {
           /* This is very unlikely, if it happens allow the value to be set since the caller
@@ -1523,15 +1533,17 @@ int getTransformOrientation(const bContext *C, float r_normal[3], float r_plane[
   /* Dummy value, not #V3D_AROUND_ACTIVE and not #V3D_AROUND_LOCAL_ORIGINS. */
   short around = V3D_AROUND_CENTER_BOUNDS;
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = CTX_wm_view3d(C);
 
   return getTransformOrientation_ex(
-      scene, view_layer, v3d, obact, obedit, around, r_normal, r_plane);
+      *bmain, scene, view_layer, v3d, obact, obedit, around, r_normal, r_plane);
 }
 
-void ED_getTransformOrientationMatrix(const Scene *scene,
+void ED_getTransformOrientationMatrix(const Main &bmain,
+                                      const Scene *scene,
                                       ViewLayer *view_layer,
                                       const View3D *v3d,
                                       Object *ob,
@@ -1544,7 +1556,8 @@ void ED_getTransformOrientationMatrix(const Scene *scene,
 
   int type;
 
-  type = getTransformOrientation_ex(scene, view_layer, v3d, ob, obedit, around, normal, plane);
+  type = getTransformOrientation_ex(
+      bmain, scene, view_layer, v3d, ob, obedit, around, normal, plane);
 
   /* Fallback, when the plane can't be calculated. */
   if (ORIENTATION_USE_PLANE(type) && is_zero_v3(plane)) {

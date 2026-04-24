@@ -136,9 +136,14 @@ class WheelModuleParams(NamedTuple):
 
 
 def path_to_url(path: str) -> str:
+    import sys
     from urllib.parse import urljoin
     from urllib.request import pathname2url
-    return urljoin('file:', pathname2url(path))
+    # Python 3.14+: pathname2url returns '///path' (RFC 8089), use 'file://' base.
+    file_prefix = "file://" if sys.version_info >= (3, 14) else "file:"
+    result = urljoin(file_prefix, pathname2url(path))
+    assert result.startswith('file:///')
+    return result
 
 
 def pause_until_keyboard_interrupt() -> None:
@@ -168,7 +173,7 @@ def contents_to_filesystem(
             fh.write(value)
 
 
-def create_package(
+def create_package_addon(
         pkg_src_dir: str,
         *,
         pkg_idname: str,
@@ -244,12 +249,41 @@ def create_package(
         contents_to_filesystem(file_contents, pkg_src_dir)
 
 
+def create_package_theme(
+        pkg_src_dir: str,
+        *,
+        pkg_idname: str,
+
+        # Optional.
+        blender_version_min: str | None = None,
+        blender_version_max: str | None = None,
+        file_contents: dict[str, bytes] | None = None,
+) -> None:
+    pkg_name = pkg_idname.replace("_", " ").title()
+
+    with open(os.path.join(pkg_src_dir, PKG_MANIFEST_FILENAME_TOML), "w", encoding="utf-8") as fh:
+        fh.write('''schema_version = "1.0.0"\n''')
+        fh.write('''id = "{:s}"\n'''.format(pkg_idname))
+        fh.write('''name = "{:s}"\n'''.format(pkg_name))
+        fh.write('''type = "theme"\n''')
+        fh.write('''maintainer = "Maintainer Name <username@addr.com>"\n''')
+        fh.write('''license = ["SPDX:GPL-2.0-or-later"]\n''')
+        fh.write('''version = "1.0.0"\n''')
+        fh.write('''tagline = "This is a tagline"\n''')
+        fh.write('''blender_version_min = "{:s}"\n'''.format(blender_version_min or "0.0.0"))
+        if blender_version_max is not None:
+            fh.write('''blender_version_max = "{:s}"\n'''.format(blender_version_max))
+
+    if file_contents is not None:
+        contents_to_filesystem(file_contents, pkg_src_dir)
+
+
 def run_blender(
         args: Sequence[str],
         force_script_and_pause: bool = False,
 ) -> tuple[int, str, str]:
     """
-    :arg force_script_and_pause:
+    :param force_script_and_pause:
        When true, write out a shell script and wait,
        this lets the developer run the command manually which is useful as the temporary directories
        are removed once the test finished.
@@ -370,6 +404,8 @@ TEMP_DIR_LOCAL = ""
 # Don't leave temporary files in TMP: `/tmp` (since it's only cleared on restart).
 # Instead, have a test-local temporary directly which is removed when the test finishes.
 TEMP_DIR_TMPDIR = ""
+# The embedded Python version in use by `BLENDER_BIN`, may differ from the host Python running these tests.
+BLENDER_PYTHON_VERSION: tuple[int, int] = (0, 0)
 
 user_dirs: tuple[str, ...] = (
     "config",
@@ -434,6 +470,7 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
             wheel_params: Sequence[WheelModuleParams] = (),
 
             # Optional.
+            pkg_type: str = "add-on",
             pkg_filename: str | None = None,
             platforms: tuple[str, ...] | None = None,
             blender_version_min: str | None = None,
@@ -445,18 +482,34 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
             pkg_filename = pkg_idname
         pkg_output_filepath = os.path.join(TEMP_DIR_REMOTE, pkg_filename + PKG_EXT)
         with tempfile.TemporaryDirectory() as package_build_dir:
-            create_package(
-                package_build_dir,
-                pkg_idname=pkg_idname,
+            if pkg_type == "add-on":
+                create_package_addon(
+                    package_build_dir,
+                    pkg_idname=pkg_idname,
 
-                # Optional.
-                wheel_params=wheel_params,
-                platforms=platforms,
-                blender_version_min=blender_version_min,
-                blender_version_max=blender_version_max,
-                python_script=python_script,
-                file_contents=file_contents,
-            )
+                    # Optional.
+                    wheel_params=wheel_params,
+                    platforms=platforms,
+                    blender_version_min=blender_version_min,
+                    blender_version_max=blender_version_max,
+                    python_script=python_script,
+                    file_contents=file_contents,
+                )
+            elif pkg_type == "theme":
+                assert not wheel_params, "wheels are not supported for theme packages"
+                assert platforms is None, "platforms are not supported for theme packages"
+                assert python_script is None, "python_script is not supported for theme packages"
+                create_package_theme(
+                    package_build_dir,
+                    pkg_idname=pkg_idname,
+
+                    # Optional.
+                    blender_version_min=blender_version_min,
+                    blender_version_max=blender_version_max,
+                    file_contents=file_contents,
+                )
+            else:
+                raise AssertionError("No create_package_* helper for pkg_type={!r}".format(pkg_type))
             stdout = run_blender_extensions_no_errors((
                 "build",
                 "--source-dir", package_build_dir,
@@ -983,7 +1036,9 @@ class TestPythonVersions(TestWithTempBlenderUser_MixIn, unittest.TestCase):
 
         self.repo_add(repo_id=repo_id, repo_name=repo_name)
 
-        this_python_version_major, this_python_version_minor = sys.version_info[:2]
+        # Use Blender's embedded Python version (which may differ from the host Python running this test);
+        # wheel-compatibility filtering happens under Blender's Python.
+        this_python_version_major, this_python_version_minor = BLENDER_PYTHON_VERSION
         # TODO: this test doesn't make sense for the first Python major releases (4.0 for example).
         if this_python_version_minor == 0:
             return
@@ -1240,9 +1295,140 @@ class TestBlockList(TestWithTempBlenderUser_MixIn, unittest.TestCase):
         # Install the package into Blender.
 
 
+class TestUnknownType(TestWithTempBlenderUser_MixIn, unittest.TestCase):
+
+    def test_unknown_type_skipped(self) -> None:
+        """
+        Check that packages with unknown types are silently skipped.
+        This allows repositories to contain extensions for future Blender versions
+        without causing errors in older versions.
+        """
+        import json
+
+        repo_id = "test_repo_unknown_type"
+        repo_name = "MyTestRepoUnknownType"
+
+        self.repo_add(repo_id=repo_id, repo_name=repo_name)
+
+        pkg_idnames = (
+            "my_addon_pkg",
+            "my_other_addon_pkg",
+        )
+
+        # Create packages with known types.
+        for pkg_idname in pkg_idnames:
+            self.build_package(pkg_idname=pkg_idname)
+
+        # Generate the repository.
+        stdout = run_blender_extensions_no_errors((
+            "server-generate",
+            "--repo-dir", TEMP_DIR_REMOTE,
+        ))
+        self.assertEqual(stdout, "found 2 packages.\n")
+
+        # Now modify the index.json to add entries with unknown types.
+        index_json_path = os.path.join(TEMP_DIR_REMOTE, "index.json")
+        with open(index_json_path, "r", encoding="utf-8") as fh:
+            repo_data = json.load(fh)
+
+        # Add packages with unknown types - these should be silently skipped.
+        unknown_type_packages = [
+            {
+                "id": "my_future_keymap",
+                "name": "My Future Keymap",
+                "tagline": "A keymap from the future",
+                "version": "1.0.0",
+                "type": "keymap",  # Unknown type.
+                "maintainer": "Test <test@test.com>",
+                "license": ["SPDX:GPL-2.0-or-later"],
+                "blender_version_min": "4.2.0",
+                "schema_version": "1.0.0",
+                "archive_size": 1024,
+                "archive_hash": "sha256:0" * 64,
+                "archive_url": "./my_future_keymap.zip",
+            },
+            {
+                "id": "my_future_asset_library",
+                "name": "My Future Asset Library",
+                "tagline": "Assets from the future",
+                "version": "2.0.0",
+                "type": "brush-set",  # Unknown type.
+                "maintainer": "Test <test@test.com>",
+                "license": ["SPDX:GPL-2.0-or-later"],
+                "blender_version_min": "4.2.0",
+                "schema_version": "1.0.0",
+                "archive_size": 2048,
+                "archive_hash": "sha256:0" * 64,
+                "archive_url": "./my_future_asset_library.zip",
+            },
+        ]
+        repo_data["data"].extend(unknown_type_packages)
+
+        with open(index_json_path, "w", encoding="utf-8") as fh:
+            json.dump(repo_data, fh, indent=2)
+
+        # Sync the repository - should succeed without errors about unknown types.
+        stdout = run_blender_extensions_no_errors((
+            "sync",
+        ))
+        self.assertEqual(
+            stdout.rstrip("\n").split("\n")[-1],
+            "STATUS Extensions list for \"{:s}\" updated".format(repo_name),
+        )
+
+        # List packages - should only show the known add-on types, not the unknown types.
+        stdout = run_blender_extensions_no_errors(("list",))
+        self.assertEqual(
+            stdout,
+            (
+                '''Repository: "{:s}" (id={:s})\n'''
+                '''  my_addon_pkg: "My Addon Pkg", This is a tagline\n'''
+                '''  my_other_addon_pkg: "My Other Addon Pkg", This is a tagline\n'''
+            ).format(repo_name, repo_id)
+        )
+
+        # Verify unknown type packages are NOT in the output.
+        self.assertNotIn("my_future_keymap", stdout)
+        self.assertNotIn("my_future_asset_library", stdout)
+        self.assertNotIn("keymap", stdout)
+        self.assertNotIn("brush-set", stdout)
+
+
+class TestTheme(TestWithTempBlenderUser_MixIn, unittest.TestCase):
+
+    def test_build_theme_package(self) -> None:
+        """
+        Build an extension of type ``theme`` whose content is a minimal XML theme file.
+        """
+        # Create a package contents.
+        pkg_idname = "my_theme"
+        self.build_package(
+            pkg_idname=pkg_idname,
+            pkg_type="theme",
+            file_contents={pkg_idname + ".xml": b'''<?xml version="1.0" encoding="UTF-8"?>\n<bpy/>\n'''},
+        )
+
+
+def blender_python_version_query() -> tuple[int, int]:
+    # Return the ``(major, minor)`` version of Blender's embedded Python.
+    returncode, bl_stdout, bl_stderr = run_blender((
+        "--background",
+        "--factory-startup",
+        "--python-expr",
+        "import sys; print('BLENDER_PYTHON_VERSION={:d}.{:d}'.format(*sys.version_info[:2]))",
+    ))
+    for line in bl_stdout.splitlines():
+        if line.startswith("BLENDER_PYTHON_VERSION="):
+            major_str, _, minor_str = line.partition("=")[2].partition(".")
+            return (int(major_str), int(minor_str))
+    raise Exception("Failed to access the Python version")
+
+
 def main() -> None:
     # pylint: disable-next=global-statement
     global TEMP_DIR_BLENDER_USER, TEMP_DIR_REMOTE, TEMP_DIR_LOCAL, TEMP_DIR_TMPDIR, TEMP_DIR_REMOTE_AS_URL
+    # pylint: disable-next=global-statement
+    global BLENDER_PYTHON_VERSION
 
     with tempfile.TemporaryDirectory() as temp_prefix:
         TEMP_DIR_BLENDER_USER = os.path.join(temp_prefix, "bl_ext_blender")
@@ -1262,6 +1448,8 @@ def main() -> None:
             os.makedirs(os.path.join(TEMP_DIR_BLENDER_USER, dirname), exist_ok=True)
 
         TEMP_DIR_REMOTE_AS_URL = path_to_url(TEMP_DIR_REMOTE)
+
+        BLENDER_PYTHON_VERSION = blender_python_version_query()
 
         unittest.main()
 

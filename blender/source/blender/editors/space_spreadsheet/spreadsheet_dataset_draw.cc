@@ -34,23 +34,45 @@
 #include "ED_outliner.hh"
 #include "ED_spreadsheet.hh"
 
+#include "NOD_eval_log.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_closure.hh"
-#include "NOD_geometry_nodes_log.hh"
 
 #include "spreadsheet_data_source_geometry.hh"
 #include "spreadsheet_dataset_draw.hh"
 #include "spreadsheet_intern.hh"
+#include "spreadsheet_table.hh"
 
 namespace blender::ed::spreadsheet {
 
 class GeometryDataSetTreeView;
 class GeometryInstancesTreeView;
 
-struct GeometryDataIdentifier {
+struct GeometryDomainDataId {
   bke::GeometryComponent::Type component_type;
   std::optional<int> layer_index;
   std::optional<bke::AttrDomain> domain;
+};
+
+struct GeometryBundleItemId {
+  Vector<UString> keys;
+  SpreadsheetClosureInputOutput closure_in_out = SPREADSHEET_CLOSURE_NONE;
+};
+
+struct GeometryDataIdentifier {
+  std::variant<GeometryDomainDataId, GeometryBundleItemId> id;
+
+  GeometryDataIdentifier(bke::GeometryComponent::Type component_type,
+                         std::optional<int> layer_index,
+                         std::optional<bke::AttrDomain> domain)
+      : id(GeometryDomainDataId{component_type, layer_index, domain})
+  {
+  }
+
+  GeometryDataIdentifier(Vector<UString> bundle_keys, SpreadsheetClosureInputOutput closure_in_out)
+      : id(GeometryBundleItemId{std::move(bundle_keys), closure_in_out})
+  {
+  }
 };
 
 static void draw_row_suffix(ui::AbstractTreeViewItem &view_item, const StringRefNull str)
@@ -143,7 +165,7 @@ class RootGeometryViewItem : public InstancesTreeViewItem {
  public:
   RootGeometryViewItem(const bke::GeometrySet &geometry)
   {
-    label_ = geometry.name.empty() ? IFACE_("(Geometry)") : geometry.name;
+    label_ = geometry.name().is_empty() ? IFACE_("(Geometry)") : geometry.name();
   }
 
   void build_row(ui::Layout &row) override
@@ -526,6 +548,85 @@ class InstancesViewItem : public DataSetViewItem {
   }
 };
 
+class GeometryBundleViewItem : public DataSetViewItem {
+ private:
+  bool has_bundle_items_;
+
+ public:
+  GeometryBundleViewItem(bool has_bundle_items) : has_bundle_items_(has_bundle_items)
+  {
+    label_ = IFACE_("Bundle");
+  }
+
+  void build_row(ui::Layout &row) override
+  {
+    if (!has_bundle_items_) {
+      row.active_set(false);
+    }
+    row.label(label_, ICON_NONE);
+  }
+
+  std::optional<GeometryDataIdentifier> get_geometry_data_id() const override
+  {
+    return GeometryDataIdentifier(Vector<UString>(), SPREADSHEET_CLOSURE_NONE);
+  }
+};
+
+class GeometryBundleItemViewItem : public DataSetViewItem {
+ private:
+  UString key_;
+
+ public:
+  GeometryBundleItemViewItem(const UString key) : key_(key)
+  {
+    label_ = key_.string();
+  }
+
+  void build_row(ui::Layout &row) override
+  {
+    row.label(label_, ICON_NONE);
+  }
+
+  std::optional<GeometryDataIdentifier> get_geometry_data_id() const override
+  {
+    Vector<UString> keys;
+    keys.append(key_);
+    this->foreach_parent([&](const AbstractTreeViewItem &parent) {
+      if (const auto *bundle_item = dynamic_cast<const GeometryBundleItemViewItem *>(&parent)) {
+        keys.append(bundle_item->key_);
+      }
+    });
+    std::reverse(keys.begin(), keys.end());
+    return GeometryDataIdentifier(std::move(keys), SPREADSHEET_CLOSURE_NONE);
+  }
+};
+
+class GeometryBundleClosureInOutViewItem : public DataSetViewItem {
+ private:
+  SpreadsheetClosureInputOutput in_out_;
+
+ public:
+  GeometryBundleClosureInOutViewItem(const SpreadsheetClosureInputOutput in_out) : in_out_(in_out)
+  {
+    label_ = in_out_ == SPREADSHEET_CLOSURE_INPUT ? IFACE_("Inputs") : IFACE_("Outputs");
+  }
+
+  void build_row(ui::Layout &row) override
+  {
+    row.label(label_, ICON_NONE);
+  }
+
+  std::optional<GeometryDataIdentifier> get_geometry_data_id() const override
+  {
+    std::optional<GeometryDataIdentifier> data_id =
+        dynamic_cast<const GeometryBundleItemViewItem &>(*parent_).get_geometry_data_id();
+    BLI_assert(data_id);
+    GeometryBundleItemId &bundle_item_id = std::get<GeometryBundleItemId>(data_id->id);
+    bundle_item_id.closure_in_out = in_out_;
+    return data_id;
+  }
+};
+
 class GeometryDataSetTreeView : public ui::AbstractTreeView {
  private:
   bke::GeometrySet geometry_set_;
@@ -566,6 +667,9 @@ class GeometryDataSetTreeView : public ui::AbstractTreeView {
 
     const bke::Instances *instances = geometry.get_instances();
     this->build_tree_for_instances(instances, parent);
+
+    const nodes::Bundle *bundle = geometry.bundle();
+    this->build_tree_for_bundle(bundle, parent);
   }
 
   void build_tree_for_mesh(const Mesh *mesh, ui::TreeViewItemContainer &parent)
@@ -637,6 +741,59 @@ class GeometryDataSetTreeView : public ui::AbstractTreeView {
   {
     parent.add_tree_item<InstancesViewItem>(instances);
   }
+
+  void build_tree_for_bundle(const nodes::Bundle *bundle, ui::TreeViewItemContainer &parent)
+  {
+    const bool has_bundle_items = bundle && !bundle->is_empty();
+    auto &bundle_view_item = parent.add_tree_item<GeometryBundleViewItem>(has_bundle_items);
+    if (!has_bundle_items) {
+      return;
+    }
+    this->build_bundle_children(*bundle, bundle_view_item);
+  }
+
+  void build_bundle_children(const nodes::Bundle &bundle, ui::TreeViewItemContainer &parent)
+  {
+    for (const auto &item : bundle.items()) {
+      auto &child_item = parent.add_tree_item<GeometryBundleItemViewItem>(item.key);
+      const auto *stored_value = std::get_if<nodes::BundleItemSocketValue>(&item.value.value);
+      if (!stored_value) {
+        continue;
+      }
+      this->build_socket_value(stored_value->value, child_item);
+    }
+  }
+
+  void build_closure_children(const nodes::Closure &closure, ui::TreeViewItemContainer &parent)
+  {
+    const nodes::ClosureSignature &signature = closure.signature();
+    if (!signature.inputs.is_empty()) {
+      parent.add_tree_item<GeometryBundleClosureInOutViewItem>(SPREADSHEET_CLOSURE_INPUT);
+    }
+    if (!signature.outputs.is_empty()) {
+      parent.add_tree_item<GeometryBundleClosureInOutViewItem>(SPREADSHEET_CLOSURE_OUTPUT);
+    }
+  }
+
+  void build_socket_value(const bke::SocketValueVariant &value, ui::TreeViewItemContainer &parent)
+  {
+    if (!value.is_single()) {
+      return;
+    }
+    const GPointer single_value = value.get_single_ptr();
+    if (single_value.is_type<nodes::BundlePtr>()) {
+      const nodes::BundlePtr &bundle_ptr = *single_value.get<nodes::BundlePtr>();
+      if (bundle_ptr) {
+        this->build_bundle_children(*bundle_ptr, parent);
+      }
+    }
+    if (single_value.is_type<nodes::ClosurePtr>()) {
+      const nodes::ClosurePtr &closure_ptr = *single_value.get<nodes::ClosurePtr>();
+      if (closure_ptr) {
+        this->build_closure_children(*closure_ptr, parent);
+      }
+    }
+  }
 };
 
 GeometryDataSetTreeView &DataSetViewItem::get_tree() const
@@ -690,9 +847,9 @@ void InstancesTreeViewItem::on_activate(bContext &C)
 
   SpaceSpreadsheet &sspreadsheet = *CTX_wm_space_spreadsheet(&C);
 
-  MEM_SAFE_FREE(sspreadsheet.geometry_id.instance_ids);
-  sspreadsheet.geometry_id.instance_ids = MEM_new_array_for_free<SpreadsheetInstanceID>(
-      instance_ids.size(), __func__);
+  MEM_SAFE_DELETE(sspreadsheet.geometry_id.instance_ids);
+  sspreadsheet.geometry_id.instance_ids = MEM_new_array<SpreadsheetInstanceID>(instance_ids.size(),
+                                                                               __func__);
   sspreadsheet.geometry_id.instance_ids_num = instance_ids.size();
   initialized_copy_n(
       instance_ids.data(), instance_ids.size(), sspreadsheet.geometry_id.instance_ids);
@@ -719,19 +876,31 @@ void DataSetViewItem::on_activate(bContext &C)
 
   bScreen &screen = *CTX_wm_screen(&C);
   SpaceSpreadsheet &sspreadsheet = *CTX_wm_space_spreadsheet(&C);
+  PointerRNA ptr = RNA_pointer_create_discrete(&screen.id, RNA_SpaceSpreadsheet, &sspreadsheet);
 
-  sspreadsheet.geometry_id.geometry_component_type = uint8_t(data_id->component_type);
-  if (data_id->domain) {
-    sspreadsheet.geometry_id.attribute_domain = uint8_t(*data_id->domain);
+  if (const auto *domain_data_id = std::get_if<GeometryDomainDataId>(&data_id->id)) {
+    sspreadsheet.geometry_id.geometry_item_type = SPREADSHEET_GEOMETRY_ITEM_TYPE_DOMAIN;
+    spreadsheet_bundle_path_clear(sspreadsheet.geometry_id.geometry_bundle_path);
+    sspreadsheet.geometry_id.geometry_component_type = uint8_t(domain_data_id->component_type);
+    if (domain_data_id->domain) {
+      sspreadsheet.geometry_id.attribute_domain = uint8_t(*domain_data_id->domain);
+    }
+    if (domain_data_id->layer_index) {
+      sspreadsheet.geometry_id.layer_index = *domain_data_id->layer_index;
+    }
+
+    /* These updates also make sure that the attribute domain is set properly based on the
+     * component type. */
+    RNA_property_update(&C, &ptr, RNA_struct_find_property(&ptr, "attribute_domain"));
+    RNA_property_update(&C, &ptr, RNA_struct_find_property(&ptr, "geometry_component_type"));
   }
-  if (data_id->layer_index) {
-    sspreadsheet.geometry_id.layer_index = *data_id->layer_index;
+  else if (const auto *bundle_item_id = std::get_if<GeometryBundleItemId>(&data_id->id)) {
+    sspreadsheet.geometry_id.geometry_item_type = SPREADSHEET_GEOMETRY_ITEM_TYPE_BUNDLE;
+    Vector<UString> keys = bundle_item_id->keys.as_span();
+    spreadsheet_bundle_path_init_from(
+        keys, bundle_item_id->closure_in_out, sspreadsheet.geometry_id.geometry_bundle_path);
+    RNA_property_update(&C, &ptr, RNA_struct_find_property(&ptr, "geometry_component_type"));
   }
-  PointerRNA ptr = RNA_pointer_create_discrete(&screen.id, &RNA_SpaceSpreadsheet, &sspreadsheet);
-  /* These updates also make sure that the attribute domain is set properly based on the
-   * component type. */
-  RNA_property_update(&C, &ptr, RNA_struct_find_property(&ptr, "attribute_domain"));
-  RNA_property_update(&C, &ptr, RNA_struct_find_property(&ptr, "geometry_component_type"));
 }
 
 std::optional<bool> DataSetViewItem::should_be_active() const
@@ -743,22 +912,51 @@ std::optional<bool> DataSetViewItem::should_be_active() const
   if (!data_id) {
     return false;
   }
-  if (bke::GeometryComponent::Type(sspreadsheet.geometry_id.geometry_component_type) !=
-      data_id->component_type)
-  {
-    return false;
-  }
-  if (data_id->domain) {
-    if (bke::AttrDomain(sspreadsheet.geometry_id.attribute_domain) != data_id->domain) {
+  if (const auto *domain_data_id = std::get_if<GeometryDomainDataId>(&data_id->id)) {
+    if (sspreadsheet.geometry_id.geometry_item_type != SPREADSHEET_GEOMETRY_ITEM_TYPE_DOMAIN) {
       return false;
     }
-  }
-  if (data_id->layer_index) {
-    if (sspreadsheet.geometry_id.layer_index != *data_id->layer_index) {
+    if (bke::GeometryComponent::Type(sspreadsheet.geometry_id.geometry_component_type) !=
+        domain_data_id->component_type)
+    {
       return false;
     }
+    if (domain_data_id->domain) {
+      if (bke::AttrDomain(sspreadsheet.geometry_id.attribute_domain) != domain_data_id->domain) {
+        return false;
+      }
+    }
+    if (domain_data_id->layer_index) {
+      if (sspreadsheet.geometry_id.layer_index != *domain_data_id->layer_index) {
+        return false;
+      }
+    }
+    return true;
   }
-  return true;
+  if (const auto *bundle_item_id = std::get_if<GeometryBundleItemId>(&data_id->id)) {
+    if (sspreadsheet.geometry_id.geometry_item_type != SPREADSHEET_GEOMETRY_ITEM_TYPE_BUNDLE) {
+      return false;
+    }
+    if (sspreadsheet.geometry_id.geometry_bundle_path.closure_input_output !=
+        bundle_item_id->closure_in_out)
+    {
+      return false;
+    }
+    if (sspreadsheet.geometry_id.geometry_bundle_path.bundle_path_num !=
+        bundle_item_id->keys.size())
+    {
+      return false;
+    }
+    for (const int i : IndexRange(bundle_item_id->keys.size())) {
+      if (sspreadsheet.geometry_id.geometry_bundle_path.bundle_path[i].identifier !=
+          bundle_item_id->keys[i])
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
 }
 
 class ViewerPathTreeViewItem : public ui::AbstractTreeViewItem {
@@ -932,13 +1130,12 @@ class ViewerPathTreeView : public ui::AbstractTreeView {
   {
     const ViewerPath &viewer_path = sspreadsheet_.geometry_id.viewer_path;
 
-    int index;
-    LISTBASE_FOREACH_INDEX (const ViewerPathElem *, elem, &viewer_path.path, index) {
-      if (elem == viewer_path.path.first) {
+    for (const auto [index, elem] : viewer_path.path.enumerate()) {
+      if (&elem == viewer_path.path.first) {
         /* The root item is drawn above the tree view already. */
         continue;
       }
-      this->add_viewer_path_elem(index, *elem);
+      this->add_viewer_path_elem(index, elem);
     }
   }
 
@@ -1021,18 +1218,22 @@ class ViewerDataTreeItem : public ui::AbstractTreeViewItem {
 
 struct ViewerDataPath {
   int viewer_item;
-  Vector<StringRef> bundles;
+  Vector<UString> bundles;
   SpreadsheetClosureInputOutput closure_input_output = SPREADSHEET_CLOSURE_NONE;
-  BLI_STRUCT_EQUALITY_OPERATORS_3(ViewerDataPath, viewer_item, bundles, closure_input_output);
+
+  friend bool operator==(const ViewerDataPath &a, const ViewerDataPath &b) = default;
 
   ViewerDataPath() = default;
   explicit ViewerDataPath(const SpreadsheetTableIDGeometry &table_id)
       : viewer_item(table_id.viewer_item_identifier)
   {
-    for (const auto &elem : Span(table_id.bundle_path, table_id.bundle_path_num)) {
-      this->bundles.append(elem.identifier);
+    for (const auto &elem : Span(table_id.viewer_item_bundle_path.bundle_path,
+                                 table_id.viewer_item_bundle_path.bundle_path_num))
+    {
+      this->bundles.append(UString(elem.identifier));
     }
-    this->closure_input_output = SpreadsheetClosureInputOutput(table_id.closure_input_output);
+    this->closure_input_output = SpreadsheetClosureInputOutput(
+        table_id.viewer_item_bundle_path.closure_input_output);
   }
 
   explicit ViewerDataPath(const Span<const ViewerDataTreeItem *> tree_items);
@@ -1040,31 +1241,19 @@ struct ViewerDataPath {
   void store(SpreadsheetTableIDGeometry &table_id)
   {
     table_id.viewer_item_identifier = this->viewer_item;
-    if (table_id.bundle_path) {
-      for (const int i : IndexRange(table_id.bundle_path_num)) {
-        MEM_freeN(table_id.bundle_path[i].identifier);
-      }
-      MEM_freeN(table_id.bundle_path);
-    }
-    table_id.bundle_path = MEM_new_array_for_free<SpreadsheetBundlePathElem>(this->bundles.size(),
-                                                                             __func__);
-    table_id.bundle_path_num = this->bundles.size();
-    for (const int i : this->bundles.index_range()) {
-      table_id.bundle_path[i].identifier = BLI_strdupn(this->bundles[i].data(),
-                                                       this->bundles[i].size());
-    }
-    table_id.closure_input_output = int8_t(this->closure_input_output);
+    spreadsheet_bundle_path_init_from(
+        this->bundles, this->closure_input_output, table_id.viewer_item_bundle_path);
   }
 };
 
 class ViewerNodeItem : public ViewerDataTreeItem {
  private:
-  const nodes::geo_eval_log::ViewerNodeLog::Item &item_;
+  const nodes::eval_log::ViewerNodeLog::Item &item_;
 
   friend ViewerDataPath;
 
  public:
-  ViewerNodeItem(const nodes::geo_eval_log::ViewerNodeLog::Item &item) : item_(item)
+  ViewerNodeItem(const nodes::eval_log::ViewerNodeLog::Item &item) : item_(item)
   {
     label_ = std::to_string(item.identifier);
   }
@@ -1075,13 +1264,13 @@ class ViewerNodeItem : public ViewerDataTreeItem {
   }
 };
 
-class BundleItem : public ViewerDataTreeItem {
+class BundleViewerTreeItem : public ViewerDataTreeItem {
   friend ViewerDataPath;
 
  public:
-  BundleItem(const StringRef key)
+  BundleViewerTreeItem(const UString key)
   {
-    label_ = key;
+    label_ = key.string();
   }
 
   void build_row(ui::Layout &row) override
@@ -1090,14 +1279,14 @@ class BundleItem : public ViewerDataTreeItem {
   }
 };
 
-class ClosureInputOutputItem : public ViewerDataTreeItem {
+class ClosureInOutViewerTreeItem : public ViewerDataTreeItem {
  private:
   SpreadsheetClosureInputOutput in_out_;
 
   friend ViewerDataPath;
 
  public:
-  ClosureInputOutputItem(const SpreadsheetClosureInputOutput in_out) : in_out_(in_out)
+  ClosureInOutViewerTreeItem(const SpreadsheetClosureInputOutput in_out) : in_out_(in_out)
   {
     label_ = in_out_ == SPREADSHEET_CLOSURE_INPUT ? IFACE_("Inputs") : IFACE_("Outputs");
   }
@@ -1114,10 +1303,10 @@ ViewerDataPath::ViewerDataPath(const Span<const ViewerDataTreeItem *> tree_items
     if (const auto *viewer_node_item = dynamic_cast<const ViewerNodeItem *>(item)) {
       this->viewer_item = viewer_node_item->item_.identifier;
     }
-    else if (const auto *bundle_item = dynamic_cast<const BundleItem *>(item)) {
-      this->bundles.append(bundle_item->label_);
+    else if (const auto *bundle_item = dynamic_cast<const BundleViewerTreeItem *>(item)) {
+      this->bundles.append(UString(bundle_item->label_));
     }
-    else if (const auto *bundle_item = dynamic_cast<const ClosureInputOutputItem *>(item)) {
+    else if (const auto *bundle_item = dynamic_cast<const ClosureInOutViewerTreeItem *>(item)) {
       this->closure_input_output = bundle_item->in_out_;
     }
   }
@@ -1134,11 +1323,11 @@ class ViewerDataTreeView : public ui::AbstractTreeView {
 
   void build_tree() override
   {
-    const nodes::geo_eval_log::ViewerNodeLog *log = viewer_node_log_lookup(sspreadsheet_);
+    const nodes::eval_log::ViewerNodeLog *log = viewer_node_log_lookup(sspreadsheet_);
     if (!log) {
       return;
     }
-    for (const nodes::geo_eval_log::ViewerNodeLog::Item &item : log->items) {
+    for (const nodes::eval_log::ViewerNodeLog::Item &item : log->items) {
       const bke::SocketValueVariant &value = item.value;
       auto &child_item = this->add_tree_item<ViewerNodeItem>(item);
       this->build_value(child_item, value);
@@ -1168,7 +1357,7 @@ class ViewerDataTreeView : public ui::AbstractTreeView {
   void build_bundle_children(ui::AbstractTreeViewItem &parent, const nodes::Bundle &bundle)
   {
     for (const auto &item : bundle.items()) {
-      auto &child_item = parent.add_tree_item<BundleItem>(item.key);
+      auto &child_item = parent.add_tree_item<BundleViewerTreeItem>(item.key);
       const auto *stored_value = std::get_if<nodes::BundleItemSocketValue>(&item.value.value);
       if (!stored_value) {
         continue;
@@ -1181,10 +1370,10 @@ class ViewerDataTreeView : public ui::AbstractTreeView {
   {
     const nodes::ClosureSignature &signature = closure->signature();
     if (!signature.inputs.is_empty()) {
-      parent.add_tree_item<ClosureInputOutputItem>(SPREADSHEET_CLOSURE_INPUT);
+      parent.add_tree_item<ClosureInOutViewerTreeItem>(SPREADSHEET_CLOSURE_INPUT);
     }
     if (!signature.outputs.is_empty()) {
-      parent.add_tree_item<ClosureInputOutputItem>(SPREADSHEET_CLOSURE_OUTPUT);
+      parent.add_tree_item<ClosureInOutViewerTreeItem>(SPREADSHEET_CLOSURE_OUTPUT);
     }
   }
 };
@@ -1255,7 +1444,7 @@ static void draw_context_panel_content(const bContext &C, ui::Layout &layout)
   }
 
   PointerRNA sspreadsheet_ptr = RNA_pointer_create_discrete(
-      &screen.id, &RNA_SpaceSpreadsheet, sspreadsheet);
+      &screen.id, RNA_SpaceSpreadsheet, sspreadsheet);
 
   layout.prop(&sspreadsheet_ptr, "object_eval_state", UI_ITEM_NONE, "", ICON_NONE);
 

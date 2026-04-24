@@ -11,7 +11,9 @@
 #include "BLI_enum_flags.hh"
 #include "BLI_sys_types.h"
 
-/** Opaque type hiding blender::gpu::Fence. */
+namespace blender {
+
+/** Opaque type hiding gpu::Fence. */
 struct GPUFence;
 
 enum GPUWriteMask {
@@ -190,7 +192,6 @@ void GPU_color_mask(bool r, bool g, bool b, bool a);
 void GPU_depth_mask(bool depth);
 bool GPU_depth_mask_get();
 void GPU_clip_distances(int distances_enabled);
-bool GPU_mipmap_enabled();
 void GPU_state_set(GPUWriteMask write_mask,
                    GPUBlend blend,
                    GPUFaceCullTest culling_test,
@@ -238,3 +239,5 @@ GPUFence *GPU_fence_create();
 void GPU_fence_free(GPUFence *fence);
 void GPU_fence_signal(GPUFence *fence);
 void GPU_fence_wait(GPUFence *fence);
+
+}  // namespace blender

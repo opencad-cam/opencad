@@ -184,7 +184,7 @@ bool autokeyframe_pchan(bContext *C, Scene *scene, Object *ob, bPoseChannel *pch
    * 3) Free the extra info.
    */
   Vector<PointerRNA> sources;
-  relative_keyingset_add_source(sources, &ob->id, &RNA_PoseBone, pchan);
+  relative_keyingset_add_source(sources, &ob->id, RNA_PoseBone, pchan);
   apply_keyingset(C, &sources, ks, ModifyKeyMode::INSERT, BKE_scene_frame_get(scene));
 
   return true;
@@ -205,7 +205,7 @@ void autokeyframe_pose_channel(bContext *C,
   Main *bmain = CTX_data_main(C);
   ID *id = &ob->id;
 
-  if (!blender::animrig::autokeyframe_cfra_can_key(scene, id)) {
+  if (!animrig::autokeyframe_cfra_can_key(scene, id)) {
     return;
   }
 
@@ -229,7 +229,7 @@ void autokeyframe_pose_channel(bContext *C,
 
   Vector<PointerRNA> sources;
   /* Add data-source override for the camera object. */
-  relative_keyingset_add_source(sources, id, &RNA_PoseBone, pose_channel);
+  relative_keyingset_add_source(sources, id, RNA_PoseBone, pose_channel);
 
   /* only insert into active keyingset? */
   if (is_keying_flag(scene, AUTOKEY_FLAG_ONLYKEYINGSET) && (active_ks)) {
@@ -296,14 +296,17 @@ bool autokeyframe_property(bContext *C,
       ReportList *reports = CTX_wm_reports(C);
       ToolSettings *ts = scene->toolsettings;
 
-      changed = insert_keyframe_direct(reports,
-                                       *ptr,
-                                       prop,
-                                       fcu,
-                                       &anim_eval_context,
-                                       eBezTriple_KeyframeType(ts->keyframe_type),
-                                       nullptr,
-                                       eInsertKeyFlags(0));
+      const SingleKeyingResult result = insert_keyframe_direct(
+          *ptr,
+          *prop,
+          *fcu,
+          anim_eval_context.eval_time,
+          eBezTriple_KeyframeType(ts->keyframe_type),
+          eInsertKeyFlags(0));
+      changed = result == SingleKeyingResult::SUCCESS;
+      if (result != SingleKeyingResult::SUCCESS) {
+        generate_single_keying_result_report(result, reports);
+      }
       WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
     }
   }

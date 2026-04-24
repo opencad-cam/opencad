@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2025 Blender Authors
+# SPDX-FileCopyrightText: 2026 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
@@ -8,91 +8,103 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from enum import StrEnum
+from typing import Any
 
 
 @dataclass
 class Contact:
     name: str
-    url: Optional[str] = None
-    email: Optional[str] = None
+    url: str | None = None
+    email: str | None = None
+
+
+@dataclass
+class URLWithHash:
+    url: str
+    hash: str
+
+
+type AssetIDTypeV1 = str
+
+
+class CustomPropertyTypeV1(StrEnum):
+    IDP_STRING = "IDP_STRING"
+    IDP_INT = "IDP_INT"
+    IDP_FLOAT = "IDP_FLOAT"
+    IDP_ARRAY = "IDP_ARRAY"
+    IDP_GROUP = "IDP_GROUP"
+    IDP_DOUBLE = "IDP_DOUBLE"
+    IDP_BOOLEAN = "IDP_BOOLEAN"
+
+
+@dataclass
+class CatalogV1:
+    path: str
+    uuids: list[str]
+    simple_name: str | None = None
+
+
+@dataclass
+class FileV1:
+    path: str
+    size_in_bytes: int
+    hash: str
+    blender_version: str
+    url: str | None = None
 
 
 @dataclass
 class AssetLibraryMeta:
-    api_versions: dict[str, str]
+    api_versions: dict[str, URLWithHash]
     name: str
     contact: Contact
 
 
-# This OpenAPI specification was used to generate the above code.
-# It is here so that Blender does not have to parse the YAML file.
-OPENAPI_SPEC = {
-    'openapi': '3.0.0',
-    'info': {
-        'version': '1.0.0',
-        'title': 'Blender Asset Library API',
-        'description': "Blender's API for describing and fetching assets from online libraries.",
-        'contact': {
-            'name': 'Blender',
-            'url': 'https://www.blender.org/'},
-        'license': {
-            'name': 'GPLv3',
-            'url': 'https://www.gnu.org/licenses/gpl-3.0.en.html'}},
-    'servers': [
-        {
-            'url': '/'}],
-    'paths': {
-        '/_asset-library-meta.json': {
-            'summary': 'Meta-information about this asset library.',
-            'get': {
-                'summary': 'Retrieve the asset library meta info.',
-                'operationId': 'getLibraryMeta',
-                'responses': {
-                    '200': {
-                        'description': 'normal response',
-                        'content': {
-                            'application/json': {
-                                'schema': {
-                                    '$ref': '#/components/schemas/AssetLibraryMeta'}}}}}}}},
-    'components': {
-        'schemas': {
-            'AssetLibraryMeta': {
-                'type': 'object',
-                'description': 'Meta-data of this asset library.',
-                'properties': {
-                    'api_versions': {
-                        'type': 'object',
-                        'description': 'API versions of this asset library. This is reflected in the URLs of all OpenAPI operations except the one to get this metadata.\nA single asset library can expose multiple versions, in order to be backward-compatible with older versions of Blender.\nProperties should be "v1", "v2", etc. and their values should point to their respective index files.\n',
-                        'additionalProperties': {
-                            'type': 'string'},
-                        'patternProperties': {
-                            '^v[0-9]+$': {
-                                'type': 'string'}}},
-                    'name': {
-                        'type': 'string',
-                        'description': 'Name of this asset library.'},
-                    'contact': {
-                        '$ref': '#/components/schemas/Contact'}},
-                'required': [
-                    'api_versions',
-                    'name',
-                    'contact'],
-                'example': {
-                    'api_versions': {
-                        'v1': '_v1/asset-index.json'},
-                    'name': 'Blender Essentials',
-                    'contact': {
-                        'name': 'Blender',
-                        'url': 'https://www.blender.org/'}}},
-            'Contact': {
-                'type': 'object',
-                'description': 'Owner / publisher of this asset library.',
-                'properties': {
-                    'name': {
-                        'type': 'string'},
-                    'url': {
-                        'type': 'string'},
-                    'email': {
-                        'type': 'string'}},
-                'required': ['name']}}}}
+@dataclass
+class AssetLibraryIndexV1:
+    schema_version: str
+    asset_size_bytes: int
+    asset_count: int
+    file_count: int
+    pages: list[URLWithHash]
+    catalogs: list[CatalogV1] | None = None
+
+
+@dataclass
+class AssetLibraryIndexPageV1:
+    asset_count: int
+    file_count: int
+    assets: list[AssetV1]
+    files: list[FileV1]
+
+
+@dataclass
+class AssetV1:
+    name: str
+    id_type: AssetIDTypeV1
+    files: list[str]
+    thumbnail: URLWithHash | None = None
+    meta: AssetMetadataV1 | None = None
+
+
+@dataclass
+class AssetMetadataV1:
+    catalog_id: str | None = None
+    tags: list[str] | None = None
+    author: str | None = None
+    description: str | None = None
+    license: str | None = None
+    copyright: str | None = None
+    properties: CustomPropertiesV1 | None = None
+
+
+type CustomPropertiesV1 = list[CustomPropertyV1]
+
+
+@dataclass
+class CustomPropertyV1:
+    name: str
+    type: CustomPropertyTypeV1
+    value: CustomPropertiesV1 | list[Any] | float | int | str | bool
+    itemtype: CustomPropertyTypeV1 | None = None

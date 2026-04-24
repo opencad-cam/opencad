@@ -13,6 +13,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_path_utils.hh"
+#include "BLI_rect.h"
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
@@ -44,7 +45,10 @@
 
 #include "screen_intern.hh"
 
+namespace blender {
+
 struct ScreenshotData {
+  /* Ownership transferred to ImBuf in exec function. */
   uint8_t *dumprect = nullptr;
   int dumpsx = 0, dumpsy = 0;
   rcti crop = {};
@@ -66,7 +70,7 @@ static int screenshot_data_create(bContext *C, wmOperator *op, ScrArea *area)
   uint8_t *dumprect = WM_window_pixels_read(C, win, dumprect_size);
 
   if (dumprect) {
-    ScreenshotData *scd = MEM_new_for_free<ScreenshotData>("screenshot");
+    ScreenshotData *scd = MEM_new<ScreenshotData>("screenshot");
 
     scd->dumpsx = dumprect_size[0];
     scd->dumpsy = dumprect_size[1];
@@ -87,15 +91,8 @@ static int screenshot_data_create(bContext *C, wmOperator *op, ScrArea *area)
 
 static void screenshot_data_free(wmOperator *op)
 {
-  ScreenshotData *scd = static_cast<ScreenshotData *>(op->customdata);
-
-  if (scd) {
-    if (scd->dumprect) {
-      MEM_freeN(scd->dumprect);
-    }
-    MEM_freeN(scd);
-    op->customdata = nullptr;
-  }
+  MEM_delete(static_cast<ScreenshotData *>(op->customdata));
+  op->customdata = nullptr;
 }
 
 static wmOperatorStatus screenshot_exec(bContext *C, wmOperator *op)
@@ -120,12 +117,14 @@ static wmOperatorStatus screenshot_exec(bContext *C, wmOperator *op)
 
       /* operator ensures the extension */
       ibuf = IMB_allocImBuf(scd->dumpsx, scd->dumpsy, 24, 0);
-      IMB_assign_byte_buffer(ibuf, scd->dumprect, IB_DO_NOT_TAKE_OWNERSHIP);
+      IMB_assign_byte_buffer(ibuf, scd->dumprect, IB_TAKE_OWNERSHIP);
+      scd->dumprect = nullptr;
 
       /* crop to show only single editor */
       if (use_crop) {
-        IMB_rect_crop(ibuf, &scd->crop);
-        scd->dumprect = ibuf->byte_buffer.data;
+        IMB_crop(ibuf,
+                 int2(scd->crop.xmin, scd->crop.ymin),
+                 int2(BLI_rcti_size_x(&scd->crop) + 1, BLI_rcti_size_y(&scd->crop) + 1));
       }
 
       if ((scd->im_format.planes == R_IMF_PLANES_BW) &&
@@ -210,14 +209,14 @@ static bool screenshot_draw_check_prop(PointerRNA * /*ptr*/,
 
 static void screenshot_draw(bContext *C, wmOperator *op)
 {
-  blender::ui::Layout &layout = *op->layout;
+  ui::Layout &layout = *op->layout;
   ScreenshotData *scd = static_cast<ScreenshotData *>(op->customdata);
 
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
 
   /* image template */
-  PointerRNA ptr = RNA_pointer_create_discrete(nullptr, &RNA_ImageFormatSettings, &scd->im_format);
+  PointerRNA ptr = RNA_pointer_create_discrete(nullptr, RNA_ImageFormatSettings, &scd->im_format);
   uiTemplateImageSettings(&layout, C, &ptr, false);
 
   /* main draw call */
@@ -226,7 +225,7 @@ static void screenshot_draw(bContext *C, wmOperator *op)
                    screenshot_draw_check_prop,
                    nullptr,
                    nullptr,
-                   blender::ui::BUT_LABEL_ALIGN_NONE,
+                   ui::BUT_LABEL_ALIGN_NONE,
                    false);
 }
 
@@ -279,3 +278,5 @@ void SCREEN_OT_screenshot_area(wmOperatorType *ot)
 
   ot->flag = OPTYPE_DEPENDS_ON_CURSOR;
 }
+
+}  // namespace blender

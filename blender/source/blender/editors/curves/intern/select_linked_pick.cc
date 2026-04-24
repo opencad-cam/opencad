@@ -36,7 +36,7 @@ static ClosestCurveDataBlock find_closest_curve(const Depsgraph &depsgraph,
         ClosestCurveDataBlock new_closest = init;
         for (Base *base : bases.slice(range)) {
           Object &curves_ob = *base->object;
-          Curves &curves_id = *static_cast<Curves *>(curves_ob.data);
+          Curves &curves_id = *id_cast<Curves *>(curves_ob.data);
           bke::crazyspace::GeometryDeformation deformation =
               bke::crazyspace::get_evaluated_curves_deformation(depsgraph, curves_ob);
           const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
@@ -74,7 +74,7 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(&C);
   const ViewContext vc = ED_view3d_viewcontext_init(&C, depsgraph);
   const Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
-      vc.scene, vc.view_layer, vc.v3d);
+      *vc.bmain, vc.scene, vc.view_layer, vc.v3d);
 
   const ClosestCurveDataBlock closest = find_closest_curve(*depsgraph, vc, bases, mval);
   if (!closest.curves_id) {

@@ -12,6 +12,10 @@
 
 #include "IMB_imbuf_types.hh"
 
+namespace blender {
+
+const char *imb_file_extensions_psd[] = {".psd", ".pdd", ".psb", nullptr};
+
 OIIO_NAMESPACE_USING
 using namespace blender::imbuf;
 
@@ -32,3 +36,5 @@ ImBuf *imb_load_psd(const uchar *mem, size_t size, int flags, ImFileColorSpace &
 
   return imb_oiio_read(ctx, config, r_colorspace, spec);
 }
+
+}  // namespace blender

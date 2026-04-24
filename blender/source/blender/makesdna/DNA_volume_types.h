@@ -10,16 +10,17 @@
 
 #include "DNA_ID.h"
 
+namespace blender {
+
 struct PackedFile;
 
-#ifdef __cplusplus
-namespace blender::bke {
+namespace draw {
+struct VolumeBatchCache;
+}
+
+namespace bke {
 struct VolumeRuntime;
 }
-using VolumeRuntimeHandle = blender::bke::VolumeRuntime;
-#else
-struct VolumeRuntimeHandle;
-#endif
 
 /** #Volume.flag */
 enum {
@@ -149,11 +150,13 @@ struct Volume {
   float velocity_scale = 1.0f;
 
   /* Draw Cache */
-  void *batch_cache = nullptr;
+  draw::VolumeBatchCache *batch_cache = nullptr;
 
   /* Runtime Data */
-  VolumeRuntimeHandle *runtime = nullptr;
+  bke::VolumeRuntime *runtime = nullptr;
 };
 
 /* Only one material supported currently. */
 #define VOLUME_MATERIAL_NR 1
+
+}  // namespace blender

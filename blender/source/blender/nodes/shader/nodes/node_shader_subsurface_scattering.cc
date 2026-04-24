@@ -11,32 +11,49 @@
 
 #include "BKE_node_runtime.hh"
 
-namespace blender::nodes::node_shader_subsurface_scattering_cc {
+namespace blender {
+
+namespace nodes::node_shader_subsurface_scattering_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({0.8f, 0.8f, 0.8f, 1.0f});
-  b.add_input<decl::Float>("Scale").default_value(0.05f).min(0.0f).max(1000.0f).description(
-      "Scale factor of the subsurface scattering radius");
-  b.add_input<decl::Vector>("Radius")
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.add_input<decl::Color>("Color"_ustr).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_input<decl::Float>("Scale"_ustr)
+      .default_value(0.05f)
+      .min(0.0f)
+      .max(1000.0f)
+      .description("Scale factor of the subsurface scattering radius");
+  b.add_input<decl::Vector>("Radius"_ustr)
       .default_value({1.0f, 0.2f, 0.1f})
       .min(0.0f)
       .max(100.0f)
       .description("Scattering radius per color channel (RGB), multiplied with Scale");
-  b.add_input<decl::Float>("IOR").default_value(1.4f).min(1.01f).max(3.8f).subtype(PROP_FACTOR);
-  b.add_input<decl::Float>("Roughness")
+  b.add_input<decl::Float>("IOR"_ustr)
+      .default_value(1.4f)
+      .min(1.01f)
+      .max(3.8f)
+      .subtype(PROP_FACTOR);
+  b.add_input<decl::Float>("Roughness"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Float>("Anisotropy")
+  b.add_input<decl::Float>("Anisotropy"_ustr)
       .default_value(0.0f)
-      .min(0.0f)
+      .min(-1.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_input<decl::Float>("Weight").available(false);
-  b.add_output<decl::Shader>("BSSRDF");
+      .subtype(PROP_FACTOR)
+      .description(
+          "Directionality of volume scattering within the subsurface medium. "
+          "Zero scatters uniformly in all directions, positive values scatter more in the forward "
+          "direction, and negative values scatter more backwards. "
+          "For example, skin has been measured to have an anisotropy of 0.8");
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Shader>("BSSRDF"_ustr);
 }
 
 static void node_shader_buts_subsurface(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -69,12 +86,14 @@ static void node_shader_update_subsurface_scattering(bNodeTree *ntree, bNode *no
 {
   const int sss_method = node->custom1;
 
-  LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
-    if (STR_ELEM(sock->name, "IOR", "Anisotropy")) {
-      bke::node_set_socket_availability(*ntree, *sock, sss_method != SHD_SUBSURFACE_BURLEY);
+  for (bNodeSocket &sock : node->inputs) {
+    if (STR_ELEM(sock.name, "IOR", "Anisotropy")) {
+      bke::node_set_socket_availability(*ntree, sock, sss_method != SHD_SUBSURFACE_BURLEY);
     }
-    if (STR_ELEM(sock->name, "Roughness")) {
-      bke::node_set_socket_availability(*ntree, *sock, sss_method == SHD_SUBSURFACE_RANDOM_WALK);
+    if (STR_ELEM(sock.name, "Roughness")) {
+      const bool is_random_walk = sss_method == SHD_SUBSURFACE_RANDOM_WALK ||
+                                  sss_method == SHD_SUBSURFACE_RANDOM_WALK_LEGACY;
+      bke::node_set_socket_availability(*ntree, sock, is_random_walk);
     }
   }
 }
@@ -108,16 +127,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_subsurface_scattering_cc
+}  // namespace nodes::node_shader_subsurface_scattering_cc
 
 /* node type definition */
 void register_node_type_sh_subsurface_scattering()
 {
-  namespace file_ns = blender::nodes::node_shader_subsurface_scattering_cc;
+  namespace file_ns = nodes::node_shader_subsurface_scattering_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeSubsurfaceScattering", SH_NODE_SUBSURFACE_SCATTERING);
+  sh_node_type_base(&ntype, "ShaderNodeSubsurfaceScattering"_ustr, SH_NODE_SUBSURFACE_SCATTERING);
   ntype.ui_name = "Subsurface Scattering";
   ntype.ui_description =
       "Subsurface multiple scattering shader to simulate light entering the surface and bouncing "
@@ -125,13 +144,16 @@ void register_node_type_sh_subsurface_scattering()
   ntype.enum_name_legacy = "SUBSURFACE_SCATTERING";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.add_ui_poll = object_shader_nodes_poll;
   ntype.draw_buttons = file_ns::node_shader_buts_subsurface;
-  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Middle);
+  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
   ntype.initfunc = file_ns::node_shader_init_subsurface_scattering;
   ntype.gpu_fn = file_ns::node_shader_gpu_subsurface_scattering;
   ntype.updatefunc = file_ns::node_shader_update_subsurface_scattering;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

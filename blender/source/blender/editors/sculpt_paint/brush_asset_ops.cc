@@ -168,8 +168,8 @@ static wmOperatorStatus brush_asset_save_as_exec(bContext *C, wmOperator *op)
     STRNCPY_UTF8(name, brush->id.name + 2);
   }
 
-  const eAssetLibraryType enum_value = (eAssetLibraryType)RNA_enum_get(op->ptr,
-                                                                       "asset_library_reference");
+  const eAssetLibraryType enum_value = eAssetLibraryType(
+      RNA_enum_get(op->ptr, "asset_library_reference"));
   const bool is_local_library = enum_value == ASSET_LIBRARY_LOCAL;
 
   AssetLibraryReference library_reference;
@@ -261,14 +261,6 @@ static wmOperatorStatus brush_asset_save_as_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static bool library_is_editable(const AssetLibraryReference &library)
-{
-  if (library.type == ASSET_LIBRARY_ESSENTIALS) {
-    return false;
-  }
-  return true;
-}
-
 static wmOperatorStatus brush_asset_save_as_invoke(bContext *C,
                                                    wmOperator *op,
                                                    const wmEvent * /*event*/)
@@ -281,29 +273,22 @@ static wmOperatorStatus brush_asset_save_as_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
   const asset_system::AssetLibrary &library = asset->owner_asset_library();
-  const std::optional<AssetLibraryReference> library_ref = library.library_reference();
-  if (!library_ref) {
-    BLI_assert_unreachable();
-    return OPERATOR_CANCELLED;
-  }
 
   RNA_string_set(op->ptr, "name", asset->get_name().c_str());
 
-  /* If the library isn't saved from the operator's last execution, find the current library or the
-   * first library if the current library isn't editable. */
+  /* If the library isn't saved from the operator's last execution, use the asset's owner library
+   * or fall back to the first library if the current library isn't editable. */
   if (!RNA_struct_property_is_set_ex(op->ptr, "asset_library_reference", false)) {
-    if (library_is_editable(*library_ref)) {
-      RNA_enum_set(op->ptr,
-                   "asset_library_reference",
-                   asset::library_reference_to_enum_value(&*library_ref));
+    std::optional<AssetLibraryReference> dest_library_ref =
+        ed::asset::get_user_library_ref_for_save(&library);
+
+    if (!dest_library_ref) {
+      BKE_report(op->reports, RPT_WARNING, "No editable asset library to save into");
+      return OPERATOR_CANCELLED;
     }
-    else {
-      const AssetLibraryReference first_library = asset::user_library_to_library_ref(
-          *static_cast<const bUserAssetLibrary *>(U.asset_libraries.first));
-      RNA_enum_set(op->ptr,
-                   "asset_library_reference",
-                   asset::library_reference_to_enum_value(&first_library));
-    }
+    RNA_enum_set(op->ptr,
+                 "asset_library_reference",
+                 asset::library_reference_to_enum_value(&*dest_library_ref));
   }
 
   /* By default, put the new asset in the same catalog as the existing asset. */
@@ -325,7 +310,8 @@ static const EnumPropertyItem *rna_asset_library_reference_itemf(bContext * /*C*
   const EnumPropertyItem *items = asset::library_reference_to_rna_enum_itemf(
       /* Only get writable libraries. */
       /*include_readonly=*/false,
-      /*include_current_file=*/true);
+      /*include_current_file=*/true,
+      /*include_remote_libraries=*/false);
   if (!items) {
     *r_free = false;
     return nullptr;
@@ -390,9 +376,9 @@ static wmOperatorStatus brush_asset_edit_metadata_exec(bContext *C, wmOperator *
   RNA_string_get(op->ptr, "catalog_path", catalog_path_c);
 
   AssetMetaData &meta_data = *brush->id.asset_data;
-  MEM_SAFE_FREE(meta_data.author);
+  MEM_SAFE_DELETE(meta_data.author);
   meta_data.author = RNA_string_get_alloc(op->ptr, "author", nullptr, 0, nullptr);
-  MEM_SAFE_FREE(meta_data.description);
+  MEM_SAFE_DELETE(meta_data.description);
   meta_data.description = RNA_string_get_alloc(op->ptr, "description", nullptr, 0, nullptr);
 
   if (catalog_path_c[0]) {
@@ -494,7 +480,7 @@ static bool brush_asset_edit_metadata_poll(bContext *C)
     BLI_assert_unreachable();
     return false;
   }
-  if (!library_is_editable(*library_ref)) {
+  if (asset->owner_asset_library().is_read_only()) {
     CTX_wm_operator_poll_msg_set(C, "Asset library is not editable");
     return false;
   }

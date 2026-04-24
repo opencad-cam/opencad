@@ -12,6 +12,7 @@
 
 #include "BLI_any.hh"
 #include "BLI_generic_pointer.hh"
+#include "BLI_memory_counter_fwd.hh"
 
 #include "BKE_node_socket_value_fwd.hh"
 
@@ -62,15 +63,18 @@ class SocketValueVariant {
     List,
   };
 
-  /**
-   * High level category of the stored type.
-   */
-  Kind kind_ = Kind::None;
-  /**
-   * The socket type that corresponds to the stored value type, e.g. `SOCK_INT` for an `int` or
-   * integer field.
-   */
-  eNodeSocketDatatype socket_type_;
+  struct AnyExtraData {
+    /**
+     * High level category of the stored type.
+     */
+    Kind kind = Kind::None;
+    /**
+     * The socket type that corresponds to the stored value type, e.g. `SOCK_INT` for an `int` or
+     * integer field.
+     */
+    eNodeSocketDatatype socket_type;
+  };
+
   /**
    * Contains the actual socket value. For single values this contains the value directly (e.g.
    * `int` or `float3`). For fields this always contains a #GField and not e.g. #Field<int>. This
@@ -78,7 +82,7 @@ class SocketValueVariant {
    *
    * Small types are embedded directly, while larger types are separately allocated.
    */
-  Any<void, 24> value_;
+  Any<void, 32, 16, AnyExtraData> value_;
 
  public:
   /**
@@ -95,11 +99,10 @@ class SocketValueVariant {
    * Create a variant based on the given value. This works for primitive types. For more complex
    * types use #set explicitly. Alternatively, one can use the #From or #ConstructIn utilities.
    */
-  template<typename T,
-           /* The enable-if is necessary to avoid overriding the copy/moveconstructors. */
-           BLI_ENABLE_IF((std::is_trivial_v<std::decay_t<T>> ||
-                          is_same_any_v<std::decay_t<T>, std::string>))>
+  template<typename T>
   explicit SocketValueVariant(T &&value)
+      /* Required to avoid overriding the copy/move-constructors. */
+    requires(std::is_trivial_v<std::decay_t<T>> || is_same_any_v<std::decay_t<T>, std::string>)
   {
     this->set(std::forward<T>(value));
   }
@@ -136,6 +139,8 @@ class SocketValueVariant {
    * Replaces the stored value with a new value of potentially a different type.
    */
   template<typename T> void set(T &&value);
+
+  eNodeSocketDatatype socket_type() const;
 
   /**
    * If true, the stored value cannot be converted to a single value without loss of information.
@@ -200,6 +205,8 @@ class SocketValueVariant {
    */
   void *allocate_single(eNodeSocketDatatype socket_type);
 
+  void count_memory(MemoryCounter &memory) const;
+
   friend std::ostream &operator<<(std::ostream &stream, const SocketValueVariant &value_variant);
 
  private:
@@ -208,7 +215,14 @@ class SocketValueVariant {
    * type. So only `store_impl<int>` is necessary, but not `store_impl<const int &>`.
    */
   template<typename T> void store_impl(T value);
+
+  Kind kind() const;
 };
+
+inline eNodeSocketDatatype SocketValueVariant::socket_type() const
+{
+  return value_.extra.socket_type;
+}
 
 template<typename T>
 inline SocketValueVariant &SocketValueVariant::ConstructIn(void *ptr, T &&value)
@@ -233,8 +247,13 @@ template<typename T> inline void SocketValueVariant::set(T &&value)
 
 inline const void *SocketValueVariant::get_single_ptr_raw() const
 {
-  BLI_assert(kind_ == Kind::Single);
+  BLI_assert(this->kind() == Kind::Single);
   return value_.get();
+}
+
+inline SocketValueVariant::Kind SocketValueVariant::kind() const
+{
+  return value_.extra.kind;
 }
 
 }  // namespace blender::bke

@@ -30,6 +30,15 @@
 #include "COM_domain.hh"
 #include "COM_meta_data.hh"
 
+namespace blender {
+struct Object;
+struct Image;
+struct VFont;
+struct Scene;
+struct Text;
+struct Mask;
+}  // namespace blender
+
 namespace blender::compositor {
 
 class Context;
@@ -44,11 +53,20 @@ enum class ResultType : uint8_t {
   Color,
   Int,
   Int2,
+  Int3,
+  Int4,
   Bool,
+  Float4x4,
   Menu,
 
   /* Single value only types. See Result::is_single_value_only_type. */
   String,
+  Object,
+  Image,
+  Font,
+  Scene,
+  Text,
+  Mask,
 };
 
 /* The precision of the data. CPU data is always stored using full precision at the moment. */
@@ -59,7 +77,7 @@ enum class ResultPrecision : uint8_t {
 
 /* The type of storage used to hold the result data. */
 enum class ResultStorageType : uint8_t {
-  /* Stored as a blender::gpu::Texture on the GPU. */
+  /* Stored as a gpu::Texture on the GPU. */
   GPU,
   /* Stored as a buffer on the CPU and wrapped in a GMutableSpan. */
   CPU,
@@ -120,7 +138,9 @@ class Result {
    * value of which will be identical to that of the value member. See class description for more
    * information. */
   union {
-    blender::gpu::Texture *gpu_texture_ = nullptr;
+    /* This will be a 2D texture for most types, but can be a 2D texture array for large types like
+     * float4x4 where each column will be stored in a layer. */
+    gpu::Texture *gpu_texture_ = nullptr;
     GMutableSpan cpu_data_;
   };
   /* The number of users that currently needs this result. Operations initializes this by calling
@@ -132,8 +152,7 @@ class Result {
    * member stores the number of results that share the data. This is heap allocated and have the
    * same lifetime as allocated data, that's because this reference count is shared by all results
    * that share the same data. Unlike the result's reference count, the data is freed if the count
-   * becomes 1, that is, data is no longer shared with some other result. This is nullptr if the
-   * data is external. */
+   * becomes 1, that is, data is no longer shared with some other result. */
   int *data_reference_count_ = nullptr;
   /* If the result is a single value, this member stores the value of the result, the value of
    * which will be identical to that stored in the data_ member. The active variant member depends
@@ -146,9 +165,18 @@ class Result {
                Color,
                int32_t,
                int2,
+               int3,
+               int4,
                bool,
+               float4x4,
                nodes::MenuValue,
-               std::string>
+               std::string,
+               Object *,
+               Image *,
+               VFont *,
+               Scene *,
+               Text *,
+               Mask *>
       single_value_ = 0.0f;
   /* The domain of the result. This only matters if the result was not a single value. See the
    * discussion in COM_domain.hh for more information. */
@@ -178,32 +206,31 @@ class Result {
 
   /* Construct a result of an appropriate type and precision based on the given GPU texture format
    * within the given context. */
-  Result(Context &context, blender::gpu::TextureFormat format);
+  Result(Context &context, gpu::TextureFormat format);
 
   /* Returns true if the given type can only be used with single value results. Consequently, it is
    * always allocated on the CPU and GPU code paths needn't support the type. */
   static bool is_single_value_only_type(ResultType type);
 
   /* Returns the appropriate GPU texture format based on the given result type and precision. A
-   * special case is given to ResultType::Float3, because 3-component textures can't be used as
-   * write targets in shaders, so we need to allocate 4-component textures for them, and ignore the
+   * special case is given to Float3 and Int3, because 3-component textures can't be used as write
+   * targets in shaders, so we need to allocate 4-component textures for them, and ignore the
    * fourth channel during processing. */
-  static blender::gpu::TextureFormat gpu_texture_format(ResultType type,
-                                                        ResultPrecision precision);
+  static gpu::TextureFormat gpu_texture_format(ResultType type, ResultPrecision precision);
 
   /* Returns the GPU data format that corresponds to the give result type. */
   static eGPUDataFormat gpu_data_format(const ResultType type);
 
   /* Returns the GPU texture format that corresponds to the give one, but whose precision is the
    * given precision. */
-  static blender::gpu::TextureFormat gpu_texture_format(blender::gpu::TextureFormat format,
-                                                        ResultPrecision precision);
+  static gpu::TextureFormat gpu_texture_format(gpu::TextureFormat format,
+                                               ResultPrecision precision);
 
   /* Returns the precision of the given GPU texture format. */
-  static ResultPrecision precision(blender::gpu::TextureFormat format);
+  static ResultPrecision precision(gpu::TextureFormat format);
 
   /* Returns the type of the given GPU texture format. */
-  static ResultType type(blender::gpu::TextureFormat format);
+  static ResultType type(gpu::TextureFormat format);
 
   /* Returns the CPP type corresponding to the given result type. */
   static const CPPType &cpp_type(const ResultType type);
@@ -212,17 +239,17 @@ class Result {
   static const char *type_name(const ResultType type);
 
   /* Implicit conversion to the internal GPU texture. */
-  operator blender::gpu::Texture *() const;
+  operator gpu::Texture *() const;
 
   /* Returns the CPP type of the result. */
   const CPPType &get_cpp_type() const;
 
   /* Returns the appropriate texture format based on the result's type and precision. This is
    * identical to the gpu_texture_format static method. This will match the format of the allocated
-   * texture, with one exception. Results of type ResultType::Float3 that wrap external textures
-   * might hold a 3-component texture as opposed to a 4-component one, which would have been
-   * created by uploading data from CPU. */
-  blender::gpu::TextureFormat get_gpu_texture_format() const;
+   * texture, with one exception. Results of type Float3 or Int3 that wrap external textures might
+   * hold a 3-component texture as opposed to a 4-component one, which would have been created by
+   * uploading data from CPU. */
+  gpu::TextureFormat get_gpu_texture_format() const;
 
   /* Identical to gpu_data_format but assumes the result's type. */
   eGPUDataFormat get_gpu_data_format() const;
@@ -277,33 +304,15 @@ class Result {
    * is expect to be allocated and have the same type and precision as this result. */
   void share_data(const Result &source);
 
-  /* Steal the allocated data from the given source result and assign it to this result, then
-   * remove any references to the data from the source result. It is assumed that:
-   *
-   *   - Both results are of the same type.
-   *   - This result is not allocated but the source result is allocated.
-   *
-   * This is most useful in multi-step compositor operations where some steps can be optional, in
-   * that case, intermediate results can be temporary results that can eventually be stolen by the
-   * actual output of the operation. See the uses of the method for a practical example of use. */
-  void steal_data(Result &source);
-
-  /* Similar to the Result variant of steal_data, but steals from a raw data buffer. The buffer is
-   * assumed to be allocated using Blender's guarded allocator. */
-  void steal_data(void *data, int2 size);
-
   /* Set up the result to wrap an external GPU texture that is not allocated nor managed by the
    * result. The is_external_ member will be set to true, the domain will be set to have the same
    * size as the texture, and the texture will be set to the given texture. See the is_external_
    * member for more information. The given texture should have the same format as the result and
    * is assumed to have a lifetime that covers the evaluation of the compositor. */
-  void wrap_external(blender::gpu::Texture *texture);
+  void wrap_external(gpu::Texture *texture);
 
   /* Identical to GPU variant of wrap_external but wraps a CPU buffer instead. */
   void wrap_external(void *data, int2 size);
-
-  /* Identical to GPU variant of wrap_external but wraps whatever the given result has instead. */
-  void wrap_external(const Result &result);
 
   /* Sets the transformation of the domain of the result to the given transformation. */
   void set_transformation(const float3x3 &transformation);
@@ -365,6 +374,7 @@ class Result {
   int reference_count() const;
 
   /* Returns a reference to the domain of the result. See the Domain class. */
+  Domain &domain();
   const Domain &domain() const;
 
   /* Computes the number of channels of the result based on its type. */
@@ -373,10 +383,10 @@ class Result {
   /* Computes the size of the result's data in bytes. */
   int64_t size_in_bytes() const;
 
-  blender::gpu::Texture *gpu_texture() const;
+  gpu::Texture *gpu_texture() const;
 
   GSpan cpu_data() const;
-  GMutableSpan cpu_data();
+  GMutableSpan cpu_data_for_write();
 
   /* It is important to call update_single_value_data after adjusting the single value. See that
    * method for more information. */
@@ -408,7 +418,13 @@ class Result {
    * value result, then that single value is returned for all texel coordinates. */
   template<typename T, bool CouldBeSingleValue = false> T load_pixel(const int2 &texel) const;
 
-  /* Identical to load_pixel but with extended boundary condition. */
+  /* Identical to load_pixel but with the specified boundary extensions. */
+  template<typename T, bool CouldBeSingleValue = false>
+  T load_pixel(const int2 &texel,
+               const Extension &extension_mode_x,
+               const Extension &extension_mode_y) const;
+
+  /* Identical to load_pixel but with extended boundary extension. */
   template<typename T, bool CouldBeSingleValue = false>
   T load_pixel_extended(const int2 &texel) const;
 
@@ -416,7 +432,7 @@ class Result {
   template<typename T, bool CouldBeSingleValue = false>
   T load_pixel_fallback(const int2 &texel, const T &fallback) const;
 
-  /* Identical to load_pixel but with zero boundary condition. */
+  /* Identical to load_pixel but with zero boundary extension. */
   template<typename T, bool CouldBeSingleValue = false> T load_pixel_zero(const int2 &texel) const;
 
   /* Stores the given pixel value in the pixel at the given texel coordinates. Assumes the result
@@ -424,47 +440,26 @@ class Result {
   template<typename T> void store_pixel(const int2 &texel, const T &pixel_value);
 
   /* Samples the result at the given normalized coordinates with the given interpolation and
-   * boundary conditions. The interpolation is ignored for non float types that do not support
-   * interpolation. Assumes the result stores a value of the given template type. If the
-   * CouldBeSingleValue template argument is true and the result is a single value result, then
-   * that single value is returned for all coordinates. */
+   * boundary extension. The interpolation is ignored for non float types that do not support
+   * interpolation. The jacobian represents the change of the given coordinates across space, if
+   * provided, the function will do area sampling for the area spanned by the jacobian, but if not
+   * provided, standard point sampling will be done. Assumes the result stores a value of the given
+   * template type. If the CouldBeSingleValue template argument is true and the result is a single
+   * value result, then that single value is returned for all coordinates. */
   template<typename T, bool CouldBeSingleValue = false>
   T sample(const float2 &coordinates,
            const Interpolation &interpolation,
-           const Extension &extend_mode_x,
-           const Extension &extend_mode_y) const;
+           const Extension &extension_mode_x,
+           const Extension &extension_mode_y,
+           std::optional<float2x2> jacobian = std::nullopt) const;
 
-  /* Samples the result at the given normalized coordinates with nearest interpolation and extended
-   * boundary conditions. Assumes the result stores a value of the given template type. If the
-   * CouldBeSingleValue template argument is true and the result is a single value result, then
-   * that single value is returned for all coordinates. */
-  template<typename T, bool CouldBeSingleValue = false>
-  T sample_nearest_extended(const float2 &coordinates) const;
-
-  /* Samples the result at the given normalized coordinates with bilinear interpolation and zero
-   * boundary conditions. Assumes the result stores a value of the given template type. If the
-   * CouldBeSingleValue template argument is true and the result is a single value result, then
-   * that single value is returned for all coordinates. */
+  /* Shorthand for sample() with bilinear interpolation and zero boundary extension. */
   template<typename T, bool CouldBeSingleValue = false>
   T sample_bilinear_zero(const float2 &coordinates) const;
 
-  /* Samples the result at the given normalized coordinates with bilinear interpolation and
-   * extended boundary conditions. Assumes the result stores a value of the given template type. If
-   * the CouldBeSingleValue template argument is true and the result is a single value result, then
-   * that single value is returned for all coordinates. */
+  /* Shorthand for sample() with bilinear interpolation and extended boundary extension. */
   template<typename T, bool CouldBeSingleValue = false>
   T sample_bilinear_extended(const float2 &coordinates) const;
-
-  /* Samples the result at the given normalized coordinates using EWA filtering of the given
-   * texel-space gradients using the given boundary condition. Note that boundary conditions only
-   * cover areas touched by the ellipses whose center is inside the image, other areas will be
-   * zero. The coordinates are thus expected to have half-pixels offsets. Only supports
-   * ResultType::Color. */
-  template<bool CouldBeSingleValue = false>
-  Color sample_ewa(const float2 &coordinates,
-                   const float2 &x_gradient,
-                   const float2 &y_gradient,
-                   Extension extension_mode) const;
 
  private:
   /* Allocates the image data for the given size.
@@ -477,7 +472,8 @@ class Result {
    * otherwise, a new texture will be allocated. Pooling should not be used for persistent results
    * that might span more than one evaluation, like cached resources. While pooling should be used
    * for most other cases where the result will be allocated then later released in the same
-   * evaluation. */
+   * evaluation. Some types do not support pooling, since they require array textures which are not
+   * supported by the texture pool. */
   void allocate_data(const int2 size,
                      const bool from_pool = true,
                      const std::optional<ResultStorageType> storage_type = std::nullopt);
@@ -491,39 +487,17 @@ class Result {
 /* Inline Methods.
  */
 
+BLI_INLINE_METHOD Domain &Result::domain()
+{
+  return domain_;
+}
+
 BLI_INLINE_METHOD const Domain &Result::domain() const
 {
   return domain_;
 }
 
-BLI_INLINE_METHOD int64_t Result::channels_count() const
-{
-  switch (type_) {
-    case ResultType::Float:
-    case ResultType::Int:
-    case ResultType::Bool:
-    case ResultType::Menu:
-      return 1;
-    case ResultType::Float2:
-    case ResultType::Int2:
-      return 2;
-    case ResultType::Float3:
-      return 3;
-    case ResultType::Color:
-    case ResultType::Float4:
-      return 4;
-    case ResultType::String:
-      /* Single only types do not have channels. */
-      BLI_assert(Result::is_single_value_only_type(type_));
-      BLI_assert_unreachable();
-      break;
-  }
-
-  BLI_assert_unreachable();
-  return 4;
-}
-
-BLI_INLINE_METHOD blender::gpu::Texture *Result::gpu_texture() const
+BLI_INLINE_METHOD gpu::Texture *Result::gpu_texture() const
 {
   BLI_assert(storage_type_ == ResultStorageType::GPU);
   return gpu_texture_;
@@ -535,7 +509,7 @@ BLI_INLINE_METHOD GSpan Result::cpu_data() const
   return cpu_data_;
 }
 
-BLI_INLINE_METHOD GMutableSpan Result::cpu_data()
+BLI_INLINE_METHOD GMutableSpan Result::cpu_data_for_write()
 {
   BLI_assert(storage_type_ == ResultStorageType::CPU);
   return cpu_data_;
@@ -578,6 +552,44 @@ BLI_INLINE_METHOD T Result::load_pixel(const int2 &texel) const
   }
 
   return this->cpu_data().typed<T>()[this->get_pixel_index(texel)];
+}
+
+BLI_INLINE math::InterpWrapMode map_extension_mode_to_wrap_mode(const Extension &mode)
+{
+  switch (mode) {
+    case Extension::Clip:
+      return math::InterpWrapMode::Border;
+    case Extension::Repeat:
+      return math::InterpWrapMode::Repeat;
+    case Extension::Extend:
+      return math::InterpWrapMode::Extend;
+  }
+  BLI_assert_unreachable();
+  return math::InterpWrapMode::Border;
+}
+
+template<typename T, bool CouldBeSingleValue>
+BLI_INLINE_METHOD T Result::load_pixel(const int2 &texel,
+                                       const Extension &extension_mode_x,
+                                       const Extension &extension_mode_y) const
+{
+  if constexpr (CouldBeSingleValue) {
+    if (is_single_value_) {
+      return this->get_single_value<T>();
+    }
+  }
+  else {
+    BLI_assert(!this->is_single_value());
+  }
+
+  const math::InterpWrapMode wrap_mode_x = map_extension_mode_to_wrap_mode(extension_mode_x);
+  const math::InterpWrapMode wrap_mode_y = map_extension_mode_to_wrap_mode(extension_mode_y);
+  const int x = wrap_coord(texel.x, domain_.data_size.x, wrap_mode_x);
+  const int y = wrap_coord(texel.y, domain_.data_size.y, wrap_mode_y);
+  if (x < 0 || y < 0) {
+    return T{};
+  }
+  return this->load_pixel<T>(int2(x, y));
 }
 
 template<typename T, bool CouldBeSingleValue>
@@ -626,41 +638,32 @@ BLI_INLINE_METHOD T Result::load_pixel_zero(const int2 &texel) const
 template<typename T>
 BLI_INLINE_METHOD void Result::store_pixel(const int2 &texel, const T &pixel_value)
 {
-  this->cpu_data().typed<T>()[this->get_pixel_index(texel)] = pixel_value;
+  this->cpu_data_for_write().typed<T>()[this->get_pixel_index(texel)] = pixel_value;
 }
 
-BLI_INLINE int32_t wrap_coordinates(float u, int32_t size, const Extension extension_mode)
+struct EWASamplingData {
+  const Result &result;
+  const Extension extension_mode_x;
+  const Extension extension_mode_y;
+};
+
+/* Given a result and its extension modes as the userdata argument with the type EWASamplingData,
+ * load the pixel at the given texel coordinates with the given extension modes and write the pixel
+ * to the result argument. */
+static inline void sample_ewa_read_callback(void *userdata, int x, int y, float result[4])
 {
-  if (u >= 0) {
-    if (u < float(size)) {
-      return int32_t(u);
-    }
-    switch (extension_mode) {
-      default: /* case ExtensionMode::Extend: */
-        return size - 1;
-      case Extension::Repeat:
-        return int32_t(uint32_t(u) % uint32_t(size));
-      case Extension::Clip:
-        return -1;
-    }
-  }
-  switch (extension_mode) {
-    default: /* case ExtensionMode::Extend: */
-      return 0;
-    case Extension::Repeat: {
-      int32_t x = int32_t(uint32_t(-floorf(u)) % uint32_t(size));
-      return x ? size - x : 0;
-    }
-    case Extension::Clip:
-      return -1;
-  }
+  const EWASamplingData *sampling_data = static_cast<const EWASamplingData *>(userdata);
+  const Color sampled_result = sampling_data->result.load_pixel<Color>(
+      int2(x, y), sampling_data->extension_mode_x, sampling_data->extension_mode_y);
+  copy_v4_v4(result, sampled_result);
 }
 
 template<typename T, bool CouldBeSingleValue>
 BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
                                    const Interpolation &interpolation,
-                                   const Extension &mode_x,
-                                   const Extension &mode_y) const
+                                   const Extension &extension_mode_x,
+                                   const Extension &extension_mode_y,
+                                   std::optional<float2x2> jacobian) const
 {
   if constexpr (CouldBeSingleValue) {
     if (is_single_value_) {
@@ -672,9 +675,6 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
   const float2 texel_coordinates = coordinates * float2(size);
 
   if constexpr (is_same_any_v<T, float, float2, float3, float4, Color>) {
-    const math::InterpWrapMode extension_mode_x = map_extension_mode_to_wrap_mode(mode_x);
-    const math::InterpWrapMode extension_mode_y = map_extension_mode_to_wrap_mode(mode_y);
-
     T pixel_value = T(0);
     const float *buffer = static_cast<const float *>(this->cpu_data().data());
     float *output = nullptr;
@@ -685,194 +685,81 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
       output = pixel_value;
     }
 
+    const math::InterpWrapMode wrap_mode_x = map_extension_mode_to_wrap_mode(extension_mode_x);
+    const math::InterpWrapMode wrap_mode_y = map_extension_mode_to_wrap_mode(extension_mode_y);
     switch (interpolation) {
       case Interpolation::Nearest:
         math::interpolate_nearest_wrapmode_fl(buffer,
                                               output,
                                               size.x,
                                               size.y,
-                                              this->channels_count(),
+                                              sizeof(T) / sizeof(float),
                                               texel_coordinates.x,
                                               texel_coordinates.y,
-                                              extension_mode_x,
-                                              extension_mode_y);
+                                              wrap_mode_x,
+                                              wrap_mode_y);
         break;
       case Interpolation::Bilinear:
         math::interpolate_bilinear_wrapmode_fl(buffer,
                                                output,
                                                size.x,
                                                size.y,
-                                               this->channels_count(),
+                                               sizeof(T) / sizeof(float),
                                                texel_coordinates.x - 0.5f,
                                                texel_coordinates.y - 0.5f,
-                                               extension_mode_x,
-                                               extension_mode_y);
+                                               wrap_mode_x,
+                                               wrap_mode_y);
         break;
       case Interpolation::Bicubic:
-      case Interpolation::Anisotropic:
         math::interpolate_cubic_bspline_wrapmode_fl(buffer,
                                                     output,
                                                     size.x,
                                                     size.y,
-                                                    this->channels_count(),
+                                                    sizeof(T) / sizeof(float),
                                                     texel_coordinates.x - 0.5f,
                                                     texel_coordinates.y - 0.5f,
-                                                    extension_mode_x,
-                                                    extension_mode_y);
+                                                    wrap_mode_x,
+                                                    wrap_mode_y);
+        break;
+      case Interpolation::Anisotropic:
+        BLI_assert(type_ == ResultType::Color);
+        const float2 x_gradient = jacobian.has_value() ? jacobian.value()[0] :
+                                                         float2(1.0f / size.x, 0.0f);
+        const float2 y_gradient = jacobian.has_value() ? jacobian.value()[1] :
+                                                         float2(0.0f, 1.0f / size.y);
+        EWASamplingData sampling_data = EWASamplingData{*this, extension_mode_x, extension_mode_y};
+        BLI_ewa_filter(size.x,
+                       size.y,
+                       false,
+                       true,
+                       coordinates,
+                       x_gradient,
+                       y_gradient,
+                       sample_ewa_read_callback,
+                       &sampling_data,
+                       output);
         break;
     }
 
     return pixel_value;
   }
   else {
-    /* Non float types do not support interpolations and are always sampled in nearest. */
-    const int x = wrap_coordinates(texel_coordinates.x, size.x, mode_x);
-    const int y = wrap_coordinates(texel_coordinates.y, size.y, mode_y);
-    if (x < 0 || y < 0) {
-      return T(0);
-    }
-    return this->load_pixel<T>(int2(x, y));
+    return this->load_pixel<T>(int2(texel_coordinates), extension_mode_x, extension_mode_y);
   }
 }
 
 template<typename T, bool CouldBeSingleValue>
 BLI_INLINE_METHOD T Result::sample_bilinear_zero(const float2 &coordinates) const
 {
-  if constexpr (CouldBeSingleValue) {
-    if (is_single_value_) {
-      return this->get_single_value<T>();
-    }
-  }
-
-  const int2 size = domain_.data_size;
-  const float2 texel_coordinates = (coordinates * float2(size)) - 0.5f;
-
-  const float *buffer = static_cast<const float *>(this->cpu_data().data());
-  T pixel_value = T(0);
-  float *output = nullptr;
-  if constexpr (std::is_same_v<T, float>) {
-    output = &pixel_value;
-  }
-  else {
-    output = pixel_value;
-  }
-  math::interpolate_bilinear_border_fl(buffer,
-                                       output,
-                                       size.x,
-                                       size.y,
-                                       this->channels_count(),
-                                       texel_coordinates.x,
-                                       texel_coordinates.y);
-  return pixel_value;
-}
-
-template<typename T, bool CouldBeSingleValue>
-BLI_INLINE_METHOD T Result::sample_nearest_extended(const float2 &coordinates) const
-{
-  if constexpr (CouldBeSingleValue) {
-    if (is_single_value_) {
-      return this->get_single_value<T>();
-    }
-  }
-
-  const int2 size = domain_.data_size;
-  const float2 texel_coordinates = coordinates * float2(size);
-
-  const float *buffer = static_cast<const float *>(this->cpu_data().data());
-  T pixel_value = T(0);
-  float *output = nullptr;
-  if constexpr (std::is_same_v<T, float>) {
-    output = &pixel_value;
-  }
-  else {
-    output = pixel_value;
-  }
-  math::interpolate_nearest_fl(buffer,
-                               output,
-                               size.x,
-                               size.y,
-                               this->channels_count(),
-                               texel_coordinates.x,
-                               texel_coordinates.y);
-  return pixel_value;
+  return this->sample<T, CouldBeSingleValue>(
+      coordinates, Interpolation::Bilinear, Extension::Clip, Extension::Clip);
 }
 
 template<typename T, bool CouldBeSingleValue>
 BLI_INLINE_METHOD T Result::sample_bilinear_extended(const float2 &coordinates) const
 {
-  if constexpr (CouldBeSingleValue) {
-    if (is_single_value_) {
-      return this->get_single_value<T>();
-    }
-  }
-
-  const int2 size = domain_.data_size;
-  const float2 texel_coordinates = (coordinates * float2(size)) - 0.5f;
-
-  const float *buffer = static_cast<const float *>(this->cpu_data().data());
-  T pixel_value = T(0);
-  float *output = nullptr;
-  if constexpr (std::is_same_v<T, float>) {
-    output = &pixel_value;
-  }
-  else {
-    output = pixel_value;
-  }
-  math::interpolate_bilinear_fl(buffer,
-                                output,
-                                size.x,
-                                size.y,
-                                this->channels_count(),
-                                texel_coordinates.x,
-                                texel_coordinates.y);
-  return pixel_value;
-}
-
-/* Given a Result as the userdata argument, sample it at the given coordinates using extended
- * boundary condition and write the result to the result argument. */
-static inline void sample_ewa_extended_read_callback(void *userdata, int x, int y, float result[4])
-{
-  const Result *input = static_cast<const Result *>(userdata);
-  const Color sampled_result = input->load_pixel_extended<Color>(int2(x, y));
-  copy_v4_v4(result, sampled_result);
-}
-
-/* Same as sample_ewa_extended_read_callback but uses zero boundary conditions. */
-static inline void sample_ewa_zero_read_callback(void *userdata, int x, int y, float result[4])
-{
-  const Result *input = static_cast<const Result *>(userdata);
-  const Color sampled_result = input->load_pixel_zero<Color>(int2(x, y));
-  copy_v4_v4(result, sampled_result);
-}
-
-template<bool CouldBeSingleValue>
-BLI_INLINE_METHOD Color Result::sample_ewa(const float2 &coordinates,
-                                           const float2 &x_gradient,
-                                           const float2 &y_gradient,
-                                           Extension extension_mode) const
-{
-  BLI_assert(type_ == ResultType::Color);
-  BLI_assert(extension_mode == Extension::Clip || extension_mode == Extension::Extend);
-
-  if constexpr (CouldBeSingleValue) {
-    if (is_single_value_) {
-      return this->get_single_value<Color>();
-    }
-  }
-
-  Color pixel_value = Color(0.0f);
-  BLI_ewa_filter(domain_.data_size.x,
-                 domain_.data_size.y,
-                 false,
-                 true,
-                 coordinates,
-                 x_gradient,
-                 y_gradient,
-                 extension_mode == Extension::Clip ? sample_ewa_zero_read_callback :
-                                                     sample_ewa_extended_read_callback,
-                 const_cast<Result *>(this),
-                 pixel_value);
-  return pixel_value;
+  return this->sample<T, CouldBeSingleValue>(
+      coordinates, Interpolation::Bilinear, Extension::Extend, Extension::Extend);
 }
 
 BLI_INLINE_METHOD int64_t Result::get_pixel_index(const int2 &texel) const

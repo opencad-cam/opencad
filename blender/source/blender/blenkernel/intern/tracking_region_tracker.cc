@@ -22,6 +22,8 @@
 #include "libmv-capi.h"
 #include "tracking_private.hh"
 
+namespace blender {
+
 /* **** utility functions for tracking **** */
 
 /** Convert from float and byte RGBA to gray-scale. Supports different coefficients for RGB. */
@@ -75,15 +77,15 @@ static float *track_get_search_floatbuf(ImBuf *ibuf,
   width = searchibuf->x;
   height = searchibuf->y;
 
-  gray_pixels = MEM_calloc_arrayN<float>(width * height, "tracking floatBuf");
+  gray_pixels = MEM_new_array_zeroed<float>(width * height, "tracking floatBuf");
 
-  if (searchibuf->float_buffer.data) {
+  if (searchibuf->float_data()) {
     float_rgba_to_gray(
-        searchibuf->float_buffer.data, gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
+        searchibuf->float_data(), gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
   }
   else {
     uint8_rgba_to_float_gray(
-        searchibuf->byte_buffer.data, gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
+        searchibuf->byte_data(), gray_pixels, width * height, 0.2126f, 0.7152f, 0.0722f);
   }
 
   IMB_freeImBuf(searchibuf);
@@ -260,7 +262,7 @@ static bool configure_and_run_tracker(ImBuf *destination_ibuf,
                               dst_pixel_x,
                               dst_pixel_y);
 
-  MEM_freeN(patch_new);
+  MEM_delete(patch_new);
 
   return tracked;
 }
@@ -368,10 +370,12 @@ void BKE_tracking_refine_marker(MovieClip *clip,
   }
 
   /* Free memory used for refining */
-  MEM_freeN(search_area);
+  MEM_delete(search_area);
   if (mask) {
-    MEM_freeN(mask);
+    MEM_delete(mask);
   }
   IMB_freeImBuf(reference_ibuf);
   IMB_freeImBuf(destination_ibuf);
 }
+
+}  // namespace blender

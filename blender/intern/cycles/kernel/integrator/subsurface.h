@@ -137,7 +137,11 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   /* Pass BSSRDF parameters. */
   INTEGRATOR_STATE_WRITE(state, subsurface, albedo) = bssrdf->albedo;
   INTEGRATOR_STATE_WRITE(state, subsurface, radius) = bssrdf->radius;
-  INTEGRATOR_STATE_WRITE(state, subsurface, anisotropy) = bssrdf->anisotropy;
+  /* Encode the bssrdf type in anisotropy. */
+  INTEGRATOR_STATE_WRITE(state, subsurface, anisotropy) = (bssrdf->type ==
+                                                           CLOSURE_BSSRDF_RANDOM_WALK_ID) ?
+                                                              bssrdf->anisotropy :
+                                                              bssrdf->anisotropy + 2.0f;
 
   /* Path guiding. */
   guiding_record_bssrdf_weight(kg, state, weight, bssrdf->albedo);
@@ -159,14 +163,7 @@ ccl_device void subsurface_shader_data_setup(KernelGlobals kg, ccl_private Shade
   sd->num_closure_left = kernel_data.max_closures;
 
   const Spectrum weight = one_spectrum();
-
-  ccl_private DiffuseBsdf *bsdf = (ccl_private DiffuseBsdf *)bsdf_alloc(
-      sd, sizeof(DiffuseBsdf), weight);
-
-  if (bsdf) {
-    bsdf->N = N;
-    sd->flag |= bsdf_diffuse_setup(bsdf);
-  }
+  bsdf_diffuse_setup(sd, N, weight);
 }
 
 ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState state)
@@ -192,7 +189,7 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
   /* Update volume stack if needed. */
   if (kernel_data.integrator.use_volumes) {
     const int object = ss_isect.hits[0].object;
-    const int object_flag = kernel_data_fetch(object_flag, object);
+    const uint object_flag = kernel_data_fetch(object_flag, object);
 
     if (object_flag & SD_OBJECT_INTERSECTS_VOLUME) {
       const float3 P = INTEGRATOR_STATE(state, ray, P);
@@ -216,7 +213,7 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
 
   const int shader = intersection_get_shader(kg, &ss_isect.hits[0]);
   const int shader_flags = kernel_data_fetch(shaders, shader).flags;
-  const int object_flags = intersection_get_object_flags(kg, &ss_isect.hits[0]);
+  const uint object_flags = intersection_get_object_flags(kg, &ss_isect.hits[0]);
   const bool use_caustics = kernel_data.integrator.use_caustics &&
                             (object_flags & SD_OBJECT_CAUSTICS);
   const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);

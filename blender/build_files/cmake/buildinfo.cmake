@@ -59,6 +59,7 @@ if(EXISTS ${SOURCE_DIR}/.git)
         OUTPUT_STRIP_TRAILING_WHITESPACE
       )
 
+      # Safe to use as a regex since git hashes only contain hex characters.
       if(_git_tag_hashes MATCHES "${_git_head_hash}")
         set(MY_WC_BRANCH "main")
       else()
@@ -82,7 +83,7 @@ if(EXISTS ${SOURCE_DIR}/.git)
       endif()
 
       unset(_git_tag_hashes)
-      unset(_git_head_hashs)
+      unset(_git_head_hash)
     endif()
 
 

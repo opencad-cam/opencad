@@ -2,16 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include <cmath>
 
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
-
-#include "UI_resources.hh"
 
 #include "GPU_shader.hh"
 
@@ -21,21 +15,19 @@
 
 #include "node_composite_util.hh"
 
-/* **************** ID Mask  ******************** */
-
 namespace blender::nodes::node_composite_id_mask_cc {
 
-static void cmp_node_idmask_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("ID value")
+  b.add_input<decl::Float>("ID value"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Int>("Index").default_value(0).min(0);
-  b.add_input<decl::Bool>("Anti-Alias").default_value(false);
+  b.add_input<decl::Int>("Index"_ustr).default_value(0).min(0);
+  b.add_input<decl::Bool>("Anti-Alias"_ustr).default_value(false);
 
-  b.add_output<decl::Float>("Alpha").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Alpha"_ustr).structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;
@@ -126,27 +118,25 @@ class IDMaskOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new IDMaskOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_id_mask_cc
-
-static void register_node_type_cmp_idmask()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_id_mask_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeIDMask", CMP_NODE_ID_MASK);
+  cmp_node_type_base(&ntype, "CompositorNodeIDMask"_ustr, CMP_NODE_ID_MASK);
   ntype.ui_name = "ID Mask";
   ntype.ui_description = "Create a matte from an object or material index pass";
   ntype.enum_name_legacy = "ID_MASK";
   ntype.nclass = NODE_CLASS_CONVERTER;
-  ntype.declare = file_ns::cmp_node_idmask_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_idmask)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_id_mask_cc

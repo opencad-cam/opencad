@@ -26,6 +26,8 @@
 
 #include <array>
 
+namespace blender {
+
 struct IDTypeInfo;
 struct LibraryForeachIDData;
 struct Main;
@@ -114,15 +116,17 @@ enum LibraryForeachIDCallbackFlag {
   /** This ID is used as library override's reference by its owner. */
   IDWALK_CB_OVERRIDE_LIBRARY_REFERENCE = (1 << 16),
 
+  /** This ID is used as library override's hierarchy root by its owner. */
+  IDWALK_CB_OVERRIDE_LIBRARY_HIERARCHY_ROOT = (1 << 17),
+
   /** This ID pointer is not overridable. */
-  IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE = (1 << 17),
+  IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE = (1 << 18),
 
   /** This ID pointer is expected to be overridden by default, in liboverride hierarchy context. */
-  IDWALK_CB_OVERRIDE_LIBRARY_HIERARCHY_DEFAULT = (1 << 18),
+  IDWALK_CB_OVERRIDE_LIBRARY_HIERARCHY_DEFAULT = (1 << 19),
 
   /** This ID pointer is runtime data and it should not affect the ID.deep_hash computation. */
-  IDWALK_CB_HASH_IGNORE = (1 << 19),
-
+  IDWALK_CB_HASH_IGNORE = (1 << 20),
 };
 ENUM_OPERATORS(LibraryForeachIDCallbackFlag);
 
@@ -321,7 +325,7 @@ void BKE_lib_query_idpropertiesForeachIDLink_callback(IDProperty *id_prop, void 
  */
 void BKE_library_foreach_ID_link(Main *bmain,
                                  ID *id,
-                                 blender::FunctionRef<LibraryIDLinkCallback> callback,
+                                 FunctionRef<LibraryIDLinkCallback> callback,
                                  void *user_data,
                                  LibraryForeachIDFlag flag);
 
@@ -358,8 +362,8 @@ void BKE_library_foreach_subdata_id(
     Main *bmain,
     ID *owner_id,
     ID *self_id,
-    blender::FunctionRef<void(LibraryForeachIDData *data)> subdata_foreach_id,
-    blender::FunctionRef<LibraryIDLinkCallback> callback,
+    FunctionRef<void(LibraryForeachIDData *data)> subdata_foreach_id,
+    FunctionRef<LibraryIDLinkCallback> callback,
     void *user_data,
     const LibraryForeachIDFlag flag);
 
@@ -432,7 +436,7 @@ struct LibQueryUnusedIDsData {
    * Allows for more complex handling of which IDs should be deleted, on top of the basic
    * local/linked choices.
    */
-  blender::FunctionRef<bool(ID *id)> filter_fn = nullptr;
+  FunctionRef<bool(ID *id)> filter_fn = nullptr;
 
   /**
    * Amount of detected as unused data-blocks, per type and total as the last value of the array
@@ -516,3 +520,5 @@ void BKE_library_unused_linked_data_set_tag(Main *bmain, bool do_init_tag);
  * since they are only used by other data-blocks that will also be made fully local.
  */
 void BKE_library_indirectly_used_data_tag_clear(Main *bmain);
+
+}  // namespace blender

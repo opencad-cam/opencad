@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2011-2026 Blender Foundation
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -13,7 +13,6 @@
 #  include "session/buffers.h"
 
 #  include "util/log.h"
-#  include "util/path.h"
 
 #  if OIDN_VERSION_MAJOR < 2
 #    define oidnSetFilterBool oidnSetFilter1b
@@ -156,73 +155,9 @@ bool OIDNDenoiserGPU::is_device_supported(const DeviceInfo &device)
 }
 
 OIDNDenoiserGPU::OIDNDenoiserGPU(Device *denoiser_device, const DenoiseParams &params)
-    : DenoiserGPU(denoiser_device, params)
+    : DenoiserGPU(denoiser_device, params), base_(this)
 {
   DCHECK_EQ(params.type, DENOISER_OPENIMAGEDENOISE);
-}
-
-OIDNDenoiserGPU::~OIDNDenoiserGPU()
-{
-  release_all_resources();
-}
-
-bool OIDNDenoiserGPU::denoise_buffer(const BufferParams &buffer_params,
-                                     RenderBuffers *render_buffers,
-                                     const int num_samples,
-                                     bool allow_inplace_modification)
-{
-  return DenoiserGPU::denoise_buffer(
-      buffer_params, render_buffers, num_samples, allow_inplace_modification);
-}
-
-uint OIDNDenoiserGPU::get_device_type_mask() const
-{
-  uint device_mask = 0;
-#  ifdef OIDN_DEVICE_SYCL
-  device_mask |= DEVICE_MASK_ONEAPI;
-#  endif
-#  ifdef OIDN_DEVICE_METAL
-  device_mask |= DEVICE_MASK_METAL;
-#  endif
-#  ifdef OIDN_DEVICE_CUDA
-  device_mask |= DEVICE_MASK_CUDA;
-  device_mask |= DEVICE_MASK_OPTIX;
-#  endif
-#  ifdef OIDN_DEVICE_HIP
-  device_mask |= DEVICE_MASK_HIP;
-#  endif
-  return device_mask;
-}
-
-OIDNFilter OIDNDenoiserGPU::create_filter()
-{
-  const char *error_message = nullptr;
-  OIDNFilter filter = oidnNewFilter(oidn_device_, "RT");
-  if (filter == nullptr) {
-    const OIDNError err = oidnGetDeviceError(oidn_device_, &error_message);
-    if (OIDN_ERROR_NONE != err) {
-      LOG_ERROR << "OIDN error: " << error_message;
-      set_error(error_message);
-    }
-  }
-
-#  if OIDN_VERSION_MAJOR >= 2
-  switch (quality_) {
-    case DENOISER_QUALITY_FAST:
-#    if OIDN_VERSION >= 20300
-      oidnSetFilterInt(filter, "quality", OIDN_QUALITY_FAST);
-      break;
-#    endif
-    case DENOISER_QUALITY_BALANCED:
-      oidnSetFilterInt(filter, "quality", OIDN_QUALITY_BALANCED);
-      break;
-    case DENOISER_QUALITY_HIGH:
-    default:
-      oidnSetFilterInt(filter, "quality", OIDN_QUALITY_HIGH);
-  }
-#  endif
-
-  return filter;
 }
 
 bool OIDNDenoiserGPU::commit_and_execute_filter(OIDNFilter filter, ExecMode mode)
@@ -240,7 +175,7 @@ bool OIDNDenoiserGPU::commit_and_execute_filter(OIDNFilter filter, ExecMode mode
     }
 
     /* If OIDN runs out of memory, reduce mem limit and retry */
-    err = oidnGetDeviceError(oidn_device_, &error_message);
+    err = oidnGetDeviceError(base_.oidn_device_, &error_message);
     if (err != OIDN_ERROR_OUT_OF_MEMORY || max_mem_ < 200) {
       break;
     }
@@ -261,21 +196,25 @@ bool OIDNDenoiserGPU::commit_and_execute_filter(OIDNFilter filter, ExecMode mode
 
 bool OIDNDenoiserGPU::denoise_create_if_needed(DenoiseContext &context)
 {
-  const bool recreate_denoiser = (oidn_device_ == nullptr) || (oidn_filter_ == nullptr) ||
-                                 (use_pass_albedo_ != context.use_pass_albedo) ||
-                                 (use_pass_normal_ != context.use_pass_normal) ||
-                                 (quality_ != params_.quality);
+  const bool use_pass_albedo = (context.denoise_params.passes & DENOISER_PASS_ALBEDO) != 0;
+  const bool use_pass_normal = (context.denoise_params.passes & DENOISER_PASS_NORMAL) != 0;
+
+  const bool recreate_denoiser = (base_.oidn_device_ == nullptr) ||
+                                 (base_.oidn_filter_ == nullptr) ||
+                                 (base_.use_pass_albedo_ != use_pass_albedo) ||
+                                 (base_.use_pass_normal_ != use_pass_normal) ||
+                                 (base_.quality_ != params_.quality);
   if (!recreate_denoiser) {
     return true;
   }
 
   /* Destroy existing handles before creating new ones. */
-  release_all_resources();
+  base_.release_all_resources();
 
   switch (denoiser_device_->info.type) {
 #  if defined(OIDN_DEVICE_SYCL) && defined(WITH_ONEAPI)
     case DEVICE_ONEAPI:
-      oidn_device_ = oidnNewSYCLDevice(
+      base_.oidn_device_ = oidnNewSYCLDevice(
           (const sycl::queue *)reinterpret_cast<OneapiDevice *>(denoiser_device_)->sycl_queue(),
           1);
       break;
@@ -284,7 +223,7 @@ bool OIDNDenoiserGPU::denoise_create_if_needed(DenoiseContext &context)
     case DEVICE_METAL: {
       denoiser_queue_->init_execution();
       const MTLCommandQueue_id queue = (const MTLCommandQueue_id)denoiser_queue_->native_queue();
-      oidn_device_ = oidnNewMetalDevice(&queue, 1);
+      base_.oidn_device_ = oidnNewMetalDevice(&queue, 1);
     } break;
 #  endif
 #  if defined(OIDN_DEVICE_CUDA) && defined(WITH_CUDA)
@@ -292,14 +231,14 @@ bool OIDNDenoiserGPU::denoise_create_if_needed(DenoiseContext &context)
     case DEVICE_OPTIX: {
       /* Directly using the stream from the DeviceQueue returns "invalid resource handle". */
       cudaStream_t stream = nullptr;
-      oidn_device_ = oidnNewCUDADevice(&denoiser_device_->info.num, &stream, 1);
+      base_.oidn_device_ = oidnNewCUDADevice(&denoiser_device_->info.num, &stream, 1);
       break;
     }
 #  endif
 #  if defined(OIDN_DEVICE_HIP) && defined(WITH_HIP)
     case DEVICE_HIP: {
       hipStream_t stream = nullptr;
-      oidn_device_ = oidnNewHIPDevice(&denoiser_device_->info.num, &stream, 1);
+      base_.oidn_device_ = oidnNewHIPDevice(&denoiser_device_->info.num, &stream, 1);
       break;
     }
 #  endif
@@ -307,7 +246,7 @@ bool OIDNDenoiserGPU::denoise_create_if_needed(DenoiseContext &context)
       break;
   }
 
-  if (!oidn_device_) {
+  if (!base_.oidn_device_) {
     set_error("Failed to create OIDN device");
     return false;
   }
@@ -316,65 +255,16 @@ bool OIDNDenoiserGPU::denoise_create_if_needed(DenoiseContext &context)
     denoiser_queue_->init_execution();
   }
 
-  oidnCommitDevice(oidn_device_);
-
-  quality_ = params_.quality;
-
-  oidn_filter_ = create_filter();
-  if (oidn_filter_ == nullptr) {
-    return false;
-  }
-
-  oidnSetFilterBool(oidn_filter_, "hdr", true);
-  oidnSetFilterBool(oidn_filter_, "srgb", false);
-
-  const char *custom_weight_path = getenv("CYCLES_OIDN_CUSTOM_WEIGHTS");
-  if (custom_weight_path) {
-    if (path_read_binary(custom_weight_path, custom_weights)) {
-      oidnSetSharedFilterData(
-          oidn_filter_, "weights", custom_weights.data(), custom_weights.size());
-    }
-    else {
-      LOG_ERROR << "Failed to load custom OpenImageDenoise weights";
-    }
-  }
-
-  if (context.use_pass_albedo) {
-    albedo_filter_ = create_filter();
-    if (albedo_filter_ == nullptr) {
-      return false;
-    }
-  }
-
-  if (context.use_pass_normal) {
-    normal_filter_ = create_filter();
-    if (normal_filter_ == nullptr) {
-      return false;
-    }
-  }
-
-  /* OIDN denoiser handle was created with the requested number of input passes. */
-  use_pass_albedo_ = context.use_pass_albedo;
-  use_pass_normal_ = context.use_pass_normal;
-
-  /* OIDN denoiser has been created, but it needs configuration. */
-  is_configured_ = false;
-  return true;
+  oidnCommitDevice(base_.oidn_device_);
+  base_.load_custom_weights();
+  return base_.create_filters(params_.quality, use_pass_albedo, use_pass_normal);
 }
 
 bool OIDNDenoiserGPU::denoise_configure_if_needed(DenoiseContext &context)
 {
   /* Limit maximum tile size denoiser can be invoked with. */
-  const int2 size = make_int2(context.buffer_params.width, context.buffer_params.height);
-
-  if (is_configured_ && (configured_size_.x == size.x && configured_size_.y == size.y)) {
-    return true;
-  }
-
-  is_configured_ = true;
-  configured_size_ = size;
-
-  return true;
+  return base_.denoise_configure_if_needed(context.buffer_params.width,
+                                           context.buffer_params.height);
 }
 
 bool OIDNDenoiserGPU::denoise_run(const DenoiseContext &context, const DenoisePass &pass)
@@ -382,7 +272,7 @@ bool OIDNDenoiserGPU::denoise_run(const DenoiseContext &context, const DenoisePa
   /* Color pass. */
   const int64_t pass_stride_in_bytes = context.buffer_params.pass_stride * sizeof(float);
 
-  set_filter_pass(oidn_filter_,
+  set_filter_pass(base_.oidn_filter_,
                   "color",
                   context.render_buffers->buffer.device_pointer,
                   OIDN_FORMAT_FLOAT3,
@@ -392,7 +282,7 @@ bool OIDNDenoiserGPU::denoise_run(const DenoiseContext &context, const DenoisePa
                   pass_stride_in_bytes,
                   pass_stride_in_bytes * context.buffer_params.stride);
 
-  set_filter_pass(oidn_filter_,
+  set_filter_pass(base_.oidn_filter_,
                   "output",
                   context.render_buffers->buffer.device_pointer,
                   OIDN_FORMAT_FLOAT3,
@@ -403,13 +293,23 @@ bool OIDNDenoiserGPU::denoise_run(const DenoiseContext &context, const DenoisePa
                   pass_stride_in_bytes * context.buffer_params.stride);
 
   /* Optional albedo and color passes. */
-  if (context.num_input_passes > 1) {
-    const device_ptr d_guiding_buffer = context.guiding_params.device_pointer;
-    const int64_t pixel_stride_in_bytes = context.guiding_params.pass_stride * sizeof(float);
-    const int64_t row_stride_in_bytes = context.guiding_params.stride * pixel_stride_in_bytes;
+  const device_ptr d_guiding_buffer = context.guiding_params.device_pointer;
+  const int64_t pixel_stride_in_bytes = context.guiding_params.pass_stride * sizeof(float);
+  const int64_t row_stride_in_bytes = context.guiding_params.stride * pixel_stride_in_bytes;
 
-    if (context.use_pass_albedo) {
-      set_filter_pass(oidn_filter_,
+  if (base_.use_pass_albedo_) {
+    set_filter_pass(base_.oidn_filter_,
+                    "albedo",
+                    d_guiding_buffer,
+                    OIDN_FORMAT_FLOAT3,
+                    context.buffer_params.width,
+                    context.buffer_params.height,
+                    context.guiding_params.pass_albedo * sizeof(float),
+                    pixel_stride_in_bytes,
+                    row_stride_in_bytes);
+
+    if (params_.prefilter == DENOISER_PREFILTER_ACCURATE) {
+      set_filter_pass(base_.albedo_filter_,
                       "albedo",
                       d_guiding_buffer,
                       OIDN_FORMAT_FLOAT3,
@@ -419,35 +319,35 @@ bool OIDNDenoiserGPU::denoise_run(const DenoiseContext &context, const DenoisePa
                       pixel_stride_in_bytes,
                       row_stride_in_bytes);
 
-      if (params_.prefilter == DENOISER_PREFILTER_ACCURATE) {
-        set_filter_pass(albedo_filter_,
-                        "albedo",
-                        d_guiding_buffer,
-                        OIDN_FORMAT_FLOAT3,
-                        context.buffer_params.width,
-                        context.buffer_params.height,
-                        context.guiding_params.pass_albedo * sizeof(float),
-                        pixel_stride_in_bytes,
-                        row_stride_in_bytes);
+      set_filter_pass(base_.albedo_filter_,
+                      "output",
+                      d_guiding_buffer,
+                      OIDN_FORMAT_FLOAT3,
+                      context.buffer_params.width,
+                      context.buffer_params.height,
+                      context.guiding_params.pass_albedo * sizeof(float),
+                      pixel_stride_in_bytes,
+                      row_stride_in_bytes);
 
-        set_filter_pass(albedo_filter_,
-                        "output",
-                        d_guiding_buffer,
-                        OIDN_FORMAT_FLOAT3,
-                        context.buffer_params.width,
-                        context.buffer_params.height,
-                        context.guiding_params.pass_albedo * sizeof(float),
-                        pixel_stride_in_bytes,
-                        row_stride_in_bytes);
-
-        if (!commit_and_execute_filter(albedo_filter_, ExecMode::ASYNC)) {
-          return false;
-        }
+      if (!commit_and_execute_filter(base_.albedo_filter_, ExecMode::ASYNC)) {
+        return false;
       }
     }
+  }
 
-    if (context.use_pass_normal) {
-      set_filter_pass(oidn_filter_,
+  if (base_.use_pass_normal_) {
+    set_filter_pass(base_.oidn_filter_,
+                    "normal",
+                    d_guiding_buffer,
+                    OIDN_FORMAT_FLOAT3,
+                    context.buffer_params.width,
+                    context.buffer_params.height,
+                    context.guiding_params.pass_normal * sizeof(float),
+                    pixel_stride_in_bytes,
+                    row_stride_in_bytes);
+
+    if (params_.prefilter == DENOISER_PREFILTER_ACCURATE) {
+      set_filter_pass(base_.normal_filter_,
                       "normal",
                       d_guiding_buffer,
                       OIDN_FORMAT_FLOAT3,
@@ -457,36 +357,24 @@ bool OIDNDenoiserGPU::denoise_run(const DenoiseContext &context, const DenoisePa
                       pixel_stride_in_bytes,
                       row_stride_in_bytes);
 
-      if (params_.prefilter == DENOISER_PREFILTER_ACCURATE) {
-        set_filter_pass(normal_filter_,
-                        "normal",
-                        d_guiding_buffer,
-                        OIDN_FORMAT_FLOAT3,
-                        context.buffer_params.width,
-                        context.buffer_params.height,
-                        context.guiding_params.pass_normal * sizeof(float),
-                        pixel_stride_in_bytes,
-                        row_stride_in_bytes);
+      set_filter_pass(base_.normal_filter_,
+                      "output",
+                      d_guiding_buffer,
+                      OIDN_FORMAT_FLOAT3,
+                      context.buffer_params.width,
+                      context.buffer_params.height,
+                      context.guiding_params.pass_normal * sizeof(float),
+                      pixel_stride_in_bytes,
+                      row_stride_in_bytes);
 
-        set_filter_pass(normal_filter_,
-                        "output",
-                        d_guiding_buffer,
-                        OIDN_FORMAT_FLOAT3,
-                        context.buffer_params.width,
-                        context.buffer_params.height,
-                        context.guiding_params.pass_normal * sizeof(float),
-                        pixel_stride_in_bytes,
-                        row_stride_in_bytes);
-
-        if (!commit_and_execute_filter(normal_filter_, ExecMode::ASYNC)) {
-          return false;
-        }
+      if (!commit_and_execute_filter(base_.normal_filter_, ExecMode::ASYNC)) {
+        return false;
       }
     }
   }
 
-  oidnSetFilterInt(oidn_filter_, "cleanAux", params_.prefilter != DENOISER_PREFILTER_FAST);
-  return commit_and_execute_filter(oidn_filter_);
+  oidnSetFilterInt(base_.oidn_filter_, "cleanAux", params_.prefilter != DENOISER_PREFILTER_FAST);
+  return commit_and_execute_filter(base_.oidn_filter_);
 }
 
 void OIDNDenoiserGPU::set_filter_pass(OIDNFilter filter,
@@ -502,7 +390,7 @@ void OIDNDenoiserGPU::set_filter_pass(OIDNFilter filter,
 #  if defined(OIDN_DEVICE_METAL) && defined(WITH_METAL)
   if (denoiser_device_->info.type == DEVICE_METAL) {
     void *mtl_buffer = denoiser_device_->get_native_buffer(ptr);
-    OIDNBuffer oidn_buffer = oidnNewSharedBufferFromMetal(oidn_device_, mtl_buffer);
+    OIDNBuffer oidn_buffer = oidnNewSharedBufferFromMetal(base_.oidn_device_, mtl_buffer);
 
     oidnSetFilterImage(filter,
                        name,
@@ -528,26 +416,6 @@ void OIDNDenoiserGPU::set_filter_pass(OIDNFilter filter,
                              offset_in_bytes,
                              pixel_stride_in_bytes,
                              row_stride_in_bytes);
-  }
-}
-
-void OIDNDenoiserGPU::release_all_resources()
-{
-  if (albedo_filter_) {
-    oidnReleaseFilter(albedo_filter_);
-    albedo_filter_ = nullptr;
-  }
-  if (normal_filter_) {
-    oidnReleaseFilter(normal_filter_);
-    normal_filter_ = nullptr;
-  }
-  if (oidn_filter_) {
-    oidnReleaseFilter(oidn_filter_);
-    oidn_filter_ = nullptr;
-  }
-  if (oidn_device_) {
-    oidnReleaseDevice(oidn_device_);
-    oidn_device_ = nullptr;
   }
 }
 

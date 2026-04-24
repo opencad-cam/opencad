@@ -11,14 +11,16 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
+namespace blender {
+
 /* **************** BUMP ******************** */
 
-namespace blender::nodes::node_shader_bump_cc {
+namespace nodes::node_shader_bump_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
 #define SOCK_STRENGTH_ID 0
-  b.add_input<decl::Float>("Strength")
+  b.add_input<decl::Float>("Strength"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
@@ -28,14 +30,14 @@ static void node_declare(NodeDeclarationBuilder &b)
           "no bump mapping and full bump mapping")
       .translation_context(BLT_I18NCONTEXT_AMOUNT);
 #define SOCK_DISTANCE_ID 1
-  b.add_input<decl::Float>("Distance")
+  b.add_input<decl::Float>("Distance"_ustr)
       .default_value(0.001f)
       .min(0.0f)
       .max(1000.0f)
       .description(
           "Multiplier for the height value to control the overall distance for bump mapping");
 #define SOCK_FILTER_WIDTH_ID 2
-  b.add_input<decl::Float>("Filter Width")
+  b.add_input<decl::Float>("Filter Width"_ustr)
       .default_value(0.1f)
       .min(0.001)
       .max(10.0f)
@@ -45,15 +47,15 @@ static void node_declare(NodeDeclarationBuilder &b)
           "the default value of 0.1 enables subpixel filtering for stable results. For stepwise "
           "textures a larger filter width can be used to get a bevel like effect on the edges");
 #define SOCK_HEIGHT_ID 3
-  b.add_input<decl::Float>("Height")
+  b.add_input<decl::Float>("Height"_ustr)
       .default_value(1.0f)
       .min(-1000.0f)
       .max(1000.0f)
       .hide_value()
       .description("Height above surface. Connect the height map texture to this input");
 #define SOCK_NORMAL_ID 4
-  b.add_input<decl::Vector>("Normal").min(-1.0f).max(1.0f).hide_value();
-  b.add_output<decl::Vector>("Normal");
+  b.add_input<decl::Vector>("Normal"_ustr).min(-1.0f).max(1.0f).hide_value();
+  b.add_output<decl::Vector>("Normal"_ustr);
 }
 
 static void node_shader_buts_bump(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -127,16 +129,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_bump_cc
+}  // namespace nodes::node_shader_bump_cc
 
 /* node type definition */
 void register_node_type_sh_bump()
 {
-  namespace file_ns = blender::nodes::node_shader_bump_cc;
+  namespace file_ns = nodes::node_shader_bump_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeBump", SH_NODE_BUMP);
+  sh_node_type_base(&ntype, "ShaderNodeBump"_ustr, SH_NODE_BUMP);
   ntype.ui_name = "Bump";
   ntype.ui_description =
       "Generate a perturbed normal from a height texture for bump mapping. Typically used for "
@@ -148,5 +150,7 @@ void register_node_type_sh_bump()
   ntype.gpu_fn = file_ns::gpu_shader_bump;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -1,0 +1,42 @@
+# Build outputs
+build/
+opencad/build/
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.suo
+*.user
+*.ncb
+*.sdf
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Large third-party source trees (not submodules)
+Blender/
+ElmerFEM/
+OpenFOAM-11/
+OpenModelica/
+opencascade-7.9.3-vc14-64/
+
+# Logs & temp files
+*.log
+debug_output.txt
+opencad/debug_topo.txt
+opencad/opencad_log.txt
+opencad/temp_cq_output/
+test_cyl.cpp
+
+# Editor / OS
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+*.swp
+*~

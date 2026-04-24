@@ -21,12 +21,14 @@
 #include "vk_graphics_pipeline.hh"
 #include "vk_pipeline_pool.hh"
 
+namespace blender {
+
 #ifdef WITH_BUILDINFO
 extern "C" char build_hash[];
 #endif
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
-namespace blender::gpu {
+namespace gpu {
 
 void VKPipelinePool::init()
 {
@@ -235,10 +237,8 @@ VkPipeline VKPipelineMap<VKGraphicsInfo>::create(const VKGraphicsInfo &graphics_
   if (extensions.graphics_pipeline_library) {
     return create_graphics_pipeline_libs(graphics_info, vk_pipeline_cache, vk_pipeline_base, name);
   }
-  else {
-    return create_graphics_pipeline_no_libs(
-        graphics_info, vk_pipeline_cache, vk_pipeline_base, name);
-  }
+  return create_graphics_pipeline_no_libs(
+      graphics_info, vk_pipeline_cache, vk_pipeline_base, name);
 }
 
 std::string VKGraphicsInfo::pipeline_info_source() const
@@ -688,19 +688,19 @@ void VKPipelinePool::read_from_disk()
   fstream file(cache_file, std::ios::binary | std::ios::in | std::ios::ate);
   std::streamsize data_size = file.tellg();
   file.seekg(0, std::ios::beg);
-  void *buffer = MEM_mallocN(data_size, __func__);
-  file.read(reinterpret_cast<char *>(buffer), data_size);
+  Vector<char> buffer(data_size);
+  file.read(buffer.data(), data_size);
   file.close();
 
   /* Validate the prefix header. */
   VKPipelineCachePrefixHeader prefix;
-  VKPipelineCachePrefixHeader &read_prefix = *static_cast<VKPipelineCachePrefixHeader *>(buffer);
+  VKPipelineCachePrefixHeader &read_prefix = *reinterpret_cast<VKPipelineCachePrefixHeader *>(
+      buffer.data());
   prefix.data_size = read_prefix.data_size;
   if (memcmp(&read_prefix, &prefix, sizeof(VKPipelineCachePrefixHeader)) != 0) {
     /* Headers are different, most likely the cache will not work and potentially crash the driver.
      * [https://medium.com/@zeuxcg/creating-a-robust-pipeline-cache-with-vulkan-961d09416cda]
      */
-    MEM_freeN(buffer);
     CLOG_INFO(&LOG,
               "Pipeline cache on disk [%s] is ignored as it was written by a different driver or "
               "Blender version. Cache will be overwritten when exiting.",
@@ -713,10 +713,9 @@ void VKPipelinePool::read_from_disk()
   VkPipelineCacheCreateInfo create_info = {};
   create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
   create_info.initialDataSize = read_prefix.data_size;
-  create_info.pInitialData = static_cast<uint8_t *>(buffer) + sizeof(VKPipelineCachePrefixHeader);
+  create_info.pInitialData = buffer.data() + sizeof(VKPipelineCachePrefixHeader);
   VkPipelineCache vk_pipeline_cache = VK_NULL_HANDLE;
   vkCreatePipelineCache(device.vk_handle(), &create_info, nullptr, &vk_pipeline_cache);
-  MEM_freeN(buffer);
 
   vkMergePipelineCaches(device.vk_handle(), vk_pipeline_cache_static_, 1, &vk_pipeline_cache);
   vkDestroyPipelineCache(device.vk_handle(), vk_pipeline_cache, nullptr);
@@ -735,8 +734,8 @@ void VKPipelinePool::write_to_disk()
   VKDevice &device = VKBackend::get().device;
   size_t data_size;
   vkGetPipelineCacheData(device.vk_handle(), vk_pipeline_cache_static_, &data_size, nullptr);
-  void *buffer = MEM_mallocN(data_size, __func__);
-  vkGetPipelineCacheData(device.vk_handle(), vk_pipeline_cache_static_, &data_size, buffer);
+  Vector<char> buffer(data_size);
+  vkGetPipelineCacheData(device.vk_handle(), vk_pipeline_cache_static_, &data_size, buffer.data());
 
   std::string cache_file = pipeline_cache_filepath_get();
   CLOG_INFO(&LOG, "Writing static pipeline cache to disk [%s].", cache_file.c_str());
@@ -746,12 +745,11 @@ void VKPipelinePool::write_to_disk()
   VKPipelineCachePrefixHeader header;
   header.data_size = data_size;
   file.write(reinterpret_cast<char *>(&header), sizeof(VKPipelineCachePrefixHeader));
-  file.write(static_cast<char *>(buffer), data_size);
-
-  MEM_freeN(buffer);
+  file.write(buffer.data(), data_size);
 #endif
 }
 
 /** \} */
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

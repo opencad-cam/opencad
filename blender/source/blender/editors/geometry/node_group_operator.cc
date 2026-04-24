@@ -30,7 +30,9 @@
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_geometry_set.hh"
+#include "BKE_global.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_idprop_hash.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
@@ -57,6 +59,8 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
+#include "RNA_enum_types.hh"
+#include "RNA_prototypes.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -69,10 +73,11 @@
 
 #include "BLT_translation.hh"
 
+#include "NOD_dependencies.hh"
 #include "NOD_geometry_nodes_caller_ui.hh"
-#include "NOD_geometry_nodes_dependencies.hh"
 #include "NOD_geometry_nodes_execute.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
+#include "NOD_geometry_nodes_srna.hh"
 
 #include "AS_asset_catalog.hh"
 #include "AS_asset_catalog_path.hh"
@@ -86,9 +91,9 @@
 
 #include <fmt/format.h>
 
-namespace geo_log = blender::nodes::geo_eval_log;
+namespace blender {
 
-namespace blender::ed::geometry {
+namespace ed::geometry {
 
 using asset_system::AssetRepresentation;
 
@@ -96,10 +101,9 @@ struct ErrorsForType {
   int duplicate_count = 0;
   bool is_builtin_operator = false;
   Vector<std::string> idname_validation_errors;
-  BLI_STRUCT_EQUALITY_OPERATORS_3(ErrorsForType,
-                                  duplicate_count,
-                                  is_builtin_operator,
-                                  idname_validation_errors);
+  Vector<std::string> invalid_metadata_errors;
+
+  friend bool operator==(const ErrorsForType &a, const ErrorsForType &b) = default;
 };
 using OperatorRegisterErrors = Map<std::string, ErrorsForType>;
 
@@ -119,6 +123,9 @@ struct OperatorTypeData : public wmOperatorType::TypeData {
   StringRefNull custom_idname;
   std::string description;
   GeometryNodeAssetTraitFlag flag;
+
+  std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> asset_meta_data_properties;
+  Vector<StructRNA *> generated_structs;
 
   struct LocalRef {
     uint32_t session_uid;
@@ -167,6 +174,7 @@ void OperatorTypeData::ensure_hash()
         }
       },
       this->group_ref);
+  bke::idprop::hash(*this->asset_meta_data_properties, hash_state);
   static_assert(sizeof(this->hash) == sizeof(XXH128_hash_t));
   const XXH128_hash_t xxh3_hash = XXH3_128bits_digest(hash_state);
   this->hash[0] = xxh3_hash.low64;
@@ -182,8 +190,8 @@ static std::optional<std::string> operator_idname_get(const StringRefNull custom
   if (!WM_operator_idname_ok_or_report(&reports, custom_idname.c_str())) {
     if (errors) {
       ErrorsForType &errors_for_type = errors->lookup_or_add_default_as(custom_idname);
-      LISTBASE_FOREACH (Report *, report, &reports.list) {
-        errors_for_type.idname_validation_errors.append_as(report->message);
+      for (Report &report : reports.list) {
+        errors_for_type.idname_validation_errors.append_as(report.message);
       }
     }
     return std::nullopt;
@@ -237,6 +245,27 @@ std::optional<OperatorTypeData> OperatorTypeData::from_asset(
   }
   type_data.flag = GeometryNodeAssetTraitFlag(IDP_int_get(traits_flag));
   type_data.group_ref = asset.make_weak_reference();
+
+  const IDProperty *properties = BKE_asset_metadata_idprop_find(&metadata, "properties");
+  if (!properties || properties->type != IDP_GROUP) {
+    return std::nullopt;
+  }
+  const IDProperty *inputs = IDP_GetPropertyFromGroup(properties, "inputs");
+  if (!inputs || inputs->type != IDP_GROUP) {
+    return std::nullopt;
+  }
+  for (const IDProperty &input_prop : inputs->data.group) {
+    if (input_prop.type != IDP_GROUP ||
+        !IDP_GetPropertyTypeFromGroup(&input_prop, "type", IDP_INT))
+    {
+      ErrorsForType &errors_for_type = errors.lookup_or_add_default_as(*custom_idname);
+      errors_for_type.invalid_metadata_errors.append(input_prop.name);
+      return std::nullopt;
+    }
+  }
+  type_data.asset_meta_data_properties =
+      std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter>(IDP_CopyProperty(properties));
+
   type_data.ensure_hash();
   return type_data;
 }
@@ -277,6 +306,11 @@ std::optional<OperatorTypeData> OperatorTypeData::from_group(const bNodeTree &gr
   type_data.description = group.description ? group.description : "";
   type_data.flag = GeometryNodeAssetTraitFlag(group.geometry_node_asset_traits->flag);
   type_data.group_ref = OperatorTypeData::LocalRef{group.id.session_uid};
+
+  type_data.asset_meta_data_properties =
+      std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter>(
+          bke::node_create_asset_meta_data_properties(group));
+
   type_data.ensure_hash();
   return type_data;
 }
@@ -349,17 +383,17 @@ const GeoOperatorLog &node_group_operator_static_eval_log()
 }
 
 /** Find all the visible node editors to log values for. */
-static void find_socket_log_contexts(const Main &bmain,
-                                     Set<ComputeContextHash> &r_socket_log_contexts)
+static void find_verbose_log_contexts(const Main &bmain,
+                                      Set<ComputeContextHash> &r_verbose_log_contexts)
 {
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain.wm.first);
   if (wm == nullptr) {
     return;
   }
-  LISTBASE_FOREACH (const wmWindow *, window, &wm->windows) {
-    const bScreen *screen = BKE_workspace_active_screen_get(window->workspace_hook);
-    LISTBASE_FOREACH (const ScrArea *, area, &screen->areabase) {
-      const SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+  for (const wmWindow &window : wm->windows) {
+    const bScreen *screen = BKE_workspace_active_screen_get(window.workspace_hook);
+    for (const ScrArea &area : screen->areabase) {
+      const SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
       if (sl->spacetype == SPACE_NODE) {
         const SpaceNode &snode = *reinterpret_cast<const SpaceNode *>(sl);
         if (snode.edittree == nullptr) {
@@ -370,10 +404,10 @@ static void find_socket_log_contexts(const Main &bmain,
         }
         bke::ComputeContextCache compute_context_cache;
         const Map<const bke::bNodeTreeZone *, ComputeContextHash> hash_by_zone =
-            geo_log::GeoNodesLog::get_context_hash_by_zone_for_node_editor(snode,
-                                                                           compute_context_cache);
+            nodes::eval_log::NodesEvalLog::get_context_hash_by_zone_for_node_editor(
+                snode, compute_context_cache);
         for (const ComputeContextHash &hash : hash_by_zone.values()) {
-          r_socket_log_contexts.add(hash);
+          r_verbose_log_contexts.add(hash);
         }
       }
     }
@@ -434,13 +468,13 @@ static std::string shape_key_attribute_name(const KeyBlock &kb)
 static void add_shape_keys_as_attributes(Mesh &mesh, const Key &key)
 {
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
-  LISTBASE_FOREACH (const KeyBlock *, kb, &key.block) {
-    if (kb == key.refkey) {
+  for (const KeyBlock &kb : key.block) {
+    if (&kb == key.refkey) {
       /* The basis key will just receive values from the mesh positions. */
       continue;
     }
-    const Span<float3> key_data(static_cast<float3 *>(kb->data), kb->totelem);
-    attributes.add<float3>(shape_key_attribute_name(*kb),
+    const Span<float3> key_data(static_cast<float3 *>(kb.data), kb.totelem);
+    attributes.add<float3>(shape_key_attribute_name(kb),
                            bke::AttrDomain::Point,
                            bke::AttributeInitVArray(VArray<float3>::from_span(key_data)));
   }
@@ -450,21 +484,21 @@ static void add_shape_keys_as_attributes(Mesh &mesh, const Key &key)
 static void store_attributes_to_shape_keys(const Mesh &mesh, Key &key)
 {
   const bke::AttributeAccessor attributes = mesh.attributes();
-  LISTBASE_FOREACH (KeyBlock *, kb, &key.block) {
-    const VArray attr = *attributes.lookup<float3>(shape_key_attribute_name(*kb),
+  for (KeyBlock &kb : key.block) {
+    const VArray attr = *attributes.lookup<float3>(shape_key_attribute_name(kb),
                                                    bke::AttrDomain::Point);
     if (!attr) {
       continue;
     }
-    MEM_freeN(kb->data);
-    kb->data = MEM_malloc_arrayN(attr.size(), sizeof(float3), __func__);
-    kb->totelem = attr.size();
-    attr.materialize({static_cast<float3 *>(kb->data), attr.size()});
+    MEM_delete(static_cast<float3 *>(kb.data));
+    kb.data = MEM_new_array_uninitialized<float3>(attr.size(), __func__);
+    kb.totelem = attr.size();
+    attr.materialize({static_cast<float3 *>(kb.data), attr.size()});
   }
   if (KeyBlock *kb = key.refkey) {
     const Span<float3> positions = mesh.vert_positions();
-    MEM_freeN(kb->data);
-    kb->data = MEM_malloc_arrayN(positions.size(), sizeof(float3), __func__);
+    MEM_delete(static_cast<float3 *>(kb->data));
+    kb->data = MEM_new_array_uninitialized<float3>(positions.size(), __func__);
     kb->totelem = positions.size();
     array_utils::copy(positions, MutableSpan(static_cast<float3 *>(kb->data), positions.size()));
   }
@@ -473,8 +507,8 @@ static void store_attributes_to_shape_keys(const Mesh &mesh, Key &key)
 static void remove_shape_key_attributes(Mesh &mesh, const Key &key)
 {
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
-  LISTBASE_FOREACH (KeyBlock *, kb, &key.block) {
-    attributes.remove(shape_key_attribute_name(*kb));
+  for (KeyBlock &kb : key.block) {
+    attributes.remove(shape_key_attribute_name(kb));
   }
 }
 
@@ -491,16 +525,15 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
 {
   switch (object.type) {
     case OB_CURVES: {
-      Curves *curves = BKE_curves_copy_for_eval(static_cast<const Curves *>(object.data));
+      Curves *curves = BKE_curves_copy_for_eval(id_cast<const Curves *>(object.data));
       return bke::GeometrySet::from_curves(curves);
     }
     case OB_POINTCLOUD: {
-      PointCloud *points = BKE_pointcloud_copy_for_eval(
-          static_cast<const PointCloud *>(object.data));
+      PointCloud *points = BKE_pointcloud_copy_for_eval(id_cast<const PointCloud *>(object.data));
       return bke::GeometrySet::from_pointcloud(points);
     }
     case OB_MESH: {
-      Mesh *mesh = static_cast<Mesh *>(object.data);
+      Mesh *mesh = id_cast<Mesh *>(object.data);
 
       if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
         operator_data.active_point_index = BM_mesh_active_vert_index_get(em->bm);
@@ -530,7 +563,7 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
       return bke::GeometrySet::from_mesh(mesh_copy);
     }
     case OB_GREASE_PENCIL: {
-      const GreasePencil *grease_pencil = static_cast<const GreasePencil *>(object.data);
+      const GreasePencil *grease_pencil = id_cast<const GreasePencil *>(object.data);
       if (const bke::greasepencil::Layer *active_layer = grease_pencil->get_active_layer()) {
         operator_data.active_layer_index = *grease_pencil->get_layer_index(*active_layer);
       }
@@ -555,7 +588,7 @@ static void store_result_geometry(const bContext &C,
   geometry.ensure_owns_direct_data();
   switch (object.type) {
     case OB_CURVES: {
-      Curves &curves = *static_cast<Curves *>(object.data);
+      Curves &curves = *id_cast<Curves *>(object.data);
       Curves *new_curves = geometry.get_curves_for_write();
       if (!new_curves) {
         curves.geometry.wrap() = {};
@@ -571,7 +604,7 @@ static void store_result_geometry(const bContext &C,
       break;
     }
     case OB_POINTCLOUD: {
-      PointCloud &points = *static_cast<PointCloud *>(object.data);
+      PointCloud &points = *id_cast<PointCloud *>(object.data);
       PointCloud *new_points =
           geometry.get_component_for_write<bke::PointCloudComponent>().release();
       if (!new_points) {
@@ -589,7 +622,7 @@ static void store_result_geometry(const bContext &C,
       break;
     }
     case OB_MESH: {
-      Mesh &mesh = *static_cast<Mesh *>(object.data);
+      Mesh &mesh = *id_cast<Mesh *>(object.data);
 
       Mesh *new_mesh = geometry.get_component_for_write<bke::MeshComponent>().release();
       if (new_mesh) {
@@ -638,7 +671,7 @@ static void store_result_geometry(const bContext &C,
     case OB_GREASE_PENCIL: {
       const int eval_frame = int(DEG_get_ctime(&depsgraph));
 
-      GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+      GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
       Vector<int> editable_layer_indices;
       for (const int layer_i : grease_pencil.layers().index_range()) {
         const bke::greasepencil::Layer &layer = grease_pencil.layer(layer_i);
@@ -699,8 +732,8 @@ static void store_result_geometry(const bContext &C,
 static void gather_node_group_ids(const bNodeTree &node_tree, Set<ID *> &ids)
 {
   const int orig_size = ids.size();
-  BLI_assert(node_tree.runtime->geometry_nodes_eval_dependencies);
-  for (ID *id : node_tree.runtime->geometry_nodes_eval_dependencies->ids.values()) {
+  BLI_assert(node_tree.runtime->eval_dependencies);
+  for (ID *id : node_tree.runtime->eval_dependencies->ids.values()) {
     ids.add(id);
   }
   if (ids.size() != orig_size) {
@@ -710,23 +743,13 @@ static void gather_node_group_ids(const bNodeTree &node_tree, Set<ID *> &ids)
   }
 }
 
-static const bNodeTreeInterfaceSocket *find_group_input_by_identifier(const bNodeTree &node_group,
-                                                                      const StringRef identifier)
-{
-  for (const bNodeTreeInterfaceSocket *input : node_group.interface_inputs()) {
-    if (input->identifier == identifier) {
-      return input;
-    }
-  }
-  return nullptr;
-}
-
 static std::optional<ID_Type> socket_type_to_id_type(const eNodeSocketDatatype socket_type)
 {
   switch (socket_type) {
     case SOCK_CUSTOM:
     case SOCK_FLOAT:
     case SOCK_VECTOR:
+    case SOCK_INT_VECTOR:
     case SOCK_RGBA:
     case SOCK_SHADER:
     case SOCK_BOOLEAN:
@@ -768,30 +791,26 @@ static std::optional<ID_Type> socket_type_to_id_type(const eNodeSocketDatatype s
  * input properties will be copied to contain evaluated data-blocks from the active and/or an extra
  * depsgraph.
  */
-static Map<StringRef, ID *> gather_input_ids(const Main &bmain,
-                                             const bNodeTree &node_group,
-                                             const IDProperty &properties)
+static Map<std::string, ID *> gather_input_ids(const Main &bmain,
+                                               const bNodeTree &node_group,
+                                               const PointerRNA &properties_ptr)
 {
-  Map<StringRef, ID *> ids;
-  IDP_foreach_property(
-      &const_cast<IDProperty &>(properties), IDP_TYPE_FILTER_STRING, [&](IDProperty *prop) {
-        const bNodeTreeInterfaceSocket *input = find_group_input_by_identifier(node_group,
-                                                                               prop->name);
-        if (!input) {
-          return;
-        }
-        const std::optional<ID_Type> id_type = socket_type_to_id_type(
-            input->socket_typeinfo()->type);
-        if (!id_type) {
-          return;
-        }
-        const char *id_name = IDP_string_get(prop);
-        ID *id = BKE_libblock_find_name(&const_cast<Main &>(bmain), *id_type, id_name);
-        if (!id) {
-          return;
-        }
-        ids.add(prop->name, id);
-      });
+  PointerRNA inputs_ptr = RNA_pointer_get(const_cast<PointerRNA *>(&properties_ptr), "inputs");
+
+  Map<std::string, ID *> ids;
+  for (const bNodeTreeInterfaceSocket *input : node_group.interface_inputs()) {
+    const std::optional<ID_Type> id_type = socket_type_to_id_type(input->socket_typeinfo()->type);
+    if (!id_type) {
+      continue;
+    }
+    PointerRNA input_props_ptr = RNA_pointer_get(&inputs_ptr, input->identifier);
+    std::string name = RNA_string_get(&input_props_ptr, "value");
+    ID *id = BKE_libblock_find_name(&const_cast<Main &>(bmain), *id_type, name.c_str());
+    if (!id) {
+      continue;
+    }
+    ids.add(std::move(name), id);
+  }
   return ids;
 }
 
@@ -804,33 +823,6 @@ static Depsgraph *build_extra_depsgraph(const Depsgraph &depsgraph_active, const
   DEG_graph_build_from_ids(depsgraph, Vector<ID *>(ids.begin(), ids.end()));
   DEG_evaluate_on_refresh(depsgraph);
   return depsgraph;
-}
-
-static IDProperty *replace_strings_with_id_pointers(const IDProperty &op_properties,
-                                                    const Map<StringRef, ID *> &input_ids)
-{
-  IDProperty *properties = bke::idprop::create_group("Exec Properties").release();
-  IDP_foreach_property(&const_cast<IDProperty &>(op_properties), 0, [&](IDProperty *prop) {
-    if (ID *id = input_ids.lookup_default(prop->name, nullptr)) {
-      IDP_AddToGroup(properties, bke::idprop::create(prop->name, id).release());
-    }
-    else {
-      IDP_AddToGroup(properties, IDP_CopyProperty(prop));
-    }
-  });
-  return properties;
-}
-
-static void replace_inputs_evaluated_data_blocks(
-    IDProperty &properties, const nodes::GeoNodesOperatorDepsgraphs &depsgraphs)
-{
-  IDP_foreach_property(&properties, IDP_TYPE_FILTER_ID, [&](IDProperty *property) {
-    if (ID *id = IDP_ID_get(property)) {
-      if (ID_TYPE_USE_COPY_ON_EVAL(GS(id->name))) {
-        property->data.pointer = const_cast<ID *>(depsgraphs.get_evaluated_id(*id));
-      }
-    }
-  });
 }
 
 static bool object_has_editable_data(const Main &bmain, const Object &object)
@@ -871,12 +863,13 @@ static Vector<Object *> gather_supported_objects(const bContext &C,
     CTX_DATA_END;
   }
   else {
+    const Main *bmain = CTX_data_main(&C);
     Scene *scene = CTX_data_scene(&C);
     ViewLayer *view_layer = CTX_data_view_layer(&C);
     View3D *v3d = CTX_wm_view3d(&C);
     Object *active_object = CTX_data_active_object(&C);
     if (v3d && active_object) {
-      FOREACH_OBJECT_IN_MODE_BEGIN (scene, view_layer, v3d, active_object->type, mode, ob) {
+      FOREACH_OBJECT_IN_MODE_BEGIN (bmain, scene, view_layer, v3d, active_object->type, mode, ob) {
         handle_object(ob);
       }
       FOREACH_OBJECT_IN_MODE_END;
@@ -905,8 +898,7 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   Depsgraph *depsgraph_active = CTX_data_ensure_evaluated_depsgraph(C);
   Set<ID *> extra_ids;
   gather_node_group_ids(*node_tree_orig, extra_ids);
-  const Map<StringRef, ID *> input_ids = gather_input_ids(
-      *bmain, *node_tree_orig, *op->properties);
+  const Map<std::string, ID *> input_ids = gather_input_ids(*bmain, *node_tree_orig, *op->ptr);
   for (ID *id : input_ids.values()) {
     /* Skip IDs that are already fully evaluated in the active depsgraph. */
     if (!DEG_id_is_fully_evaluated(depsgraph_active, id)) {
@@ -918,11 +910,6 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
       depsgraph_active,
       extra_ids.is_empty() ? nullptr : build_extra_depsgraph(*depsgraph_active, extra_ids),
   };
-
-  IDProperty *properties = replace_strings_with_id_pointers(*op->properties, input_ids);
-  BLI_SCOPED_DEFER([&]() { IDP_FreeProperty_ex(properties, false); });
-
-  replace_inputs_evaluated_data_blocks(*properties, depsgraphs);
 
   const bNodeTree *node_tree = nullptr;
   if (depsgraphs.extra) {
@@ -951,11 +938,11 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   }
 
   bke::OperatorComputeContext compute_context;
-  Set<ComputeContextHash> socket_log_contexts;
+  Set<ComputeContextHash> verbose_log_contexts;
   GeoOperatorLog &eval_log = get_static_eval_log();
-  eval_log.log = std::make_unique<geo_log::GeoNodesLog>();
+  eval_log.log = std::make_unique<nodes::eval_log::NodesEvalLog>();
   eval_log.node_group_name = node_tree->id.name + 2;
-  find_socket_log_contexts(*bmain, socket_log_contexts);
+  find_verbose_log_contexts(*bmain, verbose_log_contexts);
 
   /* May be null if operator called from outside 3D view context. */
   const RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -967,6 +954,7 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
     operator_eval_data.depsgraphs = &depsgraphs;
     operator_eval_data.self_object_orig = object;
     operator_eval_data.scene_orig = scene;
+    operator_eval_data.input_ids = &input_ids;
     RNA_int_get_array(op->ptr, "mouse_position", operator_eval_data.mouse_position);
     RNA_int_get_array(op->ptr, "region_size", operator_eval_data.region_size);
     RNA_float_get_array(op->ptr, "cursor_position", operator_eval_data.cursor_position);
@@ -983,23 +971,23 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
     call_data.eval_log = eval_log.log.get();
     if (object == active_object) {
       /* Only log values from the active object. */
-      call_data.socket_log_contexts = &socket_log_contexts;
+      call_data.verbose_log_contexts = &verbose_log_contexts;
     }
 
     bke::GeometrySet geometry_orig = get_original_geometry_eval_copy(
         *depsgraph_active, *object, operator_eval_data, orig_mesh_states);
 
     bke::GeometrySet new_geometry = nodes::execute_geometry_nodes_on_geometry(
-        *node_tree, properties, compute_context, call_data, std::move(geometry_orig));
+        *node_tree, *op->ptr, compute_context, call_data, std::move(geometry_orig));
 
     store_result_geometry(
         *C, *op, *depsgraph_active, *bmain, *scene, *object, rv3d, std::move(new_geometry));
     WM_event_add_notifier(C, NC_GEOM | ND_DATA, object->data);
   }
 
-  geo_log::GeoTreeLog &tree_log = eval_log.log->get_tree_log(compute_context.hash());
+  nodes::eval_log::NodeTreeLog &tree_log = eval_log.log->get_tree_log(compute_context.hash());
   tree_log.ensure_node_warnings(*bmain);
-  for (const geo_log::NodeWarning &warning : tree_log.all_warnings) {
+  for (const nodes::eval_log::NodeWarning &warning : tree_log.all_warnings) {
     if (warning.type == nodes::NodeWarningType::Info) {
       BKE_report(op->reports, RPT_INFO, warning.message.c_str());
     }
@@ -1063,9 +1051,6 @@ static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const
 
   store_input_node_values_rna_props(*C, *op, *event);
 
-  nodes::update_input_properties_from_node_tree(*node_tree, op->properties, *op->properties, true);
-  nodes::update_output_properties_from_node_tree(*node_tree, op->properties, *op->properties);
-
   return run_node_group_exec(C, op);
 }
 
@@ -1085,9 +1070,9 @@ static void run_node_group_ui(bContext *C, wmOperator *op)
   bke::OperatorComputeContext compute_context;
   GeoOperatorLog &eval_log = get_static_eval_log();
 
-  geo_log::GeoTreeLog *tree_log = eval_log.log ?
-                                      &eval_log.log->get_tree_log(compute_context.hash()) :
-                                      nullptr;
+  nodes::eval_log::NodeTreeLog *tree_log = eval_log.log ? &eval_log.log->get_tree_log(
+                                                              compute_context.hash()) :
+                                                          nullptr;
   nodes::draw_geometry_nodes_operator_redo_ui(
       *C, *op, const_cast<bNodeTree &>(*node_tree), tree_log);
 }
@@ -1120,6 +1105,280 @@ static bool run_node_group_poll(bContext *C, wmOperatorType *ot)
   return true;
 }
 
+static const EnumPropertyItem *enum_input_items_fn(bContext * /*C*/,
+                                                   PointerRNA *ptr,
+                                                   PropertyRNA *prop,
+                                                   bool *r_free)
+{
+  const wmOperator *op = ptr->data_as<wmOperator>();
+  const OperatorTypeData &type_data = *static_cast<const OperatorTypeData *>(op->customdata);
+  const IDProperty &inputs_props = *IDP_GetPropertyFromGroup(
+      type_data.asset_meta_data_properties.get(), "inputs");
+  const IDProperty &input_idprop = *IDP_GetPropertyFromGroup(&inputs_props,
+                                                             RNA_property_identifier(prop));
+
+  const IDProperty *items_idprop = IDP_GetPropertyFromGroup(&input_idprop, "items");
+  if (!items_idprop || items_idprop->type != IDP_GROUP) {
+    return rna_enum_dummy_NULL_items;
+  }
+
+  int totitem = 0;
+  EnumPropertyItem *items = nullptr;
+  for (IDProperty &item_idprop : items_idprop->data.group) {
+    EnumPropertyItem item;
+    item.identifier = item_idprop.name;
+    item.name = IDP_group_lookup_string(item_idprop, "name").value_or("").c_str();
+    item.description = IDP_group_lookup_string(item_idprop, "description").value_or("").c_str();
+    item.value = std::stoi(item_idprop.name);
+    RNA_enum_item_add(&items, &totitem, &item);
+  }
+
+  *r_free = true;
+  return items;
+}
+
+static void make_common_type_prop(StructRNA &srna,
+                                  const EnumPropertyItem *items,
+                                  const nodes::GeometryNodesInputType default_type)
+{
+  PropertyRNA *prop = RNA_def_enum(&srna, "type", items, int(default_type), "Input Type", "");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+}
+
+static void make_common_attribute_name_prop(StructRNA &srna,
+                                            const StringRefNull name,
+                                            const StringRefNull description,
+                                            const IDProperty &input_idprop)
+{
+  const std::optional<StringRefNull> default_name = IDP_group_lookup_string(
+      input_idprop, "default_attribute_name");
+  RNA_def_string(&srna,
+                 "attribute_name",
+                 default_name.has_value() ? default_name->c_str() : nullptr,
+                 0,
+                 name.c_str(),
+                 description.c_str());
+}
+
+static void make_common_value_and_attribute_props(StructRNA &srna,
+                                                  const StringRefNull name,
+                                                  const StringRefNull description,
+                                                  const IDProperty &input_idprop)
+{
+  make_common_type_prop(srna,
+                        nodes::geometry_nodes_input_type_items_value_or_attribute,
+                        nodes::GeometryNodesInputType::Value);
+  make_common_attribute_name_prop(srna, name, description, input_idprop);
+}
+
+static void make_common_value_props(StructRNA &srna)
+{
+  make_common_type_prop(
+      srna, nodes::geometry_nodes_input_type_items_value, nodes::GeometryNodesInputType::Value);
+}
+
+static StructRNA *get_input_socket_struct_rna(IDProperty &input_idprop,
+                                              Vector<StructRNA *> &r_generated)
+{
+
+  const StringRefNull identifier = input_idprop.name;
+  const std::optional<int> type = IDP_group_lookup_int(input_idprop, "type");
+  if (!type) {
+    return nullptr;
+  }
+  StructRNA *srna = RNA_def_struct_ptr(
+      &RNA_blender_rna_get(), identifier.c_str(), RNA_PropertyGroup);
+  BLI_assert(!RNA_struct_in_public_namespace(srna));
+  r_generated.append(srna);
+  // RNA_def_struct_path_func_runtime(srna, rna_NodesModifierPropertyInput_path);
+  const StringRefNull name = IDP_group_lookup_string(input_idprop, "name").value_or(identifier);
+  const StringRefNull description =
+      IDP_group_lookup_string(input_idprop, "description").value_or("");
+  RNA_def_struct_ui_text(srna, name.c_str(), description.c_str());
+
+  switch (eNodeSocketDatatype(*type)) {
+    case SOCK_FLOAT: {
+      PropertyRNA *prop = RNA_def_float(
+          srna,
+          "value",
+          IDP_group_lookup_float(input_idprop, "default_value").value_or(0.0f),
+          -FLT_MAX,
+          FLT_MAX,
+          name.c_str(),
+          description.c_str(),
+          IDP_group_lookup_float(input_idprop, "min").value_or(-FLT_MAX),
+          IDP_group_lookup_float(input_idprop, "max").value_or(FLT_MAX));
+      RNA_def_property_subtype(
+          prop,
+          PropertySubType(IDP_group_lookup_int(input_idprop, "subtype").value_or(PROP_NONE)));
+      make_common_value_and_attribute_props(*srna, name, description, input_idprop);
+      break;
+    }
+    case SOCK_VECTOR: {
+      const int dimensions = IDP_group_lookup_int(input_idprop, "dimensions").value_or(3);
+      std::optional<Span<float>> defaults = IDP_group_lookup_float_array(
+          input_idprop, "default_value", dimensions);
+      PropertyRNA *prop = RNA_def_float_array(
+          srna,
+          "value",
+          dimensions,
+          defaults ? defaults->data() : nullptr,
+          -FLT_MAX,
+          FLT_MAX,
+          name.c_str(),
+          description.c_str(),
+          IDP_group_lookup_float(input_idprop, "min").value_or(-FLT_MAX),
+          IDP_group_lookup_float(input_idprop, "max").value_or(FLT_MAX));
+      RNA_def_property_subtype(
+          prop,
+          PropertySubType(IDP_group_lookup_int(input_idprop, "subtype").value_or(PROP_NONE)));
+      make_common_value_and_attribute_props(*srna, name, description, input_idprop);
+      break;
+    }
+    case SOCK_RGBA: {
+      std::optional<Span<float>> defaults = IDP_group_lookup_float_array(
+          input_idprop, "default_value", 4);
+      PropertyRNA *prop = RNA_def_float_color(srna,
+                                              "value",
+                                              4,
+                                              defaults ? defaults->data() : nullptr,
+                                              -FLT_MAX,
+                                              FLT_MAX,
+                                              name.c_str(),
+                                              description.c_str(),
+                                              0.0f,
+                                              1.0f);
+      RNA_def_property_subtype(prop, PROP_COLOR);
+      make_common_value_and_attribute_props(*srna, name, description, input_idprop);
+      break;
+    }
+    case SOCK_BOOLEAN: {
+      RNA_def_boolean(srna,
+                      "value",
+                      IDP_group_lookup_bool(input_idprop, "default_value").value_or(false),
+                      name.c_str(),
+                      description.c_str());
+      make_common_type_prop(*srna,
+                            nodes::geometry_nodes_input_type_items_value_or_attribute_or_layer,
+                            nodes::GeometryNodesInputType::Value);
+      make_common_attribute_name_prop(*srna, name, description, input_idprop);
+      break;
+    }
+    case SOCK_INT: {
+      PropertyRNA *prop = RNA_def_int(
+          srna,
+          "value",
+          IDP_group_lookup_int(input_idprop, "default_value").value_or(0),
+          INT_MIN,
+          INT_MAX,
+          name.c_str(),
+          description.c_str(),
+          IDP_group_lookup_int(input_idprop, "min").value_or(INT_MIN),
+          IDP_group_lookup_int(input_idprop, "max").value_or(INT_MIN));
+      RNA_def_property_subtype(
+          prop,
+          PropertySubType(IDP_group_lookup_int(input_idprop, "subtype").value_or(PROP_NONE)));
+      make_common_value_and_attribute_props(*srna, name, description, input_idprop);
+      break;
+    }
+    case SOCK_STRING: {
+      PropertyRNA *prop = RNA_def_string(
+          srna,
+          "value",
+          IDP_group_lookup_string(input_idprop, "default_value").value_or("").c_str(),
+          0,
+          name.c_str(),
+          description.c_str());
+      RNA_def_property_subtype(
+          prop,
+          PropertySubType(IDP_group_lookup_int(input_idprop, "subtype").value_or(PROP_NONE)));
+      make_common_value_props(*srna);
+      break;
+    }
+    case SOCK_IMAGE:
+    case SOCK_COLLECTION:
+    case SOCK_MATERIAL:
+    case SOCK_FONT:
+    case SOCK_OBJECT: {
+      RNA_def_string(srna, "value", nullptr, 0, name.c_str(), description.c_str());
+      make_common_value_props(*srna);
+      break;
+    }
+    case SOCK_ROTATION: {
+      std::optional<Span<float>> defaults = IDP_group_lookup_float_array(
+          input_idprop, "default_value", 3);
+      RNA_def_float_rotation(srna,
+                             "value",
+                             3,
+                             defaults ? defaults->data() : nullptr,
+                             -FLT_MAX,
+                             FLT_MAX,
+                             name.c_str(),
+                             description.c_str(),
+                             -FLT_MAX,
+                             FLT_MAX);
+      make_common_value_and_attribute_props(*srna, name, description, input_idprop);
+      break;
+    }
+    case SOCK_MENU: {
+      PropertyRNA *prop = RNA_def_enum(
+          srna, "value", rna_enum_dummy_NULL_items, 0, name.c_str(), description.c_str());
+      RNA_def_enum_funcs(prop, enum_input_items_fn);
+      make_common_value_props(*srna);
+      break;
+    }
+    default:
+      break;
+  }
+
+  return srna;
+}
+
+static StructRNA *create_inputs_srna(const IDProperty &properties,
+                                     Vector<StructRNA *> &r_generated)
+{
+  StructRNA *srna = RNA_def_struct_ptr(
+      &RNA_blender_rna_get(), "GeometryNodesInterfaceInputs", RNA_PropertyGroup);
+  BLI_assert(!RNA_struct_in_public_namespace(srna));
+  r_generated.append(srna);
+
+  const IDProperty &inputs_props = *IDP_GetPropertyFromGroup(&properties, "inputs");
+
+  for (IDProperty &input_idprop : inputs_props.data.group) {
+    if (input_idprop.type != IDP_GROUP) {
+      continue;
+    }
+    StructRNA *input_srna = get_input_socket_struct_rna(input_idprop, r_generated);
+    if (!input_srna) {
+      continue;
+    }
+    BLI_assert(!RNA_struct_in_public_namespace(srna));
+    RNA_def_pointer_runtime(srna,
+                            input_idprop.name,
+                            input_srna,
+                            RNA_struct_ui_name(input_srna),
+                            RNA_struct_ui_description(input_srna));
+  }
+  return srna;
+}
+
+static StructRNA *create_panels_srna(const IDProperty &properties,
+                                     Vector<StructRNA *> &r_generated)
+{
+  const IDProperty *panels_props = IDP_GetPropertyFromGroup(&properties, "panels");
+  if (!panels_props) {
+    return nullptr;
+  }
+  StructRNA *srna = RNA_def_struct_ptr(
+      &RNA_blender_rna_get(), "GeometryNodesInterfacePanels", RNA_PropertyGroup);
+  BLI_assert(!RNA_struct_in_public_namespace(srna));
+  r_generated.append(srna);
+  for (IDProperty &panel_prop : panels_props->data.group) {
+    RNA_def_boolean(srna, panel_prop.name, IDP_bool_get(&panel_prop), "Is Open", "");
+  }
+  return srna;
+}
+
 static void register_node_tool(wmOperatorType *ot,
                                std::unique_ptr<OperatorTypeData> &type_data_ptr)
 {
@@ -1140,6 +1399,15 @@ static void register_node_tool(wmOperatorType *ot,
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_NODE_TOOL;
   if (type_data.flag & GEO_NODE_ASSET_WAIT_FOR_CURSOR) {
     ot->flag |= OPTYPE_DEPENDS_ON_CURSOR;
+  }
+
+  StructRNA *inputs_srna = create_inputs_srna(*type_data.asset_meta_data_properties,
+                                              type_data.generated_structs);
+  RNA_def_pointer_runtime(ot->srna, "inputs", inputs_srna, "Inputs", "Settings for input sockets");
+  if (StructRNA *panels_srna = create_panels_srna(*type_data.asset_meta_data_properties,
+                                                  type_data.generated_structs))
+  {
+    RNA_def_pointer_runtime(ot->srna, "panels", panels_srna, "Panels", "Settings for panels");
   }
 
   /* See comment for #store_input_node_values_rna_props. */
@@ -1231,17 +1499,17 @@ static Vector<std::unique_ptr<OperatorTypeData>> get_node_tools_type_data(
     const bContext &C, Main &bmain, OperatorRegisterErrors &errors)
 {
   Vector<std::unique_ptr<OperatorTypeData>> all_types;
-  LISTBASE_FOREACH (bNodeTree *, ntree, &bmain.nodetrees) {
-    if (ID_IS_ASSET(&ntree->id)) {
+  for (bNodeTree &ntree : bmain.nodetrees) {
+    if (ID_IS_ASSET(&ntree.id)) {
       continue;
     }
-    if (!ntree->geometry_node_asset_traits) {
+    if (!ntree.geometry_node_asset_traits) {
       continue;
     }
-    if ((ntree->geometry_node_asset_traits->flag & GEO_NODE_ASSET_TOOL) == 0) {
+    if ((ntree.geometry_node_asset_traits->flag & GEO_NODE_ASSET_TOOL) == 0) {
       continue;
     }
-    std::optional<OperatorTypeData> type_data = OperatorTypeData::from_group(*ntree, errors);
+    std::optional<OperatorTypeData> type_data = OperatorTypeData::from_group(ntree, errors);
     if (!type_data) {
       continue;
     }
@@ -1335,6 +1603,14 @@ void register_node_group_operators(const bContext &C)
     WM_operator_stack_clear(&wm, types_to_remove);
     WM_operator_handlers_clear(&wm, types_to_remove);
     for (wmOperatorType *ot : types_to_remove) {
+      OperatorTypeData &type_data = static_cast<OperatorTypeData &>(*ot->custom_data);
+
+      for (StructRNA *srna : type_data.generated_structs) {
+        /* Avoids warning when freeing the #StructRNA. */
+        RNA_struct_py_type_set(srna, nullptr);
+        RNA_struct_free(&RNA_blender_rna_get(), srna);
+      }
+
       WM_operatortype_remove_ptr(ot);
     }
   }
@@ -1369,6 +1645,14 @@ void register_node_group_operators(const bContext &C)
         BKE_reportf(reports,
                     RPT_ERROR,
                     "Error registering node tool \"%s\", %s",
+                    item.key.c_str(),
+                    error.c_str());
+      }
+      for (const std::string &error : item.value.invalid_metadata_errors) {
+        BKE_reportf(reports,
+                    RPT_ERROR,
+                    "Error registering node tool \"%s\". Invalid metadata for input \"%s\". "
+                    "Asset meta-data may be out of date",
                     item.key.c_str(),
                     error.c_str());
       }
@@ -1446,7 +1730,6 @@ static GeometryNodeAssetTraitFlag asset_flag_for_context(const ObjectType type,
     default:
       break;
   }
-  BLI_assert_unreachable();
   return GeometryNodeAssetTraitFlag(0);
 }
 
@@ -1768,13 +2051,13 @@ static bool unassigned_local_poll(const bContext &C)
     return false;
   }
   const GeometryNodeAssetTraitFlag flag = asset_flag_for_context(*active_object);
-  LISTBASE_FOREACH (const bNodeTree *, group, &bmain.nodetrees) {
+  for (const bNodeTree &group : bmain.nodetrees) {
     /* Assets are displayed in other menus, and non-local data-blocks aren't added to this menu. */
-    if (group->id.library_weak_reference || group->id.asset_data) {
+    if (group.id.library_weak_reference || group.id.asset_data) {
       continue;
     }
-    if (!group->geometry_node_asset_traits ||
-        (group->geometry_node_asset_traits->flag & flag) != flag)
+    if (!group.geometry_node_asset_traits ||
+        (group.geometry_node_asset_traits->flag & flag) != flag)
     {
       continue;
     }
@@ -1812,19 +2095,19 @@ static void catalog_assets_draw_unassigned(const bContext *C, Menu *menu)
   bool first = true;
   bool add_separator = !tree->unassigned_assets.is_empty();
   Main &bmain = *CTX_data_main(C);
-  LISTBASE_FOREACH (const bNodeTree *, group, &bmain.nodetrees) {
+  for (const bNodeTree &group : bmain.nodetrees) {
     /* Assets are displayed in other menus, and non-local data-blocks aren't added to this menu. */
-    if (group->id.library_weak_reference || group->id.asset_data) {
+    if (group.id.library_weak_reference || group.id.asset_data) {
       continue;
     }
-    if (!group->geometry_node_asset_traits ||
-        (group->geometry_node_asset_traits->flag & flag) != flag)
+    if (!group.geometry_node_asset_traits ||
+        (group.geometry_node_asset_traits->flag & flag) != flag)
     {
       continue;
     }
-    const std::optional<std::string> operator_idname = operator_idname_for_group(*group);
+    const std::optional<std::string> operator_idname = operator_idname_for_group(group);
     if (!operator_idname) {
-      missing_tool_idname_error(layout, BKE_id_name(group->id));
+      missing_tool_idname_error(layout, BKE_id_name(group.id));
       continue;
     }
     if (add_separator) {
@@ -1836,7 +2119,7 @@ static void catalog_assets_draw_unassigned(const bContext *C, Menu *menu)
       first = false;
     }
     layout.op(*operator_idname,
-              BKE_id_name(group->id),
+              BKE_id_name(group.id),
               ICON_NONE,
               wm::OpCallContext::InvokeRegionWin,
               UI_ITEM_NONE);
@@ -1914,4 +2197,5 @@ void ui_template_node_operator_asset_root_items(ui::Layout &layout, const bConte
 
 /** \} */
 
-}  // namespace blender::ed::geometry
+}  // namespace ed::geometry
+}  // namespace blender

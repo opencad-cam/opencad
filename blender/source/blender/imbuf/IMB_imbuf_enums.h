@@ -10,10 +10,12 @@
  * \ingroup imbuf
  */
 
+namespace blender {
+
 #define IM_MAX_SPACE 64
 
 /** #ImBuf.ftype: main image types. */
-enum eImbFileType {
+enum eImbFileType : int8_t {
   IMB_FTYPE_NONE = 0,
   IMB_FTYPE_PNG = 1,
   IMB_FTYPE_TGA = 2,
@@ -36,7 +38,17 @@ enum eImbFileType {
 #ifdef WITH_IMAGE_WEBP
   IMB_FTYPE_WEBP = 14,
 #endif
+  IMB_FTYPE_AVIF = 15,
 };
+#define IMB_FTYPE_LAST IMB_FTYPE_AVIF
+
+/** Flags for #ImFileType.capability_read and #ImFileType.capability_write. */
+enum class eImFileTypeCapability : uint8_t {
+  Zero = 0,
+  File = (1 << 0),
+  Memory = (1 << 1),
+};
+ENUM_OPERATORS(eImFileTypeCapability);
 
 /** NOTE: Keep in sync with #MovieClipProxy.build_size_flag */
 enum IMB_Proxy_Size {
@@ -48,3 +60,5 @@ enum IMB_Proxy_Size {
   IMB_PROXY_MAX_SLOT = 4,
 };
 ENUM_OPERATORS(IMB_Proxy_Size);
+
+}  // namespace blender

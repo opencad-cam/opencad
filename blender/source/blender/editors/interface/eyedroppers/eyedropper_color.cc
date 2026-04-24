@@ -26,6 +26,7 @@
 #include "BKE_context.hh"
 #include "BKE_cryptomatte.h"
 #include "BKE_image.hh"
+#include "BKE_layer.hh"
 #include "BKE_material.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
@@ -101,7 +102,7 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
       MEM_delete(eye);
       return false;
     }
-    PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, &RNA_Context, C);
+    PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, RNA_Context, C);
     if (!RNA_path_resolve(&ctx_ptr, prop_data_path.c_str(), &eye->ptr, &eye->prop)) {
       BKE_reportf(op->reports, RPT_ERROR, "Could not resolve path '%s'", prop_data_path.c_str());
       MEM_delete(eye);
@@ -132,8 +133,9 @@ static bool eyedropper_init(bContext *C, wmOperator *op)
 
   float col[4];
   RNA_property_float_get_array_at_most(&eye->ptr, eye->prop, col, ARRAY_SIZE(col));
-  if (eye->ptr.type == &RNA_CompositorNodeCryptomatteV2) {
-    eye->crypto_node = (bNode *)eye->ptr.data;
+  if (eye->ptr.type == RNA_CompositorNodeCryptomatteV2) {
+    BKE_main_view_layers_synced_ensure(CTX_data_main(C));
+    eye->crypto_node = static_cast<bNode *>(eye->ptr.data);
     eye->cryptomatte_session = ntreeCompositCryptomatteSession(eye->crypto_node);
     eye->cb_win = CTX_wm_window(C);
     eye->draw_handle_sample_text = WM_draw_cb_activate(eye->cb_win, eyedropper_draw_cb, eye);
@@ -243,22 +245,22 @@ static bool eyedropper_cryptomatte_sample_renderlayer_fl(RenderLayer *render_lay
                                             prefix + 1 + render_layer_name_len :
                                             prefix;
 
-  LISTBASE_FOREACH (RenderPass *, render_pass, &render_layer->passes) {
-    if (STRPREFIX(render_pass->name, render_pass_name_prefix) &&
-        !STREQLEN(render_pass->name, render_pass_name_prefix, sizeof(render_pass->name)))
+  for (RenderPass &render_pass : render_layer->passes) {
+    if (STRPREFIX(render_pass.name, render_pass_name_prefix) &&
+        !STREQLEN(render_pass.name, render_pass_name_prefix, sizeof(render_pass.name)))
     {
-      BLI_assert(render_pass->channels == 4);
+      BLI_assert(render_pass.channels == 4);
 
       /* Pass was allocated but not rendered yet. */
-      if (!render_pass->ibuf) {
+      if (!render_pass.ibuf) {
         return false;
       }
 
-      const int x = int(fpos[0] * render_pass->rectx);
-      const int y = int(fpos[1] * render_pass->recty);
-      const int offset = 4 * (y * render_pass->rectx + x);
+      const int x = int(fpos[0] * render_pass.rectx);
+      const int y = int(fpos[1] * render_pass.recty);
+      const int offset = 4 * (y * render_pass.rectx + x);
       zero_v3(r_col);
-      r_col[0] = render_pass->ibuf->float_buffer.data[offset];
+      r_col[0] = render_pass.ibuf->float_data()[offset];
       return true;
     }
   }
@@ -272,15 +274,15 @@ static bool eyedropper_cryptomatte_sample_render_fl(const bNode *node,
                                                     float r_col[3])
 {
   bool success = false;
-  Scene *scene = (Scene *)node->id;
+  Scene *scene = id_cast<Scene *>(node->id);
   BLI_assert(GS(scene->id.name) == ID_SCE);
   Render *re = RE_GetSceneRender(scene);
 
   if (re) {
     RenderResult *rr = RE_AcquireResultRead(re);
     if (rr) {
-      LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
-        RenderLayer *render_layer = RE_GetRenderLayer(rr, view_layer->name);
+      for (ViewLayer &view_layer : scene->view_layers) {
+        RenderLayer *render_layer = RE_GetRenderLayer(rr, view_layer.name);
         success = eyedropper_cryptomatte_sample_renderlayer_fl(render_layer, prefix, fpos, r_col);
         if (success) {
           break;
@@ -300,7 +302,7 @@ static bool eyedropper_cryptomatte_sample_image_fl(bContext *C,
                                                    float r_col[3])
 {
   bool success = false;
-  Image *image = (Image *)node->id;
+  Image *image = id_cast<Image *>(node->id);
   BLI_assert((image == nullptr) || (GS(image->id.name) == ID_IM));
 
   /* Compute the effective frame number of the image if it was animated. */
@@ -311,8 +313,8 @@ static bool eyedropper_cryptomatte_sample_image_fl(bContext *C,
   if (image && image->type == IMA_TYPE_MULTILAYER) {
     ImBuf *ibuf = BKE_image_acquire_ibuf(image, &image_user_for_frame, nullptr);
     if (image->rr) {
-      LISTBASE_FOREACH (RenderLayer *, render_layer, &image->rr->layers) {
-        success = eyedropper_cryptomatte_sample_renderlayer_fl(render_layer, prefix, fpos, r_col);
+      for (RenderLayer &render_layer : image->rr->layers) {
+        success = eyedropper_cryptomatte_sample_renderlayer_fl(&render_layer, prefix, fpos, r_col);
         if (success) {
           break;
         }
@@ -329,7 +331,7 @@ static bool eyedropper_cryptomatte_sample_fl(bContext *C,
                                              float r_col[3])
 {
   bNode *node = eye->crypto_node;
-  NodeCryptomatte *crypto = node ? ((NodeCryptomatte *)node->storage) : nullptr;
+  NodeCryptomatte *crypto = node ? (static_cast<NodeCryptomatte *>(node->storage)) : nullptr;
 
   if (!crypto) {
     return false;
@@ -600,7 +602,7 @@ static void eyedropper_cancel(bContext *C, wmOperator *op)
 /* main modal status check */
 static wmOperatorStatus eyedropper_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Eyedropper *eye = (Eyedropper *)op->customdata;
+  Eyedropper *eye = static_cast<Eyedropper *>(op->customdata);
 
   /* handle modal keymap */
   if (event->type == EVT_MODAL_MAP) {

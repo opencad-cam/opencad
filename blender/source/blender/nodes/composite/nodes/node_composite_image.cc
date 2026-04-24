@@ -8,12 +8,13 @@
 #include "BLI_set.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
-#include "BLI_utildefines.h"
 
 #include "BKE_image.hh"
+#include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
 #include "DNA_image_types.h"
+#include "DNA_node_types.h"
 #include "DNA_scene_types.h"
 
 #include "COM_algorithm_extract_alpha.hh"
@@ -24,18 +25,18 @@
 
 namespace blender::nodes::node_composite_image_cc {
 
-/* Default declaration for contextless static declarations and when the image is not assigned. */
+/** Default declaration for contextless static declarations and when the image is not assigned. */
 static void declare_default(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Alpha").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Alpha"_ustr).structure_type(StructureType::Dynamic);
 }
 
 /* Declaration for simple single layer images. */
 static void declare_single_layer(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Alpha").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Alpha"_ustr).structure_type(StructureType::Dynamic);
 }
 
 /* Declares an already existing output. */
@@ -44,12 +45,12 @@ static BaseSocketDeclarationBuilder &declare_existing_output(NodeDeclarationBuil
 {
   if (output->type == SOCK_VECTOR) {
     const int dimensions = output->default_value_typed<bNodeSocketValueVector>()->dimensions;
-    return b.add_output<decl::Vector>(output->name)
+    return b.add_output<decl::Vector>(UString(output->name))
         .dimensions(dimensions)
         .structure_type(StructureType::Dynamic)
         .available(output->is_available());
   }
-  return b.add_output(eNodeSocketDatatype(output->type), output->name)
+  return b.add_output(eNodeSocketDatatype(output->type), UString(output->name))
       .structure_type(StructureType::Dynamic)
       .available(output->is_available());
 }
@@ -60,34 +61,35 @@ static BaseSocketDeclarationBuilder &declare_existing_output(NodeDeclarationBuil
 static void declare_existing(NodeDeclarationBuilder &b)
 {
   const bNode *node = b.node_or_null();
-  LISTBASE_FOREACH (const bNodeSocket *, output, &node->outputs) {
-    declare_existing_output(b, output);
+  for (const bNodeSocket &output : node->outputs) {
+    declare_existing_output(b, &output);
   }
 }
 
 /* Declares an output that matches the type of the given pass. */
 static void declare_pass(NodeDeclarationBuilder &b, const RenderPass &pass)
 {
+  const UString name(pass.name);
   switch (pass.channels) {
     case 1:
-      b.add_output<decl::Float>(pass.name).structure_type(StructureType::Dynamic);
+      b.add_output<decl::Float>(name).structure_type(StructureType::Dynamic);
       return;
     case 2:
-      b.add_output<decl::Vector>(pass.name).dimensions(2).structure_type(StructureType::Dynamic);
+      b.add_output<decl::Vector>(name).dimensions(2).structure_type(StructureType::Dynamic);
       return;
     case 3:
       if (STR_ELEM(pass.chan_id, "RGB", "rgb")) {
-        b.add_output<decl::Color>(pass.name).structure_type(StructureType::Dynamic);
+        b.add_output<decl::Color>(name).structure_type(StructureType::Dynamic);
         return;
       }
-      b.add_output<decl::Vector>(pass.name).dimensions(3).structure_type(StructureType::Dynamic);
+      b.add_output<decl::Vector>(name).dimensions(3).structure_type(StructureType::Dynamic);
       return;
     case 4:
       if (STR_ELEM(pass.chan_id, "RGBA", "rgba")) {
-        b.add_output<decl::Color>(pass.name).structure_type(StructureType::Dynamic);
+        b.add_output<decl::Color>(name).structure_type(StructureType::Dynamic);
         return;
       }
-      b.add_output<decl::Vector>(pass.name).dimensions(4).structure_type(StructureType::Dynamic);
+      b.add_output<decl::Vector>(name).dimensions(4).structure_type(StructureType::Dynamic);
       return;
   }
 
@@ -114,22 +116,43 @@ static void node_declare_multi_layer(NodeDeclarationBuilder &b,
   }
 
   bool has_alpha_pass = false;
-  LISTBASE_FOREACH (RenderPass *, pass, &render_layer->passes) {
-    if (StringRef(pass->name) == "Alpha") {
+  for (RenderPass &pass : render_layer->passes) {
+    if (StringRef(pass.name) == "Alpha") {
       has_alpha_pass = true;
       break;
     }
   }
 
-  LISTBASE_FOREACH (RenderPass *, pass, &render_layer->passes) {
-    declare_pass(b, *pass);
+  /* The special 0 view in the image user denotes the view currently being composited, but since
+   * this is not known at declaration time, we add all passes regardless of their view. */
+  const bool should_add_all_views = image_user->view == 0;
+  /* If the special 0 value is not chosen, the selected view will be the image user view minus 1,
+   * to offset for the special value. */
+  const int selected_view = image_user->view - 1;
+
+  Set<StringRef> added_passes;
+  for (RenderPass &pass : render_layer->passes) {
+    if (should_add_all_views) {
+      /* Pass already added from another view. */
+      if (added_passes.contains(pass.name)) {
+        continue;
+      }
+      added_passes.add_new(pass.name);
+    }
+    else {
+      if (pass.view_id != selected_view) {
+        continue;
+      }
+    }
+
+    declare_pass(b, pass);
 
     /* If the image does not have an alpha pass add an extra alpha pass that is generated based on
      * the combined pass, if the combined pass is an RGBA pass. */
-    if (!has_alpha_pass && StringRef(pass->name) == RE_PASSNAME_COMBINED && pass->channels == 4 &&
-        StringRef(pass->chan_id) == "RGBA")
+    if (!has_alpha_pass && StringRef(pass.name) == RE_PASSNAME_COMBINED && pass.channels == 4 &&
+        StringRef(pass.chan_id) == "RGBA")
     {
-      b.add_output<decl::Float>("Alpha").structure_type(StructureType::Dynamic);
+      b.add_output<decl::Float>("Alpha"_ustr).structure_type(StructureType::Dynamic);
     }
   }
 }
@@ -158,7 +181,7 @@ static void prepare_image(Image *image, const ImageUser *image_user)
  * changed through some external factor without an explicit action from the user. */
 static void declare_old_linked_outputs(NodeDeclarationBuilder &b)
 {
-  Set<std::string> added_outputs_identifiers;
+  Set<UString> added_outputs_identifiers;
   for (const SocketDeclaration *output_declaration : b.declaration().sockets(SOCK_OUT)) {
     added_outputs_identifiers.add_new(output_declaration->identifier);
   }
@@ -167,7 +190,7 @@ static void declare_old_linked_outputs(NodeDeclarationBuilder &b)
   const bNode *node = b.node_or_null();
   node_tree->ensure_topology_cache();
   for (const bNodeSocket *output : node->output_sockets()) {
-    if (added_outputs_identifiers.contains(output->identifier)) {
+    if (added_outputs_identifiers.contains(output->identifier_ustr())) {
       continue;
     }
     if (!output->is_directly_linked()) {
@@ -191,18 +214,18 @@ static void node_declare(NodeDeclarationBuilder &b)
     return;
   }
 
-  /* Avoid unnecessary updates, only changes to the Image/Image User data are of interest. */
-  if (!(node->runtime->update & NODE_UPDATE_ID)) {
-    declare_existing(b);
-    return;
-  }
-
   BLI_SCOPED_DEFER([&]() { declare_old_linked_outputs(b); });
 
   Image *image = reinterpret_cast<Image *>(node->id);
   const ImageUser *image_user = static_cast<ImageUser *>(node->storage);
   if (!image || !image_user) {
     declare_default(b);
+    return;
+  }
+
+  /* Avoid unnecessary updates, only changes to the Image/Image User data are of interest. */
+  if (!(node->runtime->update & NODE_UPDATE_ID)) {
+    declare_existing(b);
     return;
   }
 
@@ -218,7 +241,9 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_init(bNodeTree * /*node_tree*/, bNode *node)
 {
-  ImageUser *iuser = MEM_new_for_free<ImageUser>(__func__);
+  node->flag |= NODE_PREVIEW;
+
+  ImageUser *iuser = MEM_new<ImageUser>(__func__);
   node->storage = iuser;
   iuser->frames = 1;
   iuser->sfra = 1;
@@ -233,6 +258,11 @@ class ImageOperation : public NodeOperation {
 
   void execute() override
   {
+    if (!this->get_image() || !this->get_image_user()) {
+      this->allocate_default_remaining_outputs();
+      return;
+    }
+
     for (const bNodeSocket *output : this->node().output_sockets()) {
       if (!is_socket_available(output)) {
         continue;
@@ -246,11 +276,6 @@ class ImageOperation : public NodeOperation {
   {
     Result &result = this->get_result(identifier);
     if (!result.should_compute()) {
-      return;
-    }
-
-    if (!this->get_image() || !this->get_image_user()) {
-      result.allocate_invalid();
       return;
     }
 
@@ -268,7 +293,7 @@ class ImageOperation : public NodeOperation {
 
     result.set_type(cached_image.type());
     result.set_precision(cached_image.precision());
-    result.wrap_external(cached_image);
+    result.share_data(cached_image);
   }
 
   void compute_alpha()
@@ -294,7 +319,7 @@ class ImageOperation : public NodeOperation {
     if (cached_alpha.is_allocated()) {
       result.set_type(cached_alpha.type());
       result.set_precision(cached_alpha.precision());
-      result.wrap_external(cached_alpha);
+      result.share_data(cached_alpha);
       return;
     }
 
@@ -319,30 +344,30 @@ class ImageOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new ImageOperation(context, node);
 }
 
-static void register_node()
+static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeImage", CMP_NODE_IMAGE);
+  cmp_node_type_base(&ntype, "CompositorNodeImage"_ustr, CMP_NODE_IMAGE);
   ntype.ui_name = "Image";
   ntype.ui_description = "Input image or movie file";
   ntype.enum_name_legacy = "IMAGE";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "ImageUser", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = get_compositor_operation;
   ntype.labelfunc = node_image_label;
   ntype.flag |= NODE_PREVIEW;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node)
+NOD_REGISTER_NODE(node_register)
 
 }  // namespace blender::nodes::node_composite_image_cc

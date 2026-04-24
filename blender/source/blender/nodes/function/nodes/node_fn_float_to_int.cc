@@ -18,8 +18,8 @@ namespace blender::nodes::node_fn_float_to_int_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Float>("Float");
-  b.add_output<decl::Int>("Integer");
+  b.add_input<decl::Float>("Float"_ustr);
+  b.add_output<decl::Int>("Integer"_ustr);
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -75,9 +75,9 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeFloatToInt", FN_NODE_FLOAT_TO_INT);
+  fn_node_type_base(&ntype, "FunctionNodeFloatToInt"_ustr, FN_NODE_FLOAT_TO_INT);
   ntype.ui_name = "Float to Integer";
   ntype.ui_description =
       "Convert the given floating-point number to an integer, with a choice of methods";
@@ -87,7 +87,7 @@ static void node_register()
   ntype.labelfunc = node_label;
   ntype.build_multi_function = node_build_multi_function;
   ntype.draw_buttons = node_layout;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

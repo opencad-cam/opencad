@@ -33,9 +33,14 @@ uint outline_colorid_get()
 
 void main()
 {
-  float3 world_pos = pointcloud_get_pos();
+  const eObjectInfoFlag ob_flag = buffer_get(draw_object_infos, drw_infos)[drw_resource_id()].flag;
 
-  gl_Position = drw_point_world_to_homogenous(world_pos);
+  const pointcloud::Point ls_pt = pointcloud::point_get(uint(gl_VertexID));
+  const pointcloud::Point ws_pt = pointcloud::object_to_world(ls_pt, drw_modelmat());
+  const pointcloud::ShapePoint pt = pointcloud::shape_point_get(
+      ws_pt, drw_world_incident_vector(ws_pt.P), drw_view_up(), ob_flag);
+
+  gl_Position = drw_point_world_to_homogenous(pt.P);
 
   /* Small bias to always be on top of the geom. */
   gl_Position.z -= 1e-3f;
@@ -49,5 +54,5 @@ void main()
   /* Combine for 16bit uint target. */
   interp.ob_id = outline_id_pack(outline_id, interp.ob_id);
 
-  view_clipping_distances(world_pos);
+  view_clipping_distances(pt.P);
 }

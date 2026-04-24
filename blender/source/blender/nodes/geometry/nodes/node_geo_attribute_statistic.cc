@@ -24,22 +24,22 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   const bNode *node = b.node_or_null();
 
-  b.add_input<decl::Geometry>("Geometry").description("Geometry to get the statistics from");
-  b.add_input<decl::Bool>("Selection").default_value(true).field_on_all().hide_value();
+  b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to get the statistics from");
+  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).field_on_all().hide_value();
 
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node->custom1);
-    b.add_input(data_type, "Attribute").hide_value().field_on_all();
+    b.add_input(data_type, "Attribute"_ustr).hide_value().field_on_all();
 
-    b.add_output(data_type, N_("Mean"));
-    b.add_output(data_type, CTX_N_(BLT_I18NCONTEXT_ID_NODETREE, "Median"))
+    b.add_output(data_type, "Mean"_ustr);
+    b.add_output(data_type, CTX_N_(BLT_I18NCONTEXT_ID_NODETREE, "Median"_ustr))
         .translation_context(BLT_I18NCONTEXT_ID_NODETREE);
-    b.add_output(data_type, N_("Sum"));
-    b.add_output(data_type, N_("Min"));
-    b.add_output(data_type, N_("Max"));
-    b.add_output(data_type, N_("Range"));
-    b.add_output(data_type, N_("Standard Deviation"));
-    b.add_output(data_type, N_("Variance"));
+    b.add_output(data_type, "Sum"_ustr);
+    b.add_output(data_type, "Min"_ustr);
+    b.add_output(data_type, "Max"_ustr);
+    b.add_output(data_type, "Range"_ustr);
+    b.add_output(data_type, "Standard Deviation"_ustr);
+    b.add_output(data_type, "Variance"_ustr);
   }
 }
 
@@ -73,7 +73,7 @@ static std::optional<eCustomDataType> node_type_from_other_socket(const bNodeSoc
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const blender::bke::bNodeType &node_type = params.node_type();
+  const bke::bNodeType &node_type = params.node_type();
   const NodeDeclaration &declaration = *params.node_type().static_declaration;
   search_link_ops_for_declarations(params, declaration.inputs);
 
@@ -86,14 +86,20 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(IFACE_("Attribute"), [node_type, type](LinkSearchOpParams &params) {
       bNode &node = params.add_node(node_type);
       node.custom1 = *type;
-      params.update_and_connect_available_socket(node, "Attribute");
+      params.update_and_connect_available_socket(node, "Attribute"_ustr);
     });
   }
   else {
-    for (const StringRefNull name :
-         {"Mean", "Median", "Sum", "Min", "Max", "Range", "Standard Deviation", "Variance"})
+    for (const UString name : {"Mean"_ustr,
+                               "Median"_ustr,
+                               "Sum"_ustr,
+                               "Min"_ustr,
+                               "Max"_ustr,
+                               "Range"_ustr,
+                               "Standard Deviation"_ustr,
+                               "Variance"_ustr})
     {
-      params.add_item(IFACE_(name), [node_type, name, type](LinkSearchOpParams &params) {
+      params.add_item(IFACE_(name.ref()), [node_type, name, type](LinkSearchOpParams &params) {
         bNode &node = params.add_node(node_type);
         node.custom1 = *type;
         params.update_and_connect_available_socket(node, name);
@@ -134,38 +140,36 @@ static float median_of_sorted_span(const Span<float> data)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
   const bNode &node = params.node();
   const eCustomDataType data_type = eCustomDataType(node.custom1);
   const AttrDomain domain = AttrDomain(node.custom2);
   Vector<const GeometryComponent *> components = geometry_set.get_components();
 
-  const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
+  const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection"_ustr);
 
   switch (data_type) {
     case CD_PROP_FLOAT: {
-      const Field<float> input_field = params.extract_input<Field<float>>("Attribute");
+      const Field<float> input_field = params.extract_input<Field<float>>("Attribute"_ustr);
       Vector<float> data;
       for (const GeometryComponent *component : components) {
-        const std::optional<AttributeAccessor> attributes = component->attributes();
-        if (!attributes.has_value()) {
+        const int domain_size = component->attribute_domain_size(domain);
+        if (domain_size == 0) {
           continue;
         }
-        if (attributes->domain_supported(domain)) {
-          const bke::GeometryFieldContext field_context{*component, domain};
-          fn::FieldEvaluator data_evaluator{field_context, attributes->domain_size(domain)};
-          data_evaluator.add(input_field);
-          data_evaluator.set_selection(selection_field);
-          data_evaluator.evaluate();
-          const VArray<float> component_data = data_evaluator.get_evaluated<float>(0);
-          const IndexMask selection = data_evaluator.get_evaluated_selection_as_mask();
+        const bke::GeometryFieldContext field_context{*component, domain};
+        fn::FieldEvaluator data_evaluator{field_context, domain_size};
+        data_evaluator.add(input_field);
+        data_evaluator.set_selection(selection_field);
+        data_evaluator.evaluate();
+        const VArray<float> component_data = data_evaluator.get_evaluated<float>(0);
+        const IndexMask selection = data_evaluator.get_evaluated_selection_as_mask();
 
-          const int next_data_index = data.size();
-          data.resize(next_data_index + selection.size());
-          MutableSpan<float> selected_data = data.as_mutable_span().slice(next_data_index,
-                                                                          selection.size());
-          array_utils::gather(component_data, selection, selected_data);
-        }
+        const int next_data_index = data.size();
+        data.resize(next_data_index + selection.size());
+        MutableSpan<float> selected_data = data.as_mutable_span().slice(next_data_index,
+                                                                        selection.size());
+        array_utils::gather(component_data, selection, selected_data);
       }
 
       float mean = 0.0f;
@@ -176,18 +180,18 @@ static void node_geo_exec(GeoNodeExecParams params)
       float range = 0.0f;
       float standard_deviation = 0.0f;
       float variance = 0.0f;
-      const bool sort_required = params.output_is_required("Min") ||
-                                 params.output_is_required("Max") ||
-                                 params.output_is_required("Range") ||
-                                 params.output_is_required("Median");
-      const bool sum_required = params.output_is_required("Sum") ||
-                                params.output_is_required("Mean");
-      const bool variance_required = params.output_is_required("Standard Deviation") ||
-                                     params.output_is_required("Variance");
+      const bool sort_required = params.output_is_required("Min"_ustr) ||
+                                 params.output_is_required("Max"_ustr) ||
+                                 params.output_is_required("Range"_ustr) ||
+                                 params.output_is_required("Median"_ustr);
+      const bool sum_required = params.output_is_required("Sum"_ustr) ||
+                                params.output_is_required("Mean"_ustr);
+      const bool variance_required = params.output_is_required("Standard Deviation"_ustr) ||
+                                     params.output_is_required("Variance"_ustr);
 
       if (data.size() != 0) {
         if (sort_required) {
-          std::sort(data.begin(), data.end());
+          std::ranges::sort(data);
           median = median_of_sorted_span(data);
 
           min = data.first();
@@ -195,7 +199,7 @@ static void node_geo_exec(GeoNodeExecParams params)
           range = max - min;
         }
         if (sum_required || variance_required) {
-          sum = blender::array_utils::compute_sum<float>(data);
+          sum = array_utils::compute_sum<float>(data);
           mean = sum / data.size();
 
           if (variance_required) {
@@ -206,23 +210,23 @@ static void node_geo_exec(GeoNodeExecParams params)
       }
 
       if (sum_required) {
-        params.set_output("Sum", sum);
-        params.set_output("Mean", mean);
+        params.set_output("Sum"_ustr, sum);
+        params.set_output("Mean"_ustr, mean);
       }
       if (sort_required) {
-        params.set_output("Min", min);
-        params.set_output("Max", max);
-        params.set_output("Range", range);
-        params.set_output("Median", median);
+        params.set_output("Min"_ustr, min);
+        params.set_output("Max"_ustr, max);
+        params.set_output("Range"_ustr, range);
+        params.set_output("Median"_ustr, median);
       }
       if (variance_required) {
-        params.set_output("Standard Deviation", standard_deviation);
-        params.set_output("Variance", variance);
+        params.set_output("Standard Deviation"_ustr, standard_deviation);
+        params.set_output("Variance"_ustr, variance);
       }
       break;
     }
     case CD_PROP_FLOAT3: {
-      const Field<float3> input_field = params.extract_input<Field<float3>>("Attribute");
+      const Field<float3> input_field = params.extract_input<Field<float3>>("Attribute"_ustr);
       Vector<float3> data;
       for (const GeometryComponent *component : components) {
         const std::optional<AttributeAccessor> attributes = component->attributes();
@@ -254,14 +258,14 @@ static void node_geo_exec(GeoNodeExecParams params)
       float3 mean{0};
       float3 variance{0};
       float3 standard_deviation{0};
-      const bool sort_required = params.output_is_required("Min") ||
-                                 params.output_is_required("Max") ||
-                                 params.output_is_required("Range") ||
-                                 params.output_is_required("Median");
-      const bool sum_required = params.output_is_required("Sum") ||
-                                params.output_is_required("Mean");
-      const bool variance_required = params.output_is_required("Standard Deviation") ||
-                                     params.output_is_required("Variance");
+      const bool sort_required = params.output_is_required("Min"_ustr) ||
+                                 params.output_is_required("Max"_ustr) ||
+                                 params.output_is_required("Range"_ustr) ||
+                                 params.output_is_required("Median"_ustr);
+      const bool sum_required = params.output_is_required("Sum"_ustr) ||
+                                params.output_is_required("Mean"_ustr);
+      const bool variance_required = params.output_is_required("Standard Deviation"_ustr) ||
+                                     params.output_is_required("Variance"_ustr);
 
       Array<float> data_x;
       Array<float> data_y;
@@ -279,9 +283,9 @@ static void node_geo_exec(GeoNodeExecParams params)
 
       if (data.size() != 0) {
         if (sort_required) {
-          std::sort(data_x.begin(), data_x.end());
-          std::sort(data_y.begin(), data_y.end());
-          std::sort(data_z.begin(), data_z.end());
+          std::ranges::sort(data_x);
+          std::ranges::sort(data_y);
+          std::ranges::sort(data_z);
 
           const float x_median = median_of_sorted_span(data_x);
           const float y_median = median_of_sorted_span(data_y);
@@ -293,7 +297,7 @@ static void node_geo_exec(GeoNodeExecParams params)
           range = max - min;
         }
         if (sum_required || variance_required) {
-          sum = blender::array_utils::compute_sum(data.as_span());
+          sum = array_utils::compute_sum(data.as_span());
           mean = sum / data.size();
 
           if (variance_required) {
@@ -308,18 +312,18 @@ static void node_geo_exec(GeoNodeExecParams params)
       }
 
       if (sum_required) {
-        params.set_output("Sum", sum);
-        params.set_output("Mean", mean);
+        params.set_output("Sum"_ustr, sum);
+        params.set_output("Mean"_ustr, mean);
       }
       if (sort_required) {
-        params.set_output("Min", min);
-        params.set_output("Max", max);
-        params.set_output("Range", range);
-        params.set_output("Median", median);
+        params.set_output("Min"_ustr, min);
+        params.set_output("Max"_ustr, max);
+        params.set_output("Range"_ustr, range);
+        params.set_output("Median"_ustr, median);
       }
       if (variance_required) {
-        params.set_output("Standard Deviation", standard_deviation);
-        params.set_output("Variance", variance);
+        params.set_output("Standard Deviation"_ustr, standard_deviation);
+        params.set_output("Variance"_ustr, variance);
       }
       break;
     }
@@ -358,8 +362,8 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeAttributeStatistic", GEO_NODE_ATTRIBUTE_STATISTIC);
+  static bke::bNodeType ntype;
+  geo_node_type_base(&ntype, "GeometryNodeAttributeStatistic"_ustr, GEO_NODE_ATTRIBUTE_STATISTIC);
   ntype.ui_name = "Attribute Statistic";
   ntype.ui_description =
       "Calculate statistics about a data set from a field evaluated on a geometry";
@@ -370,7 +374,7 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.gather_link_search_ops = node_gather_link_searches;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

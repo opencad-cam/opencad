@@ -10,7 +10,9 @@
 
 #include <Python.h>
 
-namespace blender::gpu {
+namespace blender {
+
+namespace gpu {
 class IndexBuf;
 }
 
@@ -19,8 +21,10 @@ extern PyTypeObject BPyGPUIndexBuf_Type;
 #define BPyGPUIndexBuf_Check(v) (Py_TYPE(v) == &BPyGPUIndexBuf_Type)
 
 struct BPyGPUIndexBuf {
-  PyObject_VAR_HEAD
-  blender::gpu::IndexBuf *elem;
+  PyObject_HEAD
+  gpu::IndexBuf *elem;
 };
 
-[[nodiscard]] PyObject *BPyGPUIndexBuf_CreatePyObject(blender::gpu::IndexBuf *elem);
+[[nodiscard]] PyObject *BPyGPUIndexBuf_CreatePyObject(gpu::IndexBuf *elem);
+
+}  // namespace blender

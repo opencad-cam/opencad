@@ -10,6 +10,7 @@ import unittest
 # -----------------------------------------------------------------------------
 # Tests
 
+
 class TestGreasePencil(unittest.TestCase):
     def setUp(self):
         self.gp = bpy.data.grease_pencils.new("test_grease_pencil")
@@ -62,14 +63,14 @@ class TestGreasePencilLayers(unittest.TestCase):
 
     def test_grease_pencil_layers_move_down(self):
         # Move the top most layer down
-        self.gp.layers.move(self.gp.layers[-1], 'DOWN')
+        self.gp.layers.move(self.gp.layers[-1], "DOWN")
         self.assertEqual(self.gp.layers[0].name, "test_layer01")
         self.assertEqual(self.gp.layers[1].name, "test_layer03")
         self.assertEqual(self.gp.layers[2].name, "test_layer02")
 
     def test_grease_pencil_layers_move_up(self):
         # Move the bottom most layer up
-        self.gp.layers.move(self.gp.layers[0], 'UP')
+        self.gp.layers.move(self.gp.layers[0], "UP")
         self.assertEqual(self.gp.layers[0].name, "test_layer02")
         self.assertEqual(self.gp.layers[1].name, "test_layer01")
         self.assertEqual(self.gp.layers[2].name, "test_layer03")
@@ -81,6 +82,54 @@ class TestGreasePencilLayers(unittest.TestCase):
         self.assertEqual(round(self.gp.layers[0].tint_factor, 1), self.tint_factors[1])
         self.assertEqual(round(self.gp.layers[1].tint_factor, 1), self.tint_factors[2])
         self.assertEqual(round(self.gp.layers[2].tint_factor, 1), self.tint_factors[0])
+
+    def test_grease_pencil_layer_mask_add(self):
+        while len(self.gp.layers) < 4:
+            self.gp.layers.new(f"Layer_{len(self.gp.layers)}")
+
+        layer = self.gp.layers[0]
+        mask_layer_1 = self.gp.layers[1]
+        mask_layer_2 = self.gp.layers[2]
+        mask_layer_3 = self.gp.layers[3]
+
+        mask1 = layer.mask_layers.add(mask_layer_1)
+        self.assertIsNotNone(mask1)
+        self.assertEqual(len(layer.mask_layers), 1)
+
+        mask2 = layer.mask_layers.add(mask_layer_2)
+        self.assertIsNotNone(mask2)
+        self.assertEqual(len(layer.mask_layers), 2)
+
+        mask3 = layer.mask_layers.add(mask_layer_3)
+        self.assertIsNotNone(mask3)
+        self.assertEqual(len(layer.mask_layers), 3)
+
+        # Test duplicate prevention - adding same layer again
+        mask_dup = layer.mask_layers.add(mask_layer_1)
+        self.assertIsNotNone(mask_dup)
+        self.assertEqual(len(layer.mask_layers), 3)  # Should still be 3, not 4
+
+    def test_grease_pencil_layer_mask_remove(self):
+        while len(self.gp.layers) < 4:
+            self.gp.layers.new(f"Layer_{len(self.gp.layers)}")
+
+        layer = self.gp.layers[0]
+        mask_layer_1 = self.gp.layers[1]
+        mask_layer_2 = self.gp.layers[2]
+        mask_layer_3 = self.gp.layers[3]
+
+        mask1 = layer.mask_layers.add(mask_layer_1)
+        mask2 = layer.mask_layers.add(mask_layer_2)
+        mask3 = layer.mask_layers.add(mask_layer_3)
+
+        self.assertEqual(len(layer.mask_layers), 3)
+
+        layer.mask_layers.remove(mask2)
+        self.assertEqual(len(layer.mask_layers), 2)
+
+        layer.mask_layers.remove(mask1)
+        layer.mask_layers.remove(mask3)
+        self.assertEqual(len(layer.mask_layers), 0)
 
 
 class TestGreasePencilFrame(unittest.TestCase):
@@ -299,7 +348,87 @@ class TestGreasePencilDrawing(unittest.TestCase):
         self.assertEqual(len(strokes[0].points), 5)
 
 
-if __name__ == '__main__':
+class TestGreasePencilRootNodes(unittest.TestCase):
+    def setUp(self):
+        self.gp = bpy.data.grease_pencils.new("test_gp")
+
+        self.layer_a = self.gp.layers.new("LayerA")
+        self.group_g = self.gp.layer_groups.new("GroupG")
+
+        self.layer_b = self.gp.layers.new("LayerB")
+        self.layer_c = self.gp.layers.new("LayerC")
+
+        self.gp.layers.move_to_layer_group(self.layer_b, self.group_g)
+        self.gp.layers.move_to_layer_group(self.layer_c, self.group_g)
+
+        self.layer_d = self.gp.layers.new("LayerD")
+
+    def tearDown(self):
+        bpy.data.grease_pencils.remove(self.gp)
+
+    def test_root_nodes_len_and_order(self):
+        nodes = self.gp.root_nodes
+
+        self.assertEqual(len(nodes), 3)
+        self.assertEqual(nodes[0].name, "LayerA")
+        self.assertEqual(nodes[1].name, "GroupG")
+        self.assertEqual(nodes[2].name, "LayerD")
+
+    def test_root_nodes_types(self):
+        nodes = self.gp.root_nodes
+
+        self.assertIsInstance(nodes[0], bpy.types.GreasePencilLayer)
+        self.assertIsInstance(nodes[1], bpy.types.GreasePencilLayerGroup)
+        self.assertIsInstance(nodes[2], bpy.types.GreasePencilLayer)
+
+
+class TestGreasePencilLayerGroupChildren(unittest.TestCase):
+    def setUp(self):
+        self.gp = bpy.data.grease_pencils.new("test_gp")
+
+        self.group = self.gp.layer_groups.new("Group")
+
+        self.layer1 = self.gp.layers.new("Layer1")
+        self.layer2 = self.gp.layers.new("Layer2")
+
+        self.gp.layers.move_to_layer_group(self.layer1, self.group)
+        self.gp.layers.move_to_layer_group(self.layer2, self.group)
+
+        self.subgroup = self.gp.layer_groups.new("SubGroup")
+        self.gp.layer_groups.move_to_layer_group(self.subgroup, self.group)
+
+        self.sublayer = self.gp.layers.new("SubLayer")
+        self.gp.layers.move_to_layer_group(self.sublayer, self.subgroup)
+
+    def tearDown(self):
+        bpy.data.grease_pencils.remove(self.gp)
+
+    def test_children_basic(self):
+        children = self.group.children
+
+        self.assertEqual(len(children), 3)
+        self.assertEqual(children[0].name, "Layer1")
+        self.assertEqual(children[1].name, "Layer2")
+        self.assertEqual(children[2].name, "SubGroup")
+
+    def test_children_not_recursive(self):
+        children = self.group.children
+        names = {child.name for child in children}
+
+        self.assertNotIn("SubLayer", names)
+
+    def test_children_iteration(self):
+        names = []
+        for node in self.group.children:
+            names.append(node.name)
+
+        self.assertEqual(names, ["Layer1", "Layer2", "SubGroup"])
+
+
+if __name__ == "__main__":
     import sys
-    sys.argv = [__file__] + (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
+
+    sys.argv = [__file__] + (
+        sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    )
     unittest.main()

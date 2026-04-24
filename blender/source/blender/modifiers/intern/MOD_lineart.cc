@@ -17,6 +17,7 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_collection.hh"
+#include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_lib_query.hh"
@@ -77,7 +78,7 @@ static bool is_last_line_art(const GreasePencilLineartModifierData &md, const bo
 
 static void init_data(ModifierData *md)
 {
-  GreasePencilLineartModifierData *gpmd = (GreasePencilLineartModifierData *)md;
+  GreasePencilLineartModifierData *gpmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
   INIT_DEFAULT_STRUCT_AFTER(gpmd, modifier);
 }
 
@@ -92,7 +93,11 @@ static void copy_data(const ModifierData *md, ModifierData *target, const int fl
   GreasePencilLineartModifierData *target_lmd =
       reinterpret_cast<GreasePencilLineartModifierData *>(target);
 
-  target_lmd->runtime = MEM_new<LineartModifierRuntime>(__func__, *source_runtime);
+  if (source_runtime) {
+    /* `source_runtime` can be nullptr when line art is imported from asset. `target_lmd->runtime`
+     * Will also re-init before calculation/depsgraph evaluation if it's nullptr anyway.  */
+    target_lmd->runtime = MEM_new<LineartModifierRuntime>(__func__, *source_runtime);
+  }
 }
 
 static void free_data(ModifierData *md)
@@ -106,7 +111,7 @@ static void free_data(ModifierData *md)
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)md;
+  GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
   if (lmd->target_layer[0] == '\0' || !lmd->target_material) {
     return true;
@@ -163,7 +168,7 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 {
   DEG_add_object_relation(ctx->node, ctx->object, DEG_OB_COMP_TRANSFORM, "Line Art Modifier");
 
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)md;
+  GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
   /* Always add whole master collection because line art will need the whole scene for
    * visibility computation. Line art exclusion is handled inside #add_this_collection. */
@@ -203,14 +208,14 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)md;
+  GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
-  walk(user_data, ob, (ID **)&lmd->target_material, IDWALK_CB_USER);
-  walk(user_data, ob, (ID **)&lmd->source_collection, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->target_material), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->source_collection), IDWALK_CB_NOP);
 
-  walk(user_data, ob, (ID **)&lmd->source_object, IDWALK_CB_NOP);
-  walk(user_data, ob, (ID **)&lmd->source_camera, IDWALK_CB_NOP);
-  walk(user_data, ob, (ID **)&lmd->light_contour_object, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->source_object), IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->source_camera), IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->light_contour_object), IDWALK_CB_NOP);
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
@@ -255,6 +260,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   col = &layout.column(false);
   col->prop(ptr, "radius", ui::ITEM_R_SLIDER, IFACE_("Line Radius"), ICON_NONE);
   col->prop(ptr, "opacity", ui::ITEM_R_SLIDER, std::nullopt, ICON_NONE);
+  col->prop(ptr, "fill_strokes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   modifier_error_message_draw(layout, ptr);
 }
@@ -302,7 +308,7 @@ static void edge_types_panel_draw(const bContext * /*C*/, Panel *panel)
     sub->prop(ptr, "use_crease", UI_ITEM_NONE, "", ICON_NONE);
     sub->prop(ptr,
               "crease_threshold",
-              ui::ITEM_R_SLIDER | blender::ui::ITEM_R_FORCE_BLANK_DECORATE,
+              ui::ITEM_R_SLIDER | ui::ITEM_R_FORCE_BLANK_DECORATE,
               std::nullopt,
               ICON_NONE);
   }
@@ -691,7 +697,7 @@ static void composition_panel_draw(const bContext * /*C*/, Panel *panel)
   ui::Layout &col = layout.column(false);
   col.active_set(!show_in_front);
 
-  col.prop(ptr, "stroke_depth_offset", ui::ITEM_R_SLIDER, IFACE_("Depth Offset"), ICON_NONE);
+  col.prop(ptr, "stroke_depth_offset", UI_ITEM_NONE, IFACE_("Depth Offset"), ICON_NONE);
   col.prop(ptr,
            "use_offset_towards_custom_camera",
            UI_ITEM_NONE,
@@ -784,6 +790,9 @@ static void generate_strokes(ModifierData &md,
   }();
 
   if (drawing) {
+    BKE_defgroup_copy_list(&drawing->wrap().geometry.vertex_group_names,
+                           &grease_pencil.vertex_group_names);
+
     MOD_lineart_gpencil_generate_v3(
         lmd.cache,
         mat,
@@ -801,6 +810,7 @@ static void generate_strokes(ModifierData &md,
         lmd.intersection_mask,
         lmd.radius,
         lmd.opacity,
+        lmd.fill_strokes,
         lmd.shadow_selection,
         lmd.silhouette_selection,
         lmd.source_vertex_group,
@@ -829,8 +839,8 @@ static void modify_geometry_set(ModifierData *md,
   GreasePencil &grease_pencil = *geometry_set->get_grease_pencil_for_write();
   auto *mmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
-  GreasePencilLineartModifierData *first_lineart =
-      blender::ed::greasepencil::get_first_lineart_modifier(*ctx->object);
+  GreasePencilLineartModifierData *first_lineart = ed::greasepencil::get_first_lineart_modifier(
+      *ctx->object);
   BLI_assert(first_lineart);
 
   /* Since settings for line art cached data are always in the first line art modifier, we need to
@@ -868,8 +878,6 @@ static void blend_read(BlendDataReader * /*reader*/, ModifierData *md)
   lmd->runtime = MEM_new<LineartModifierRuntime>(__func__);
 }
 
-}  // namespace blender
-
 ModifierTypeInfo modifierType_GreasePencilLineart = {
     /*idname*/ "Lineart Modifier",
     /*name*/ N_("Lineart"),
@@ -880,26 +888,28 @@ ModifierTypeInfo modifierType_GreasePencilLineart = {
     /*flags*/ eModifierTypeFlag_AcceptsGreasePencil,
     /*icon*/ ICON_MOD_LINEART,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
-    /*is_disabled*/ blender::is_disabled,
-    /*update_depsgraph*/ blender::update_depsgraph,
+    /*free_data*/ free_data,
+    /*is_disabled*/ is_disabled,
+    /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

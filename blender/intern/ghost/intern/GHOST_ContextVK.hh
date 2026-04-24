@@ -37,6 +37,10 @@
 #include <optional>
 #include <vector>
 
+namespace blender {
+class StringRefNull;
+}
+
 #ifndef GHOST_OPENGL_VK_CONTEXT_FLAGS
 /* leave as convenience define for the future */
 #  define GHOST_OPENGL_VK_CONTEXT_FLAGS 0
@@ -169,11 +173,21 @@ class GHOST_ContextVK : public GHOST_Context {
   GHOST_TSuccess getVulkanSwapChainFormat(GHOST_VulkanSwapChainData *r_swap_chain_data) override;
 
   GHOST_TSuccess setVulkanSwapBuffersCallbacks(
-      std::function<void(const GHOST_VulkanSwapChainData *)> swap_buffer_draw_callback,
+      std::function<void(const GHOST_VulkanSwapChainData *, bool)> swap_buffer_draw_callback,
       std::function<void(void)> swap_buffer_acquired_callback,
       std::function<void(GHOST_VulkanOpenXRData *)> openxr_acquire_framebuffer_image_callback,
       std::function<void(GHOST_VulkanOpenXRData *)> openxr_release_framebuffer_image_callback)
       override;
+
+#ifdef WITH_GHOST_WAYLAND
+  /**
+   * \brief Check if the active driver supports wayland color management.
+   *
+   * NVIDIA driver before 595 don't support wayland color management protocol as expected resulting
+   * in to bright output.
+   */
+  static GHOST_TSuccess supportsWaylandColorManagement();
+#endif
 
   /**
    * Sets the swap interval for `swapBuffers`.
@@ -204,6 +218,23 @@ class GHOST_ContextVK : public GHOST_Context {
   {
     return true;
   }
+
+  /**
+   * \brief Is the given extension name enabled on instance level?
+   *
+   * \returns false, when extension isn't enabled on instance level or when no instance exists.
+   * Will return true when instance exists and extension name has been enabled on the instance.
+   */
+  static bool is_instance_extension_enabled(blender::StringRefNull extension_name);
+
+  /**
+   * \brief Is the given extension name enabled on device level?
+   *
+   * \returns false, when extension isn't enabled on device level or when no instance or device
+   * exists. Will return true when instance exists and extension name has been enabled on the
+   * instance.
+   */
+  static bool is_device_extension_enabled(blender::StringRefNull extension_name);
 
  private:
 #ifdef _WIN32
@@ -244,7 +275,7 @@ class GHOST_ContextVK : public GHOST_Context {
 
   std::optional<uint32_t> acquired_swapchain_image_index_;
 
-  std::function<void(const GHOST_VulkanSwapChainData *)> swap_buffer_draw_callback_;
+  std::function<void(const GHOST_VulkanSwapChainData *, bool)> swap_buffer_draw_callback_;
   std::function<void(void)> swap_buffer_acquired_callback_;
   std::function<void(GHOST_VulkanOpenXRData *)> openxr_acquire_framebuffer_image_callback_;
   std::function<void(GHOST_VulkanOpenXRData *)> openxr_release_framebuffer_image_callback_;

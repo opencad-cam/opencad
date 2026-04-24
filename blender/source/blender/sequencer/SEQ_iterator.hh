@@ -10,12 +10,15 @@
 
 #include "BLI_function_ref.hh"
 #include "BLI_vector_set.hh"
+#include "DNA_listBase.h"
 
-struct ListBase;
+namespace blender {
+
 struct Scene;
+struct SeqTimelineChannel;
 struct Strip;
 
-namespace blender::seq {
+namespace seq {
 
 /**
  * Callback format for the for_each function below.
@@ -27,115 +30,110 @@ using ForEachFunc = bool (*)(Strip *strip, void *user_data);
  * Uses callback to do operations on each element.
  * The callback can stop the iteration if needed.
  *
- * \param seqbase: #ListBase of sequences to be iterated over.
+ * \param seqbase: List of sequences to be iterated over.
  * \param callback: query function callback, returns false if iteration should stop.
  * \param user_data: pointer to user data that can be used in the callback function.
  */
-void foreach_strip(ListBase *seqbase, ForEachFunc callback, void *user_data);
+void foreach_strip(ListBaseT<Strip> *seqbase, ForEachFunc callback, void *user_data);
 
 /** Same as above, but using a more modern FunctionRef as callback. */
-void foreach_strip(ListBase *seqbase, FunctionRef<bool(Strip *)> callback);
+void foreach_strip(ListBaseT<Strip> *seqbase, FunctionRef<bool(Strip *)> callback);
 
 /**
  * Expand set by running `strip_query_func()` for each strip, which will be used as reference.
  * Results of these queries will be merged into provided collection.
  *
- * \param seqbase: ListBase in which strips are queried
+ * \param seqbase: List in which strips are queried
  * \param strips: set of strips to be expanded
  * \param strip_query_func: query function callback
  */
-void iterator_set_expand(const Scene *scene,
-                         ListBase *seqbase,
+void iterator_set_expand(ListBaseT<Strip> *seqbase,
                          VectorSet<Strip *> &strips,
-                         void strip_query_func(const Scene *scene,
-                                               Strip *strip_reference,
-                                               ListBase *seqbase,
+                         void strip_query_func(Strip *strip_reference,
+                                               ListBaseT<Strip> *seqbase,
                                                VectorSet<Strip *> &strips));
 /**
  * Query strips from seqbase. strip_reference is used by query function as filter condition.
  *
  * \param strip_reference: reference strip for query function
- * \param seqbase: ListBase in which strips are queried
+ * \param seqbase: List in which strips are queried
  * \param strip_query_func: query function callback
  * \return set of strips
  */
 VectorSet<Strip *> query_by_reference(Strip *strip_reference,
-                                      const Scene *scene,
-                                      ListBase *seqbase,
-                                      void strip_query_func(const Scene *scene,
-                                                            Strip *strip_reference,
-                                                            ListBase *seqbase,
+                                      ListBaseT<Strip> *seqbase,
+                                      void strip_query_func(Strip *strip_reference,
+                                                            ListBaseT<Strip> *seqbase,
                                                             VectorSet<Strip *> &strips));
 /**
  * Query all selected strips in seqbase.
  *
- * \param seqbase: ListBase in which strips are queried
+ * \param seqbase: List in which strips are queried
  * \return set of strips
  */
-VectorSet<Strip *> query_selected_strips(ListBase *seqbase);
+VectorSet<Strip *> query_selected_strips(ListBaseT<Strip> *seqbase);
 /**
  * Query all unselected strips in seqbase.
  *
- * \param seqbase: ListBase in which strips are queried
+ * \param seqbase: List in which strips are queried
  * \return set of strips
  */
-VectorSet<Strip *> query_unselected_strips(ListBase *seqbase);
+VectorSet<Strip *> query_unselected_strips(ListBaseT<Strip> *seqbase);
 /**
  * Query all strips in seqbase. This does not include strips nested in meta strips.
  *
- * \param seqbase: ListBase in which strips are queried
+ * \param seqbase: List in which strips are queried
  * \return set of strips
  */
-VectorSet<Strip *> query_all_strips(ListBase *seqbase);
+VectorSet<Strip *> query_all_strips(ListBaseT<Strip> *seqbase);
 /**
  * Query all strips in seqbase and nested meta strips.
  *
- * \param seqbase: ListBase in which strips are queried
+ * \param seqbase: List in which strips are queried
  * \return set of strips
  */
-VectorSet<Strip *> query_all_strips_recursive(const ListBase *seqbase);
+VectorSet<Strip *> query_all_strips_recursive(const ListBaseT<Strip> *seqbase);
 
 /**
  * Query strips at \a timeline_frame in seqbase and nested meta strips.
  *
- * \param seqbase: ListBase in which strips are queried
+ * \param seqbase: List in which strips are queried
  * \param timeline_frame: viewed frame
  * \return set of strips
  */
 VectorSet<Strip *> query_strips_recursive_at_frame(const Scene *scene,
-                                                   const ListBase *seqbase,
+                                                   const ListBaseT<Strip> *seqbase,
                                                    int timeline_frame);
 
 /**
- * Query all effect strips that are directly or indirectly connected to strip_reference.
- * This includes all effects of strip_reference, strips used by another inputs and their effects,
+ * Recursively query the entire chain of effect strips directly or indirectly
+ * attached to a given reference \a strip, placing result in return parameter \a r_strips.
+ * This includes all effects of \a strip, strips used by another inputs and their effects,
  * so that whole chain is fully independent of other strips.
  *
- * \param strip_reference: reference strip
- * \param seqbase: ListBase in which strips are queried
- * \param strips: set of strips to be filled
+ * \param strip: reference strip
+ * \param seqbase: List in which strips are queried
+ * \param r_strips: set of strips to be filled
  */
-void query_strip_effect_chain(const Scene *scene,
-                              Strip *reference_strip,
-                              ListBase *seqbase,
+void query_strip_effect_chain(Strip *strip,
+                              ListBaseT<Strip> *seqbase,
                               VectorSet<Strip *> &r_strips);
 
 /**
- * Query all connected strips, as well as all effect strips directly or indirectly connected to
- * those connected strips. These steps repeat until there are no new strips to process.
+ * Recursively query the entire chain of connected and effect strips directly or indirectly
+ * attached to a given reference \a strip, placing result in return parameter \a r_strips.
  *
- * \param strip_reference: reference strip
- * \param seqbase: ListBase in which strips are queried
- * \param strips: set of strips to be filled
+ * \param strip: reference strip
+ * \param seqbase: List in which strips are queried
+ * \param r_strips: set of strips to be filled
  */
-void query_strip_connected_and_effect_chain(const Scene *scene,
-                                            Strip *reference_strip,
-                                            ListBase *seqbase,
+void query_strip_connected_and_effect_chain(Strip *strip,
+                                            ListBaseT<Strip> *seqbase,
                                             VectorSet<Strip *> &r_strips);
 
 /**
  * Query strips that will be rendered at \a timeline_frame on all channels less than
- * or equal to \a displayed_channel. This does not recurse into metastrips or sequencer-type scene
+ * or equal to \a displayed_channel. This does not recurse into meta-strips or sequencer-type scene
  * strips.
  *
  * \note This only returns strips that are directly rendered in the strip stack. Other strips'
@@ -144,8 +142,8 @@ void query_strip_connected_and_effect_chain(const Scene *scene,
  * \note Pass \a displayed_channel of 0 to consider all channels.
  */
 VectorSet<Strip *> query_rendered_strips(const Scene *scene,
-                                         ListBase *channels,
-                                         ListBase *seqbase,
+                                         ListBaseT<SeqTimelineChannel> *channels,
+                                         ListBaseT<Strip> *seqbase,
                                          int timeline_frame,
                                          int displayed_channel);
 
@@ -153,8 +151,11 @@ VectorSet<Strip *> query_rendered_strips(const Scene *scene,
  * Strips are sorted from lowest to highest channel.
  * \copydoc #query_rendered_strips
  */
-Vector<Strip *> query_rendered_strips_sorted(
-    const Scene *scene, ListBase *channels, ListBase *seqbase, int timeline_frame, int chanshown);
+Vector<Strip *> query_rendered_strips_sorted(const Scene *scene,
+                                             ListBaseT<SeqTimelineChannel> *channels,
+                                             ListBaseT<Strip> *seqbase,
+                                             int timeline_frame,
+                                             int chanshown);
 
 /**
  * Check to see whether we cannot skip rendering this strip.
@@ -165,4 +166,5 @@ Vector<Strip *> query_rendered_strips_sorted(
  * \note: Take care when changing the logic of this function since order matters.
  * */
 bool must_render_strip(const VectorSet<Strip *> &strip_stack, Strip *target_strip);
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

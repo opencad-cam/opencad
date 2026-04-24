@@ -10,6 +10,8 @@
 
 #include "BLI_enum_flags.hh"
 
+namespace blender {
+
 /* ************************************************ */
 /* F-Curve DataTypes */
 
@@ -30,6 +32,7 @@ enum eFModifier_Types {
   FMODIFIER_TYPE_PYTHON = 7, /* Was never implemented, removed in #123906. */
   FMODIFIER_TYPE_LIMITS = 8,
   FMODIFIER_TYPE_STEPPED = 9,
+  FMODIFIER_TYPE_SMOOTH = 10,
 
   /* NOTE: all new modifiers must be added above this line */
   FMODIFIER_NUM_TYPES,
@@ -577,3 +580,5 @@ enum eAnimData_Flag {
 
 /* From: `DNA_object_types.h`, see its doc-string there. */
 #define SELECT 1
+
+}  // namespace blender

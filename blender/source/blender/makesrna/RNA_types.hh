@@ -18,6 +18,8 @@
 #include "../blenlib/BLI_sys_types.h"
 #include "../blenlib/BLI_vector.hh"
 
+namespace blender {
+
 struct BlenderRNA;
 struct FunctionRNA;
 struct ID;
@@ -36,7 +38,7 @@ struct AncestorPointerRNA {
   StructRNA *type;
   void *data;
 };
-/** Allows to benefit from the `max_full_copy_size` optimization on copy of #blender::Vector. */
+/** Allows to benefit from the `max_full_copy_size` optimization on copy of #Vector. */
 constexpr int64_t ANCESTOR_POINTERRNA_DEFAULT_SIZE = 2;
 
 /**
@@ -73,7 +75,7 @@ struct PointerRNA {
    * have access to/knowledge of the whole ancestor chain), and a sub-struct is accessed through
    * regular RNA property access (like a call to RNA_property_pointer_get etc.).
    */
-  blender::Vector<AncestorPointerRNA, ANCESTOR_POINTERRNA_DEFAULT_SIZE> ancestors = {};
+  Vector<AncestorPointerRNA, ANCESTOR_POINTERRNA_DEFAULT_SIZE> ancestors = {};
 
   PointerRNA() = default;
   PointerRNA(const PointerRNA &) = default;
@@ -90,7 +92,7 @@ struct PointerRNA {
   {
     this->ancestors.append({parent.type, parent.data});
   }
-  PointerRNA(ID *owner_id, StructRNA *type, void *data, blender::Span<AncestorPointerRNA> parents)
+  PointerRNA(ID *owner_id, StructRNA *type, void *data, Span<AncestorPointerRNA> parents)
       : owner_id(owner_id), type(type), data(data), ancestors(parents)
   {
   }
@@ -292,7 +294,20 @@ enum PropertySubType {
   PROP_FREQUENCY = 46 | PROP_UNIT_FREQUENCY,
   PROP_PIXEL_DIAMETER = 47,
   PROP_DISTANCE_DIAMETER = 48 | PROP_UNIT_LENGTH,
+  /** Mass based on scene defined units. */
+  PROP_MASS = 49 | PROP_UNIT_MASS,
 };
+
+/** These two enum types can be combined. */
+inline PropertySubType operator|(const PropertySubType subtype, const PropertyUnit unit)
+{
+  return PropertySubType(int(subtype) | int(unit));
+}
+
+inline int operator&(const PropertySubType subtype, const PropertyUnit unit)
+{
+  return int(subtype) & int(unit);
+}
 
 /* Make sure enums are updated with these */
 /* HIGHEST FLAG IN USE: 1u << 31
@@ -471,6 +486,9 @@ enum PropertyFlag {
 
   /** Do not write in presets (#PROP_HIDDEN and #PROP_SKIP_SAVE won't either). */
   PROP_SKIP_PRESET = (1 << 11),
+
+  /** Use full geometry depsgraph evaluation when this property changes. */
+  PROP_FORCE_GEOMETRY_EVAL = (1 << 3),
 };
 ENUM_OPERATORS(PropertyFlag)
 
@@ -516,7 +534,7 @@ enum PropertyOverrideFlag {
    * created for it, and no attempt to restore the data from linked reference either.
    *
    * WARNING: This flag should be used with a lot of caution, as it completely bypasses override
-   * system. It is currently only used for ID's names, since we cannot prevent local override to
+   * system. It is used for example for ID's names, since we cannot prevent local override to
    * get a different name from the linked reference, and ID names are 'rna name property' (i.e. are
    * used in overrides of collections of IDs). See also `BKE_lib_override_library_update()` where
    * we deal manually with the value of that property at DNA level. */
@@ -616,7 +634,7 @@ struct CollectionPropertyIterator {
 };
 
 struct CollectionVector {
-  blender::Vector<PointerRNA> items;
+  Vector<PointerRNA> items;
 };
 
 enum RawPropertyType {
@@ -765,6 +783,11 @@ using StringPropertySetTransformFunc = std::string (*)(PointerRNA *ptr,
                                                        const std::string &new_value,
                                                        const std::string &curr_value,
                                                        bool is_set);
+using PointerPropertyGetFunc = PointerRNA (*)(PointerRNA *ptr);
+using PointerPropertySetFunc = void (*)(PointerRNA *ptr, PointerRNA value, ReportList *reports);
+using PointerPropertyTypeFunc = StructRNA *(*)(PointerRNA * ptr);
+
+using StructPathFunc = std::optional<std::string> (*)(const PointerRNA *ptr);
 
 struct StringPropertySearchVisitParams {
   /** Text being searched for. */
@@ -808,7 +831,7 @@ using StringPropertySearchFunc =
              PointerRNA *ptr,
              PropertyRNA *prop,
              const char *edit_text,
-             blender::FunctionRef<void(StringPropertySearchVisitParams)> visit_fn);
+             FunctionRef<void(StringPropertySearchVisitParams)> visit_fn);
 
 /**
  * Returns an optional glob pattern (e.g. `*.png`) that can be passed to the file browser to filter
@@ -1061,5 +1084,7 @@ struct PrimitiveFloatRNA {
 struct PrimitiveBooleanRNA {
   bool value;
 };
+
+}  // namespace blender
 
 #endif /* __RNA_TYPES_H__ */

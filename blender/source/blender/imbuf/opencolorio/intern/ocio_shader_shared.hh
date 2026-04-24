@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 #include "GPU_shader_shared_utils.hh"
 
 struct OCIO_GPUCurveMappingParameters {

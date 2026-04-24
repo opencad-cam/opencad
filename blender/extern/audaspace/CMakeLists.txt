@@ -14,16 +14,12 @@
 # limitations under the License.
 ################################################################################
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 include(CMakeDependentOption)
-
-if(POLICY CMP0054)
-	cmake_policy(SET CMP0054 NEW)
-endif()
 
 project(audaspace)
 
-set(AUDASPACE_VERSION 1.8)
+set(AUDASPACE_VERSION 1.9)
 set(AUDASPACE_LONG_VERSION ${AUDASPACE_VERSION}.0)
 
 if(DEFINED AUDASPACE_CMAKE_CFG)
@@ -146,6 +142,7 @@ set(PUBLIC_HDR
 	include/devices/DeviceManager.h
 	include/devices/I3DDevice.h
 	include/devices/I3DHandle.h
+	include/devices/ICaptureDeviceFactory.h
 	include/devices/IDeviceFactory.h
 	include/devices/IDevice.h
 	include/devices/IHandle.h
@@ -261,9 +258,9 @@ set(HDR ${PRIVATE_HDR} ${PUBLIC_HDR})
 set(INCLUDE ${CMAKE_CURRENT_BINARY_DIR} include)
 
 if(WIN32)
-	set(LIBRARIES)
+	set(LIBRARIES "")
 	if(AUDASPACE_STANDALONE)
-		set(DLLS)
+		set(DLLS "")
 		set(LIBRARY_PATH "../lib" CACHE PATH "Path which contains the libraries.")
 		file(GLOB LIBRARY_DIRS ${LIBRARY_PATH}/*)
 		list(APPEND CMAKE_PREFIX_PATH ${LIBRARY_DIRS})
@@ -946,7 +943,6 @@ endif()
 # directories
 
 include_directories(${INCLUDE})
-link_directories()
 
 # install configuration
 
@@ -1220,7 +1216,14 @@ if(WITH_PYTHON)
 	endif()
 
 	add_library(audaspace-py ${LIBRARY_TYPE} ${PYTHON_SRC} ${PYTHON_HDR})
-	target_link_libraries(audaspace-py audaspace ${PYTHON_LIBRARIES})
+	# When Blender is built as a Python module, `PYTHON_LIBRARIES` won't be defined.
+	# NOTE: AUDASPACE has its own `WITH_PYTHON_MODULE` option with different meaning,
+	# so we check the variable is defined instead.
+	if(DEFINED PYTHON_LIBRARIES)
+		target_link_libraries(audaspace-py audaspace ${PYTHON_LIBRARIES})
+	else()
+		target_link_libraries(audaspace-py audaspace)
+	endif()
 	set_target_properties(audaspace-py PROPERTIES SOVERSION ${AUDASPACE_VERSION})
 
 	if(AUDASPACE_STANDALONE)

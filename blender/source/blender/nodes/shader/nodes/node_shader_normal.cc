@@ -8,11 +8,13 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_normal_cc {
+namespace blender {
+
+namespace nodes::node_shader_normal_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Normal")
+  b.add_input<decl::Vector>("Normal"_ustr)
       .default_value({0.0f, 0.0f, 1.0f})
       .min(-1.0f)
       .max(1.0f)
@@ -21,12 +23,12 @@ static void node_declare(NodeDeclarationBuilder &b)
           "Normal direction vector.\n"
           "\u2022 LMB click and drag on the sphere to set the direction of the normal.\n"
           "\u2022 Holding Ctrl while dragging snaps to 45 degree rotation increments");
-  b.add_output<decl::Vector>("Normal")
+  b.add_output<decl::Vector>("Normal"_ustr)
       .default_value({0.0f, 0.0f, 1.0f})
       .min(-1.0f)
       .max(1.0f)
       .subtype(PROP_DIRECTION);
-  b.add_output<decl::Float>("Dot");
+  b.add_output<decl::Float>("Dot"_ustr);
 }
 
 static int gpu_shader_normal(GPUMaterial *mat,
@@ -53,15 +55,15 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_normal_cc
+}  // namespace nodes::node_shader_normal_cc
 
 void register_node_type_sh_normal()
 {
-  namespace file_ns = blender::nodes::node_shader_normal_cc;
+  namespace file_ns = nodes::node_shader_normal_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeNormal", SH_NODE_NORMAL);
+  sh_node_type_base(&ntype, "ShaderNodeNormal"_ustr, SH_NODE_NORMAL);
   ntype.ui_name = "Normal";
   ntype.ui_description = "Generate a normal vector and a dot product";
   ntype.enum_name_legacy = "NORMAL";
@@ -70,5 +72,7 @@ void register_node_type_sh_normal()
   ntype.gpu_fn = file_ns::gpu_shader_normal;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

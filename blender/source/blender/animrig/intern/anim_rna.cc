@@ -11,6 +11,7 @@
 #include "ANIM_rna.hh"
 
 #include "BLI_listbase.h"
+#include "BLI_math_base.h"
 #include "BLI_string.h"
 #include "BLI_vector.hh"
 
@@ -30,21 +31,21 @@ Vector<float> get_rna_values(PointerRNA *ptr, PropertyRNA *prop)
 
     switch (RNA_property_type(prop)) {
       case PROP_BOOLEAN: {
-        bool *tmp_bool = MEM_malloc_arrayN<bool>(length, __func__);
+        bool *tmp_bool = MEM_new_array_uninitialized<bool>(length, __func__);
         RNA_property_boolean_get_array(ptr, prop, tmp_bool);
         for (int i = 0; i < length; i++) {
           values.append(float(tmp_bool[i]));
         }
-        MEM_freeN(tmp_bool);
+        MEM_delete(tmp_bool);
         break;
       }
       case PROP_INT: {
-        int *tmp_int = MEM_malloc_arrayN<int>(length, __func__);
+        int *tmp_int = MEM_new_array_uninitialized<int>(length, __func__);
         RNA_property_int_get_array(ptr, prop, tmp_int);
         for (int i = 0; i < length; i++) {
           values.append(float(tmp_int[i]));
         }
-        MEM_freeN(tmp_int);
+        MEM_delete(tmp_int);
         break;
       }
       case PROP_FLOAT: {
@@ -91,6 +92,48 @@ StringRef get_rotation_mode_path(const eRotationModes rotation_mode)
   }
 }
 
+std::optional<eRotationModes> get_rotation_mode_from_path(const StringRefNull rna_path)
+{
+  /* Accounting for the difference between objects and bones where the latter is e.g.
+   * `pose.bones["foo"].rotation_euler`. Assumes that rfind returns -1 if the string
+   * is not found. */
+  const int start_of_propname = rna_path.rfind(".") + 1;
+  if (!rna_path.substr(start_of_propname, rna_path.size()).startswith("rotation_")) {
+    return std::nullopt;
+  }
+  /* We already know that "rotation_" is in the rna_path, we can skip the full check for
+   * "rotation_quaternion", "rotation_euler" or "rotation_axis_angle". */
+  if (rna_path.endswith("quaternion")) {
+    return ROT_MODE_QUAT;
+  }
+  else if (rna_path.endswith("euler")) {
+    /* Cannot determine the rotation order from the path alone. */
+    return ROT_MODE_EUL;
+  }
+  else if (rna_path.endswith("axis_angle")) {
+    return ROT_MODE_AXISANGLE;
+  }
+  return std::nullopt;
+}
+
+std::optional<eRotationModes> get_rotation_mode_from_rna_pointer(const PointerRNA &ptr)
+{
+  if (ptr.type == RNA_PoseBone) {
+    bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr.data);
+    return eRotationModes(pchan->rotmode);
+  }
+  if (ptr.type == RNA_Object) {
+    Object *ob = static_cast<Object *>(ptr.data);
+    return eRotationModes(ob->rotmode);
+  }
+  return std::nullopt;
+}
+
+bool is_rotation_path(const StringRefNull rna_path)
+{
+  return get_rotation_mode_from_path(rna_path).has_value();
+}
+
 static bool is_idproperty_keyable(const IDProperty *id_prop, PointerRNA *ptr, PropertyRNA *prop)
 {
   /* While you can cast the IDProperty* to a PropertyRNA* and pass it to the RNA_* functions, this
@@ -127,11 +170,11 @@ Vector<RNAPath> get_keyable_id_property_paths(const PointerRNA &ptr)
 {
   IDProperty *properties;
 
-  if (ptr.type == &RNA_PoseBone) {
+  if (ptr.type == RNA_PoseBone) {
     const bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr.data);
     properties = pchan->prop;
   }
-  else if (ptr.type == &RNA_Object) {
+  else if (ptr.type == RNA_Object) {
     const Object *ob = static_cast<Object *>(ptr.data);
     properties = ob->id.properties;
   }
@@ -145,10 +188,10 @@ Vector<RNAPath> get_keyable_id_property_paths(const PointerRNA &ptr)
   }
 
   Vector<RNAPath> paths;
-  LISTBASE_FOREACH (const IDProperty *, id_prop, &properties->data.group) {
+  for (const IDProperty &id_prop : properties->data.group) {
     PointerRNA resolved_ptr;
     PropertyRNA *resolved_prop;
-    std::string path = id_prop->name;
+    std::string path = id_prop.name;
     /* Resolving the path twice, once as RNA property (without brackets, `"propname"`),
      * and once as ID property (with brackets, `["propname"]`).
      * This is required to support IDProperties that have been defined as part of an add-on.
@@ -160,14 +203,14 @@ Vector<RNAPath> get_keyable_id_property_paths(const PointerRNA &ptr)
      * catches that case. */
     if (!is_resolved || !RNA_property_is_runtime(resolved_prop)) {
       char name_escaped[MAX_IDPROP_NAME * 2];
-      BLI_str_escape(name_escaped, id_prop->name, sizeof(name_escaped));
+      BLI_str_escape(name_escaped, id_prop.name, sizeof(name_escaped));
       path = fmt::format("[\"{}\"]", name_escaped);
       is_resolved = RNA_path_resolve_property(&ptr, path.c_str(), &resolved_ptr, &resolved_prop);
     }
     if (!is_resolved) {
       continue;
     }
-    if (is_idproperty_keyable(id_prop, &resolved_ptr, resolved_prop)) {
+    if (is_idproperty_keyable(&id_prop, &resolved_ptr, resolved_prop)) {
       paths.append({path});
     }
   }

@@ -17,9 +17,11 @@
 
 #include "UI_interface_layout.hh"
 
+namespace blender {
+
 struct bContext;
 
-namespace blender::ui {
+namespace ui {
 
 #define CURVE_ZOOM_MAX (1.0f / 25.0f)
 #define ERROR_LIBDATA_MESSAGE N_("Cannot edit external library data")
@@ -43,7 +45,7 @@ static inline void rna_update_cb(bContext &C, const RNAUpdateCb &cb)
 
 static inline void rna_update_cb(bContext *C, void *arg_cb, void * /*arg*/)
 {
-  RNAUpdateCb *cb = (RNAUpdateCb *)arg_cb;
+  RNAUpdateCb *cb = static_cast<RNAUpdateCb *>(arg_cb);
   rna_update_cb(*C, *cb);
 }
 
@@ -64,8 +66,8 @@ void template_add_button_search_menu(const bContext *C,
                                      const bool use_previews,
                                      const bool editable,
                                      const bool live_icon,
-                                     ButtonArgNFree func_argN_free_fn = MEM_freeN,
-                                     ButtonArgNCopy func_argN_copy_fn = MEM_dupallocN);
+                                     ButtonArgNFree func_argN_free_fn = MEM_delete_void,
+                                     ButtonArgNCopy func_argN_copy_fn = MEM_dupalloc);
 
 Block *template_common_search_menu(const bContext *C,
                                    ARegion *region,
@@ -78,4 +80,5 @@ Block *template_common_search_menu(const bContext *C,
                                    const int preview_cols,
                                    float scale);
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

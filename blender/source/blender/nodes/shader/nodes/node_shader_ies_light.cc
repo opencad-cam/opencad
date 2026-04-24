@@ -10,18 +10,20 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_ies_light_cc {
+namespace blender {
+
+namespace nodes::node_shader_ies_light_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Vector").hide_value();
-  b.add_input<decl::Float>("Strength")
+  b.add_input<decl::Vector>("Vector"_ustr).hide_value();
+  b.add_input<decl::Float>("Strength"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1000000.0f)
       .description("Strength of the light source")
       .translation_context(BLT_I18NCONTEXT_AMOUNT);
-  b.add_output<decl::Float>("Factor", "Fac");
+  b.add_output<decl::Float>("Factor"_ustr, "Fac"_ustr);
 }
 
 static void node_shader_buts_ies(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -45,20 +47,20 @@ static void node_shader_buts_ies(ui::Layout &layout, bContext * /*C*/, PointerRN
 
 static void node_shader_init_tex_ies(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeShaderTexIES *tex = MEM_new_for_free<NodeShaderTexIES>("NodeShaderIESLight");
+  NodeShaderTexIES *tex = MEM_new<NodeShaderTexIES>("NodeShaderIESLight");
   node->storage = tex;
 }
 
-}  // namespace blender::nodes::node_shader_ies_light_cc
+}  // namespace nodes::node_shader_ies_light_cc
 
 /* node type definition */
 void register_node_type_sh_tex_ies()
 {
-  namespace file_ns = blender::nodes::node_shader_ies_light_cc;
+  namespace file_ns = nodes::node_shader_ies_light_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeTexIES", SH_NODE_TEX_IES);
+  sh_node_type_base(&ntype, "ShaderNodeTexIES"_ustr, SH_NODE_TEX_IES);
   ntype.ui_name = "IES Texture";
   ntype.ui_description =
       "Match real world lights with IES files, which store the directional intensity distribution "
@@ -68,8 +70,10 @@ void register_node_type_sh_tex_ies()
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_ies;
   ntype.initfunc = file_ns::node_shader_init_tex_ies;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeShaderTexIES", node_free_standard_storage, node_copy_standard_storage);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -71,6 +71,7 @@ struct CurvesBatchCache {
 
   /* Crazy-space point positions for original points. */
   gpu::VertBuf *edit_points_pos;
+  gpu::VertBuf *edit_points_rad;
 
   /* Additional data needed for shader to choose color for each point in edit_points_pos.
    * If first bit is set, then point is NURBS control point. EDIT_CURVES_NURBS_CONTROL_POINT is
@@ -100,13 +101,13 @@ struct CurvesBatchCache {
 
 static bool batch_cache_is_dirty(const Curves &curves)
 {
-  const CurvesBatchCache *cache = static_cast<CurvesBatchCache *>(curves.batch_cache);
+  const CurvesBatchCache *cache = curves.batch_cache;
   return (cache && cache->is_dirty == false);
 }
 
 static void init_batch_cache(Curves &curves)
 {
-  CurvesBatchCache *cache = static_cast<CurvesBatchCache *>(curves.batch_cache);
+  CurvesBatchCache *cache = curves.batch_cache;
 
   if (!cache) {
     cache = MEM_new<CurvesBatchCache>(__func__);
@@ -123,6 +124,7 @@ static void clear_edit_data(CurvesBatchCache *cache)
 {
   /* TODO: more granular update tagging. */
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_pos);
+  GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_rad);
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_data);
   GPU_VERTBUF_DISCARD_SAFE(cache->edit_points_selection);
   GPU_INDEXBUF_DISCARD_SAFE(cache->edit_handles_ibo);
@@ -183,7 +185,7 @@ void CurvesEvalCache::clear()
 
 static void clear_batch_cache(Curves &curves)
 {
-  CurvesBatchCache *cache = static_cast<CurvesBatchCache *>(curves.batch_cache);
+  CurvesBatchCache *cache = curves.batch_cache;
   if (!cache) {
     return;
   }
@@ -195,7 +197,7 @@ static void clear_batch_cache(Curves &curves)
 static CurvesBatchCache &get_batch_cache(Curves &curves)
 {
   DRW_curves_batch_cache_validate(&curves);
-  return *static_cast<CurvesBatchCache *>(curves.batch_cache);
+  return *curves.batch_cache;
 }
 
 static uint32_t bezier_data_value(int8_t handle_type, bool is_active)
@@ -226,15 +228,17 @@ static void extract_edit_data(const OffsetIndices<int> points_by_curve,
                               const uint32_t fill_value,
                               MutableSpan<uint32_t> data)
 {
-  curve_selection.foreach_index(GrainSize(256), [&](const int curve) {
-    const IndexRange points = points_by_curve[curve];
-    bool is_active = false;
-    if (mark_active) {
-      is_active = array_utils::count_booleans(selection_attr, points) > 0;
-    }
-    uint32_t data_value = fill_value | (is_active ? EDIT_CURVES_ACTIVE_HANDLE : 0u);
-    data.slice(points).fill(data_value);
-  });
+  curve_selection.foreach_index(
+      [&](const int curve) {
+        const IndexRange points = points_by_curve[curve];
+        bool is_active = false;
+        if (mark_active) {
+          is_active = array_utils::count_booleans(selection_attr, points) > 0;
+        }
+        uint32_t data_value = fill_value | (is_active ? EDIT_CURVES_ACTIVE_HANDLE : 0u);
+        data.slice(points).fill(data_value);
+      },
+      exec_mode::grain_size(256));
 }
 
 static void create_edit_points_data(const OffsetIndices<int> points_by_curve,
@@ -272,19 +276,22 @@ static void create_edit_points_data(const OffsetIndices<int> points_by_curve,
     MutableSpan data_left = data.slice(handle_range_left(points_num, bezier_offsets));
     MutableSpan data_right = data.slice(handle_range_right(points_num, bezier_offsets));
 
-    bezier_curves.foreach_index(GrainSize(256), [&](const int curve, const int64_t pos) {
-      const IndexRange points = points_by_curve[curve];
-      const IndexRange bezier_range = bezier_offsets[pos];
-      for (const int i : points.index_range()) {
-        const int point = points[i];
-        data[point] = EDIT_CURVES_BEZIER_KNOT;
+    bezier_curves.foreach_index(
+        [&](const int curve, const int64_t pos) {
+          const IndexRange points = points_by_curve[curve];
+          const IndexRange bezier_range = bezier_offsets[pos];
+          for (const int i : points.index_range()) {
+            const int point = points[i];
+            data[point] = EDIT_CURVES_BEZIER_KNOT;
 
-        const bool selected = selection[point] || selection_left[point] || selection_right[point];
-        const int bezier_point = bezier_range[i];
-        data_left[bezier_point] = bezier_data_value(type_right[point], selected);
-        data_right[bezier_point] = bezier_data_value(types_left[point], selected);
-      }
-    });
+            const bool selected = selection[point] || selection_left[point] ||
+                                  selection_right[point];
+            const int bezier_point = bezier_range[i];
+            data_left[bezier_point] = bezier_data_value(type_right[point], selected);
+            data_right[bezier_point] = bezier_data_value(types_left[point], selected);
+          }
+        },
+        exec_mode::grain_size(256));
   }
 
   extract_edit_data(
@@ -328,6 +335,44 @@ static void create_edit_points_position(const bke::CurvesGeometry &curves,
           data.slice(handle_range_right(points_num, bezier_offsets)));
     }
   }
+}
+
+static void create_edit_points_radius(const bke::CurvesGeometry &curves,
+                                      const OffsetIndices<int> points_by_curve,
+                                      const IndexMask &bezier_curves,
+                                      const OffsetIndices<int> bezier_offsets,
+                                      gpu::VertBuf &vbo)
+{
+  const VArraySpan<float> radii = curves.radius();
+  const int points_num = radii.size();
+
+  static const GPUVertFormat format = GPU_vertformat_from_attribute("rad",
+                                                                    gpu::VertAttrType::SFLOAT_32);
+  GPU_vertbuf_init_with_format(vbo, format);
+  GPU_vertbuf_data_alloc(vbo, handles_and_points_num(points_num, bezier_offsets));
+
+  MutableSpan<float> data = vbo.data<float>();
+  data.take_front(radii.size()).copy_from(radii);
+
+  if (bezier_curves.is_empty()) {
+    return;
+  }
+
+  MutableSpan data_left = data.slice(handle_range_left(points_num, bezier_offsets));
+  MutableSpan data_right = data.slice(handle_range_right(points_num, bezier_offsets));
+
+  bezier_curves.foreach_index(
+      [&](const int curve, const int64_t pos) {
+        const IndexRange points = points_by_curve[curve];
+        const IndexRange bezier_range = bezier_offsets[pos];
+        for (const int i : points.index_range()) {
+          const int point = points[i];
+          const int bezier_point = bezier_range[i];
+          data_left[bezier_point] = data[point];
+          data_right[bezier_point] = data[point];
+        }
+      },
+      exec_mode::grain_size(256));
 }
 
 static void create_edit_points_selection(const OffsetIndices<int> points_by_curve,
@@ -432,19 +477,21 @@ static void create_segments_with_cyclic(const OffsetIndices<int> points_by_curve
                                         const IndexMask &selection,
                                         MutableSpan<uint2> lines)
 {
-  selection.foreach_index(GrainSize(512), [&](const int curve) {
-    const IndexRange points = points_by_curve[curve];
-    MutableSpan<uint2> curve_lines = lines.slice(points);
-    for (const int i : points.index_range().drop_back(1)) {
-      curve_lines[i] = uint2(points[i]) + uint2(0, 1);
-    }
-    if (cyclic[curve]) {
-      curve_lines.last() = uint2(points.first(), points.last());
-    }
-    else {
-      curve_lines.last() = uint2(points.last(), points.last());
-    }
-  });
+  selection.foreach_index(
+      [&](const int curve) {
+        const IndexRange points = points_by_curve[curve];
+        MutableSpan<uint2> curve_lines = lines.slice(points);
+        for (const int i : points.index_range().drop_back(1)) {
+          curve_lines[i] = uint2(points[i]) + uint2(0, 1);
+        }
+        if (cyclic[curve]) {
+          curve_lines.last() = uint2(points.first(), points.last());
+        }
+        else {
+          curve_lines.last() = uint2(points.last(), points.last());
+        }
+      },
+      exec_mode::grain_size(512));
 }
 
 static void calc_edit_handles_ibo(const OffsetIndices<int> points_by_curve,
@@ -486,26 +533,30 @@ static void calc_edit_handles_ibo(const OffsetIndices<int> points_by_curve,
   const IndexRange handles_left = handle_range_left(points_num, bezier_offsets);
   const IndexRange handles_right = handle_range_right(points_num, bezier_offsets);
 
-  bezier_curves.foreach_index(GrainSize(512), [&](const int curve, const int pos) {
-    const IndexRange points = points_by_curve[curve];
-    const IndexRange bezier_point_range = bezier_offsets[pos];
-    for (const int i : points.index_range()) {
-      const int point = points[i];
-      const int bezier_point = bezier_point_range[i];
-      curve_or_handle_segments[point] = uint2(handles_left[bezier_point], point);
-    }
-  });
+  bezier_curves.foreach_index(
+      [&](const int curve, const int pos) {
+        const IndexRange points = points_by_curve[curve];
+        const IndexRange bezier_point_range = bezier_offsets[pos];
+        for (const int i : points.index_range()) {
+          const int point = points[i];
+          const int bezier_point = bezier_point_range[i];
+          curve_or_handle_segments[point] = uint2(handles_left[bezier_point], point);
+        }
+      },
+      exec_mode::grain_size(512));
 
   MutableSpan<uint2> right_handle_segments = lines.drop_front(points_num);
-  bezier_curves.foreach_index(GrainSize(512), [&](const int curve, const int pos) {
-    const IndexRange points = points_by_curve[curve];
-    const IndexRange bezier_point_range = bezier_offsets[pos];
-    for (const int i : points.index_range()) {
-      const int point = points[i];
-      const int bezier_point = bezier_point_range[i];
-      right_handle_segments[bezier_point] = uint2(handles_right[bezier_point], point);
-    }
-  });
+  bezier_curves.foreach_index(
+      [&](const int curve, const int pos) {
+        const IndexRange points = points_by_curve[curve];
+        const IndexRange bezier_point_range = bezier_offsets[pos];
+        for (const int i : points.index_range()) {
+          const int point = points[i];
+          const int bezier_point = bezier_point_range[i];
+          right_handle_segments[bezier_point] = uint2(handles_right[bezier_point], point);
+        }
+      },
+      exec_mode::grain_size(512));
 
   BLI_assert(!lines.contains(uint2(std::numeric_limits<uint32_t>::max())));
 
@@ -604,7 +655,7 @@ void CurvesEvalCache::ensure_attribute(CurvesModule &module,
   GPUVertFormat format = {0};
   /* All attributes use float4, see comment below. */
   /* TODO(fclem): Other types. */
-  GPU_vertformat_attr_add(&format, sampler_name, blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
+  GPU_vertformat_attr_add(&format, sampler_name, gpu::VertAttrType::SFLOAT_32_32_32_32);
 
   gpu::VertBufPtr attr_buf = ensure_control_point_attribute(
       curves, name, format, attributes_point_domain[index]);
@@ -650,9 +701,9 @@ void CurvesEvalCache::ensure_attributes(CurvesModule &module,
 
   if (gpu_material) {
     VectorSet<std::string> attrs_needed;
-    ListBase gpu_attrs = GPU_material_attributes(gpu_material);
-    LISTBASE_FOREACH (GPUMaterialAttribute *, gpu_attr, &gpu_attrs) {
-      StringRef name = gpu_attr->name;
+    ListBaseT<GPUMaterialAttribute> gpu_attrs = GPU_material_attributes(gpu_material);
+    for (GPUMaterialAttribute &gpu_attr : gpu_attrs) {
+      StringRef name = gpu_attr.name;
       if (name.is_empty()) {
         if (std::optional<StringRef> uv_name = get_first_uv_name(attributes)) {
           drw_attributes_add_request(&attrs_needed, *uv_name);
@@ -898,7 +949,7 @@ CurvesEvalCache &curves_get_eval_cache(Curves &curves_id)
 
 void DRW_curves_batch_cache_dirty_tag(Curves *curves, int mode)
 {
-  CurvesBatchCache *cache = static_cast<CurvesBatchCache *>(curves->batch_cache);
+  CurvesBatchCache *cache = curves->batch_cache;
   if (cache == nullptr) {
     return;
   }
@@ -922,14 +973,14 @@ void DRW_curves_batch_cache_validate(Curves *curves)
 void DRW_curves_batch_cache_free(Curves *curves)
 {
   clear_batch_cache(*curves);
-  CurvesBatchCache *batch_cache = static_cast<CurvesBatchCache *>(curves->batch_cache);
+  CurvesBatchCache *batch_cache = curves->batch_cache;
   MEM_delete(batch_cache);
   curves->batch_cache = nullptr;
 }
 
 void DRW_curves_batch_cache_free_old(Curves *curves, int ctime)
 {
-  CurvesBatchCache *cache = static_cast<CurvesBatchCache *>(curves->batch_cache);
+  CurvesBatchCache *cache = curves->batch_cache;
   if (cache == nullptr) {
     return;
   }
@@ -1043,6 +1094,7 @@ void DRW_curves_batch_cache_create_requested(Object *ob)
 
   if (DRW_batch_requested(cache.edit_points, GPU_PRIM_POINTS)) {
     DRW_vbo_request(cache.edit_points, &cache.edit_points_pos);
+    DRW_vbo_request(cache.edit_points, &cache.edit_points_rad);
     DRW_vbo_request(cache.edit_points, &cache.edit_points_data);
     DRW_vbo_request(cache.edit_points, &cache.edit_points_selection);
     is_edit_data_needed = true;
@@ -1057,6 +1109,7 @@ void DRW_curves_batch_cache_create_requested(Object *ob)
   if (DRW_batch_requested(cache.edit_handles, GPU_PRIM_LINES)) {
     DRW_ibo_request(cache.edit_handles, &cache.edit_handles_ibo);
     DRW_vbo_request(cache.edit_handles, &cache.edit_points_pos);
+    DRW_vbo_request(cache.edit_handles, &cache.edit_points_rad);
     DRW_vbo_request(cache.edit_handles, &cache.edit_points_data);
     DRW_vbo_request(cache.edit_handles, &cache.edit_points_selection);
     is_edit_data_needed = true;
@@ -1117,6 +1170,10 @@ void DRW_curves_batch_cache_create_requested(Object *ob)
                                 bezier_offsets,
                                 deformation,
                                 *cache.edit_points_pos);
+  }
+  if (DRW_vbo_requested(cache.edit_points_rad)) {
+    create_edit_points_radius(
+        curves_orig, points_by_curve, bezier_curves, bezier_offsets, *cache.edit_points_rad);
   }
   if (DRW_vbo_requested(cache.edit_points_data)) {
     create_edit_points_data(points_by_curve,

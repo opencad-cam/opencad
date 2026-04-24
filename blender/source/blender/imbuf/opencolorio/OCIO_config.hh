@@ -39,6 +39,9 @@ struct DisplayParameters {
   /* Rather than outputting colors for the specified display, output extended
    * sRGB colors emulating the specified display. */
   bool use_display_emulation = false;
+  /* Rather than outputting native display colors, output in a color space
+   * suitable for plotting SDR or HDR scopes. */
+  bool use_scope_space = false;
   /* Invert the entire transform. */
   bool inverse = false;
 };
@@ -56,12 +59,6 @@ class Config {
    * If there is an error creating the configuration nullptr is returned.
    */
   static std::unique_ptr<Config> create_from_environment();
-
-  /**
-   * Create OpenColorIO configuration using configuration from the given configuration file.
-   * If there is an error creating the configuration nullptr is returned.
-   */
-  static std::unique_ptr<Config> create_from_file(StringRefNull filename);
 
   /**
    * Create fallback implementation which is always guaranteed to work.

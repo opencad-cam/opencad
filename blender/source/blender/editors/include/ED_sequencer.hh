@@ -10,13 +10,15 @@
 
 #include "BLI_vector_set.hh"
 
+namespace blender {
+
 struct Scene;
 struct Strip;
 struct SpaceSeq;
 struct bContext;
 struct View2D;
 
-namespace blender::ed::vse {
+namespace ed::vse {
 
 enum eStripHandle {
   STRIP_HANDLE_NONE,
@@ -65,7 +67,6 @@ void ED_operatormacros_sequencer();
 Strip *special_preview_get();
 void special_preview_set(bContext *C, const int mval[2]);
 void special_preview_clear();
-bool sequencer_retiming_mode_is_active(const bContext *C);
 /**
  * Returns collection with selected strips presented to user. If operation is done in preview,
  * collection is limited to selected presented strips, that can produce image output at current
@@ -89,4 +90,17 @@ bool is_scene_time_sync_needed(const bContext &C);
 const Strip *get_scene_strip_for_time_sync(const Scene *sequencer_scene);
 void sync_active_scene_and_time_with_scene_strip(bContext &C);
 
-}  // namespace blender::ed::vse
+/**
+ * Sync the View3D camera to match the current scene strip's camera when VSE sync is active.
+ *
+ * This should be called after operations that might reset the camera (undo, layer changes, etc.)
+ * to ensure VSE maintains control over the viewport camera.
+ *
+ * See issue #152866.
+ */
+void sync_vse_camera_for_view3d(const WorkSpace *workspace,
+                                const Scene *active_scene,
+                                View3D *v3d);
+
+}  // namespace ed::vse
+}  // namespace blender

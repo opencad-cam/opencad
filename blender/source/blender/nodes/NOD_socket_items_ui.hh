@@ -42,7 +42,7 @@ static void draw_item_in_list(uiList * /*ui_list*/,
     template_node_socket(&row, const_cast<bContext *>(C), color);
   }
   row.emboss_set(blender::ui::EmbossType::None);
-  row.prop(itemptr, "name", UI_ITEM_NONE, "", ICON_NONE);
+  row.prop(itemptr, "name", blender::UI_ITEM_NONE, "", ICON_NONE);
 }
 
 /**
@@ -57,10 +57,10 @@ static void draw_items_list_with_operators(const bContext *C,
 {
   BLI_assert(Accessor::node_idname == node.idname);
   PointerRNA node_ptr = RNA_pointer_create_discrete(
-      const_cast<ID *>(&tree.id), &RNA_Node, const_cast<bNode *>(&node));
+      const_cast<ID *>(&tree.id), RNA_Node, const_cast<bNode *>(&node));
 
   static const uiListType *items_list = []() {
-    uiListType *list = MEM_callocN<uiListType>(Accessor::ui_idnames::list.c_str());
+    uiListType *list = MEM_new_zeroed<uiListType>(Accessor::ui_idnames::list.c_str());
     STRNCPY_UTF8(list->idname, Accessor::ui_idnames::list.c_str());
     list->draw_item = draw_item_in_list<Accessor>;
     WM_uilisttype_add(list);
@@ -68,19 +68,19 @@ static void draw_items_list_with_operators(const bContext *C,
   }();
 
   blender::ui::Layout *row = &layout->row(false);
-  template_list(row,
-                C,
-                items_list->idname,
-                "",
-                &node_ptr,
-                Accessor::rna_names::items,
-                &node_ptr,
-                Accessor::rna_names::active_index.c_str(),
-                nullptr,
-                3,
-                5,
-                UILST_LAYOUT_DEFAULT,
-                blender::ui::TEMPLATE_LIST_FLAG_NONE);
+  template_uilist(row,
+                  C,
+                  items_list->idname,
+                  "",
+                  &node_ptr,
+                  Accessor::rna_names::items,
+                  &node_ptr,
+                  Accessor::rna_names::active_index.c_str(),
+                  nullptr,
+                  3,
+                  5,
+                  UILST_LAYOUT_DEFAULT,
+                  blender::ui::TEMPLATE_LIST_FLAG_NONE);
 
   blender::ui::Layout *ops_col = &row->column(false);
   {
@@ -116,7 +116,7 @@ static void draw_active_item_props(const bNodeTree &tree,
 
   ItemT &item = (*ref.items)[*ref.active_index];
   PointerRNA item_ptr = RNA_pointer_create_discrete(
-      const_cast<ID *>(&tree.id), Accessor::item_srna, &item);
+      const_cast<ID *>(&tree.id), *Accessor::item_srna, &item);
   draw_item(&item_ptr);
 }
 

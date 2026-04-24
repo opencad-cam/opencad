@@ -9,9 +9,7 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 enum eIconSizes {
   ICON_SIZE_ICON = 0,
@@ -89,6 +87,20 @@ enum eIDPropertyFlag {
    * #RNA_property_is_set, currently this is a runtime flag.
    */
   IDP_FLAG_GHOST = 1 << 7,
+};
+
+/**
+ * #Library.flag
+ *
+ * Some of these flags define a 'virtual' library, which may not be an actual blendfile, store
+ * 'archived' embedded data, etc. IDs contained in these virtual libraries are _not_ managed by
+ * regular linking code.
+ *
+ * Warning: 16 bits only (uint16_t) currently!
+ */
+enum LibraryFlag {
+  /** The library is an 'archive' that only contains embedded linked data. */
+  LIBRARY_FLAG_IS_ARCHIVE = 1 << 0,
 };
 
 /**
@@ -172,6 +184,4 @@ enum ID_Type {
 /* fluidsim Ipo */
 #define ID_FLUIDSIM MAKE_ID2('F', 'S')
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

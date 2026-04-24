@@ -51,6 +51,16 @@ def gather_tracks_animations(export_settings):
     animations = []
     merged_tracks = {}
 
+    # Disable viewport updates for faster export. (Will be re-enabled at the end of export)
+    # This is needed to avoid refreshing the viewport at each track
+    # muting/unmuting, which can be very long when many tracks.
+    if export_settings['gltf_optimize_disable_viewport']:
+
+        # Before baking, disabling from viewport all meshes
+        for obj in [n.blender_object for n in export_settings['vtree'].nodes.values() if n.blender_type in
+                    [VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION]]:
+            obj.hide_viewport = True
+
     vtree = export_settings['vtree']
     for obj_uuid in vtree.get_all_objects():
 
@@ -66,8 +76,16 @@ def gather_tracks_animations(export_settings):
         if export_settings['vtree'].nodes[obj_uuid].blender_type == VExportNode.COLLECTION:
             continue
 
+        # Enable only this object for faster export, as we export per object. Will be re-enabled at the end of export
+        if export_settings['gltf_optimize_disable_viewport']:
+            vtree.nodes[obj_uuid].blender_object.hide_viewport = False
+
         animations_, merged_tracks = gather_track_animations(obj_uuid, merged_tracks, len(animations), export_settings)
         animations += animations_
+
+        # After baking, re-enabling for this object
+        if export_settings['gltf_optimize_disable_viewport']:
+            vtree.nodes[obj_uuid].blender_object.hide_viewport = False
 
     if export_settings['gltf_export_anim_pointer'] is True:
         # Manage Material tracks (for KHR_animation_pointer)
@@ -87,6 +105,14 @@ def gather_tracks_animations(export_settings):
             animations_, merged_tracks = gather_data_track_animations(
                 'lights', light, merged_tracks, len(animations), export_settings)
             animations += animations_
+
+    # We can now re-enable viewport updates, as we are done with muting/unmuting tracks
+    if export_settings['gltf_optimize_disable_viewport']:
+
+        # After baking, re-enabling for all meshes
+        for n in [n for n in export_settings['vtree'].nodes.values() if n.blender_type in
+                  [VExportNode.OBJECT, VExportNode.ARMATURE, VExportNode.COLLECTION]]:
+            n.blender_object.hide_viewport = n.default_hide_viewport
 
     new_animations = merge_tracks_perform(merged_tracks, animations, export_settings)
 
@@ -244,13 +270,14 @@ def gather_track_animations(obj_uuid: int,
                 if not (track_data.name.startswith("NlaTrack") or track_data.name.startswith("[Action Stash]")):
                     if track_data.name not in tracks.keys():
                         tracks[track_data.name] = []
-                    tracks[track_data.name].append(offset + len(animations) - 1)  # Store index of animation in animations
+                    # Store index of animation in animations
+                    tracks[track_data.name].append(offset + len(animations) - 1)
             elif export_settings['gltf_merge_animation'] == "ACTION":
-                pass # This can't happen here, as we bake per NLA track
+                pass  # This can't happen here, as we bake per NLA track
             elif export_settings['gltf_merge_animation'] == "NONE":
-                pass # This can't happen here, as we bake per NLA track
+                pass  # This can't happen here, as we bake per NLA track
             else:
-                pass # This can't happen here, as we bake per NLA track
+                pass  # This can't happen here, as we bake per NLA track
 
         # Restoring muting
         if track_data.on_type == "OBJECT":
@@ -458,7 +485,6 @@ def prepare_tracks_range(obj_uuid, track_data, export_settings, with_driver=True
     frame_start = 0
     frame_end = 0
 
-
     for idx, btrack in enumerate(tracks):
         frame_start = btrack.frame_start if idx == 0 else min(frame_start, btrack.frame_start)
         frame_end = btrack.frame_end if idx == 0 else max(frame_end, btrack.frame_end)
@@ -631,7 +657,8 @@ def gather_data_track_animations(
                 blender_data_object.node_tree.animation_data.nla_tracks[track.idx].mute = False
 
         # Export animation
-        animation = bake_data_animation(blender_type_data, blender_id, track_data.name, None, track_data.on_type, export_settings)
+        animation = bake_data_animation(blender_type_data, blender_id, track_data.name,
+                                        None, track_data.on_type, export_settings)
         get_cache_data.reset_cache()
         if animation is not None:
             animations.append(animation)

@@ -49,11 +49,11 @@ static int area_calc_region_type_index(const ScrArea *area, const ARegion *regio
 {
   const int region_type = region->regiontype;
   int index = 0;
-  LISTBASE_FOREACH (const ARegion *, region_iter, &area->regionbase) {
-    if (region_iter->regiontype != region_type) {
+  for (const ARegion &region_iter : area->regionbase) {
+    if (region_iter.regiontype != region_type) {
       continue;
     }
-    if (region_iter == region) {
+    if (&region_iter == region) {
       return index;
     }
     index += 1;
@@ -76,16 +76,16 @@ static ARegion *area_find_region_by_type_and_index_hint(const ScrArea *area,
   /* Any negative values can return the first match. */
   index_hint = std::max(0, index_hint);
   int index = 0;
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    if (region->regiontype != region_type) {
+  for (ARegion &region : area->regionbase) {
+    if (region.regiontype != region_type) {
       continue;
     }
     if (index == index_hint) {
-      region_match_type = region;
+      region_match_type = &region;
       break;
     }
     if (region_match_type == nullptr) {
-      region_match_type = region;
+      region_match_type = &region;
     }
     index += 1;
   }
@@ -123,12 +123,12 @@ static bool last_redo_poll(const bContext *C, short region_type, int region_inde
                                                    area, region_type, region_index_hint) :
                                                nullptr;
     ARegion *region_prev = CTX_wm_region(C);
-    CTX_wm_region_set((bContext *)C, region_op);
+    CTX_wm_region_set(const_cast<bContext *>(C), region_op);
 
     if (WM_operator_repeat_check(C, op) && WM_operator_ui_poll(op->type, op->ptr)) {
-      success = WM_operator_poll((bContext *)C, op->type);
+      success = WM_operator_poll(const_cast<bContext *>(C), op->type);
     }
-    CTX_wm_region_set((bContext *)C, region_prev);
+    CTX_wm_region_set(const_cast<bContext *>(C), region_prev);
   }
   return success;
 }
@@ -177,12 +177,15 @@ static void hud_panel_operator_redo_draw(const bContext *C, Panel *panel)
     panel->layout->enabled_set(false);
   }
   Layout &col = panel->layout->column(false);
+  /* Redo HUD is a kind of popup, use persistent layout panel states for the redo operator. */
+  panel->runtime->layout_panel_states_storage = &popup_persistent_layout_panel_states(
+      op->type->idname);
   template_operator_redo_properties(&col, C);
 }
 
 static void hud_panels_register(ARegionType *art, int space_type, int region_type)
 {
-  PanelType *pt = MEM_callocN<PanelType>(__func__);
+  PanelType *pt = MEM_new_zeroed<PanelType>(__func__);
   STRNCPY_UTF8(pt->idname, "OPERATOR_PT_redo");
   STRNCPY_UTF8(pt->label, N_("Redo"));
   STRNCPY_UTF8(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
@@ -215,7 +218,10 @@ static void hud_region_init(wmWindowManager *wm, ARegion *region)
 
 static void hud_region_free(ARegion *region)
 {
-  MEM_SAFE_FREE(region->regiondata);
+  if (region->regiondata) {
+    MEM_delete(static_cast<HudRegionData *>(region->regiondata));
+    region->regiondata = nullptr;
+  }
 }
 
 static void hud_region_layout(const bContext *C, ARegion *region)
@@ -295,7 +301,7 @@ static void hud_region_listener(const wmRegionListenerParams *params)
 
 ARegionType *ED_area_type_hud(int space_type)
 {
-  ARegionType *art = MEM_callocN<ARegionType>(__func__);
+  ARegionType *art = MEM_new_zeroed<ARegionType>(__func__);
   art->regionid = RGN_TYPE_HUD;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D;
   art->listener = hud_region_listener;
@@ -335,16 +341,16 @@ static ARegion *hud_region_add(ScrArea *area)
 
 void ED_area_type_hud_clear(wmWindowManager *wm, ScrArea *area_keep)
 {
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    bScreen *screen = WM_window_get_active_screen(win);
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      if (area != area_keep) {
-        LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-          if (region->regiontype == RGN_TYPE_HUD) {
-            if ((region->flag & RGN_FLAG_HIDDEN) == 0) {
-              hud_region_hide(region);
-              ED_region_tag_redraw(region);
-              ED_area_tag_redraw(area);
+  for (wmWindow &win : wm->windows) {
+    bScreen *screen = WM_window_get_active_screen(&win);
+    for (ScrArea &area : screen->areabase) {
+      if (&area != area_keep) {
+        for (ARegion &region : area.regionbase) {
+          if (region.regiontype == RGN_TYPE_HUD) {
+            if ((region.flag & RGN_FLAG_HIDDEN) == 0) {
+              hud_region_hide(&region);
+              ED_region_tag_redraw(&region);
+              ED_area_tag_redraw(&area);
             }
           }
         }
@@ -406,7 +412,7 @@ void ED_area_type_hud_ensure(bContext *C, ScrArea *area)
   {
     HudRegionData *hrd = static_cast<HudRegionData *>(region->regiondata);
     if (hrd == nullptr) {
-      hrd = MEM_callocN<HudRegionData>(__func__);
+      hrd = MEM_new_zeroed<HudRegionData>(__func__);
       region->regiondata = hrd;
     }
     if (region_op) {

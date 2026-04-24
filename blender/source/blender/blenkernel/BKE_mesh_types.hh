@@ -15,7 +15,9 @@
 #include "BLI_bit_vector.hh"
 #include "BLI_bounds_types.hh"
 #include "BLI_implicit_sharing.hh"
+#include "BLI_index_mask.hh"
 #include "BLI_kdopbvh.hh"
+#include "BLI_linear_allocator.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_mutex.hh"
 #include "BLI_shared_cache.hh"
@@ -25,17 +27,22 @@
 
 #include "DNA_customdata_types.h"
 
+namespace blender {
+
 struct BMEditMesh;
 struct BVHTree;
 struct Mesh;
 class ShrinkwrapBoundaryData;
 struct SubdivCCG;
 struct SubsurfRuntimeData;
-namespace blender::bke {
+namespace bke {
 struct EditMeshData;
-}  // namespace blender::bke
-namespace blender::bke::bake {
+}  // namespace bke
+namespace bke::bake {
 struct BakeMaterialsList;
+}
+namespace draw {
+struct MeshBatchCache;
 }
 
 /** #MeshRuntime.wrapper_type */
@@ -48,7 +55,7 @@ enum eMeshWrapperType {
   ME_WRAPPER_TYPE_SUBD = 2,
 };
 
-namespace blender::bke {
+namespace bke {
 
 /**
  * The complexity requirement of attribute domains needed to process normals.
@@ -76,27 +83,9 @@ enum class MeshNormalDomain : int8_t {
 };
 
 struct LooseGeomCache {
-  /**
-   * A bitmap set to true for each "loose" element.
-   * Allocated only if there is at least one loose element.
-   */
-  blender::BitVector<> is_loose_bits;
-  /**
-   * The number of loose elements. If zero, the #is_loose_bits shouldn't be accessed.
-   * If less than zero, the cache has been accessed in an invalid way
-   * (i.e. directly instead of through a Mesh API function).
-   */
-  int count = -1;
+  LinearAllocator<> allocator;
+  IndexMask mask;
 };
-
-/**
- * Cache of a mesh's loose edges, accessed with #Mesh::loose_edges(). *
- */
-struct LooseEdgeCache : public LooseGeomCache {};
-/**
- * Cache of a mesh's loose vertices or vertices not used by faces.
- */
-struct LooseVertCache : public LooseGeomCache {};
 
 /** Similar to #VArraySpan but with the ability to be resized and updated. */
 class NormalsCache {
@@ -188,7 +177,7 @@ struct MeshRuntime {
    * Data used to efficiently draw the mesh in the viewport, especially useful when
    * the same mesh is used in many objects or instances. See `draw_cache_impl_mesh.cc`.
    */
-  void *batch_cache = nullptr;
+  draw::MeshBatchCache *batch_cache = nullptr;
 
   /** Cache for derived triangulation of the mesh, accessed with #Mesh::corner_tris(). */
   TrianglesCache corner_tris_cache;
@@ -268,11 +257,11 @@ struct MeshRuntime {
   /** Cache of face indices for each face corner. */
   SharedCache<Array<int>> corner_to_face_map_cache;
   /** Cache of data about edges not used by faces. See #Mesh::loose_edges(). */
-  SharedCache<LooseEdgeCache> loose_edges_cache;
+  SharedCache<LooseGeomCache> loose_edges_cache;
   /** Cache of data about vertices not used by edges. See #Mesh::loose_verts(). */
-  SharedCache<LooseVertCache> loose_verts_cache;
+  SharedCache<LooseGeomCache> loose_verts_cache;
   /** Cache of data about vertices not used by faces. See #Mesh::verts_no_face(). */
-  SharedCache<LooseVertCache> verts_no_face_cache;
+  SharedCache<LooseGeomCache> verts_no_face_cache;
 
   /** Cache of non-manifold boundary data for shrinkwrap target Project. */
   SharedCache<ShrinkwrapBoundaryData> shrinkwrap_boundary_cache;
@@ -298,4 +287,5 @@ struct MeshRuntime {
   ~MeshRuntime();
 };
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

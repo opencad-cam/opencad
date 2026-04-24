@@ -120,18 +120,17 @@ enum class ExactEvalMode {
 
 static void sort_course_boundaries(MutableSpan<CourseBoundary> boundaries)
 {
-  std::sort(boundaries.begin(),
-            boundaries.end(),
-            [](const CourseBoundary &a, const CourseBoundary &b) { return a.index < b.index; });
+  std::ranges::sort(boundaries, [](const CourseBoundary &a, const CourseBoundary &b) {
+    return a.index < b.index;
+  });
 }
 
 static void sort_course_boundaries(MutableSpan<DifferenceCourseBoundary> boundaries)
 {
-  std::sort(boundaries.begin(),
-            boundaries.end(),
-            [](const DifferenceCourseBoundary &a, const DifferenceCourseBoundary &b) {
-              return a.index < b.index;
-            });
+  std::ranges::sort(boundaries,
+                    [](const DifferenceCourseBoundary &a, const DifferenceCourseBoundary &b) {
+                      return a.index < b.index;
+                    });
 }
 
 /** Smaller segments should generally be merged together. */
@@ -663,10 +662,9 @@ static IndexMaskSegment union_index_mask_segments(const Span<IndexMaskSegment> s
   /* Sort input segments by their size, so that smaller segments are unioned first. This results in
    * smaller intermediate arrays and thus less work overall. */
   Vector<IndexMaskSegment> sorted_segments(segments);
-  std::sort(
-      sorted_segments.begin(),
-      sorted_segments.end(),
-      [](const IndexMaskSegment &a, const IndexMaskSegment &b) { return a.size() < b.size(); });
+  std::ranges::sort(sorted_segments, [](const IndexMaskSegment &a, const IndexMaskSegment &b) {
+    return a.size() < b.size();
+  });
 
   std::array<int16_t, max_segment_size> tmp_indices;
   /* Can use r_values for temporary values because if it's large enough for the final result, it's
@@ -723,10 +721,9 @@ static IndexMaskSegment intersect_index_mask_segments(const Span<IndexMaskSegmen
   /* Intersect smaller segments first, because then the intermediate results will generally be
    * smaller. */
   Vector<IndexMaskSegment> sorted_segments(segments);
-  std::sort(
-      sorted_segments.begin(),
-      sorted_segments.end(),
-      [](const IndexMaskSegment &a, const IndexMaskSegment &b) { return a.size() < b.size(); });
+  std::ranges::sort(sorted_segments, [](const IndexMaskSegment &a, const IndexMaskSegment &b) {
+    return a.size() < b.size();
+  });
 
   std::array<int16_t, max_segment_size> tmp_indices_1;
   std::array<int16_t, max_segment_size> tmp_indices_2;
@@ -805,9 +802,8 @@ static IndexMaskSegment difference_index_mask_segments(
 
   /* Sort larger segments to the front. This way the intermediate arrays are likely smaller. */
   Vector<IndexMaskSegment> sorted_subtract_segments(subtract_segments);
-  std::sort(
-      sorted_subtract_segments.begin(),
-      sorted_subtract_segments.end(),
+  std::ranges::sort(
+      sorted_subtract_segments,
       [](const IndexMaskSegment &a, const IndexMaskSegment &b) { return a.size() > b.size(); });
 
   std::array<int16_t, max_segment_size> tmp_indices_1;
@@ -1126,7 +1122,7 @@ static void evaluate_short_unknown_segments_exactly(
     const ExactEvalMode exact_eval_mode,
     const Span<const Expr *> eval_order,
     const Span<IndexRange> short_unknown_segments,
-    IndexMaskMemory &memory,
+    LinearAllocator<> &memory,
     Vector<EvaluatedSegment, 16> &r_evaluated_segments)
 {
   /* Evaluate a segment exactly. */
@@ -1171,7 +1167,7 @@ static void evaluate_short_unknown_segments_exactly(
             split_indices.append(segment[0]);
           }
         }
-        std::sort(split_indices.begin(), split_indices.end());
+        std::ranges::sort(split_indices);
         for (const int64_t boundary_i : split_indices.index_range().drop_back(1)) {
           const IndexRange sub_bounds = IndexRange::from_begin_end(split_indices[boundary_i],
                                                                    split_indices[boundary_i + 1]);
@@ -1226,7 +1222,7 @@ static void evaluate_short_unknown_segments_exactly(
 }
 
 static IndexMask evaluated_segments_to_index_mask(MutableSpan<EvaluatedSegment> evaluated_segments,
-                                                  IndexMaskMemory &memory)
+                                                  LinearAllocator<> &memory)
 {
   if (evaluated_segments.is_empty()) {
     return {};
@@ -1246,18 +1242,16 @@ static IndexMask evaluated_segments_to_index_mask(MutableSpan<EvaluatedSegment> 
     }
   }
 
-  std::sort(evaluated_segments.begin(),
-            evaluated_segments.end(),
-            [](const EvaluatedSegment &a, const EvaluatedSegment &b) {
-              return a.bounds.start() < b.bounds.start();
-            });
+  std::ranges::sort(evaluated_segments, [](const EvaluatedSegment &a, const EvaluatedSegment &b) {
+    return a.bounds.start() < b.bounds.start();
+  });
 
   Vector<IndexMaskSegment> result_segments = build_result_mask_segments(evaluated_segments);
   return IndexMask::from_segments(result_segments, memory);
 }
 
 static IndexMask evaluate_expression_impl(const Expr &root_expression,
-                                          IndexMaskMemory &memory,
+                                          LinearAllocator<> &memory,
                                           const ExactEvalMode exact_eval_mode)
 {
   /* Precompute the evaluation order here, because it's used potentially many times throughout the
@@ -1281,7 +1275,7 @@ static IndexMask evaluate_expression_impl(const Expr &root_expression,
   return evaluated_segments_to_index_mask(evaluated_segments, memory);
 }
 
-IndexMask evaluate_expression(const Expr &expression, IndexMaskMemory &memory)
+IndexMask evaluate_expression(const Expr &expression, LinearAllocator<> &memory)
 {
   const ExactEvalMode exact_eval_mode = determine_exact_eval_mode(expression);
   IndexMask mask = evaluate_expression_impl(expression, memory, exact_eval_mode);

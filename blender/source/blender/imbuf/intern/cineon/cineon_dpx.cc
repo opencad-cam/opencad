@@ -19,6 +19,8 @@
 
 #include "MEM_guardedalloc.h"
 
+namespace blender {
+
 static ImBuf *imb_load_dpx_cineon(
     const uchar *mem, size_t size, int use_cineon, int flags, ImFileColorSpace &r_colorspace)
 {
@@ -44,7 +46,7 @@ static ImBuf *imb_load_dpx_cineon(
   }
 
   if (!(flags & IB_test)) {
-    if (logImageGetDataRGBA(image, ibuf->float_buffer.data, 1) != 0) {
+    if (logImageGetDataRGBA(image, ibuf->float_data_for_write(), 1) != 0) {
       logImageClose(image);
       IMB_freeImBuf(ibuf);
       return nullptr;
@@ -121,39 +123,40 @@ static int imb_save_dpx_cineon(ImBuf *ibuf, const char *filepath, int use_cineon
     return 0;
   }
 
-  if (ibuf->float_buffer.data != nullptr && bitspersample != 8) {
+  if (ibuf->float_data() != nullptr && bitspersample != 8) {
     /* Don't use the float buffer to save 8 BPP picture to prevent color banding
      * (there's no dithering algorithm behind the #logImageSetDataRGBA function). */
 
-    fbuf = MEM_malloc_arrayN<float>(4 * size_t(ibuf->x) * size_t(ibuf->y),
-                                    "fbuf in imb_save_dpx_cineon");
+    fbuf = MEM_new_array_uninitialized<float>(4 * size_t(ibuf->x) * size_t(ibuf->y),
+                                              "fbuf in imb_save_dpx_cineon");
 
     for (y = 0; y < ibuf->y; y++) {
       float *dst_ptr = fbuf + (4 * (size_t(ibuf->y - y - 1) * size_t(ibuf->x)));
-      const float *src_ptr = ibuf->float_buffer.data + (4 * (size_t(y) * size_t(ibuf->x)));
+      const float *src_ptr = ibuf->float_data() + (4 * (size_t(y) * size_t(ibuf->x)));
 
       memcpy(dst_ptr, src_ptr, 4 * ibuf->x * sizeof(float));
     }
 
     rvalue = (logImageSetDataRGBA(logImage, fbuf, 1) == 0);
 
-    MEM_freeN(fbuf);
+    MEM_delete(fbuf);
   }
   else {
-    if (ibuf->byte_buffer.data == nullptr) {
+    if (ibuf->byte_data()) {
       IMB_byte_from_float(ibuf);
     }
 
-    fbuf = MEM_malloc_arrayN<float>(4 * size_t(ibuf->x) * size_t(ibuf->y),
-                                    "fbuf in imb_save_dpx_cineon");
+    fbuf = MEM_new_array_uninitialized<float>(4 * size_t(ibuf->x) * size_t(ibuf->y),
+                                              "fbuf in imb_save_dpx_cineon");
     if (fbuf == nullptr) {
       printf("DPX/Cineon: error allocating memory.\n");
       logImageClose(logImage);
       return 0;
     }
+    const uint8_t *byte_data = ibuf->byte_data();
     for (y = 0; y < ibuf->y; y++) {
       fbuf_ptr = fbuf + (4 * (size_t(ibuf->y - y - 1) * size_t(ibuf->x)));
-      rect_ptr = ibuf->byte_buffer.data + (4 * (size_t(y) * size_t(ibuf->x)));
+      rect_ptr = byte_data + (4 * (size_t(y) * size_t(ibuf->x)));
       for (x = 0; x < ibuf->x; x++) {
         fbuf_ptr[0] = float(rect_ptr[0]) / 255.0f;
         fbuf_ptr[1] = float(rect_ptr[1]) / 255.0f;
@@ -164,7 +167,7 @@ static int imb_save_dpx_cineon(ImBuf *ibuf, const char *filepath, int use_cineon
       }
     }
     rvalue = (logImageSetDataRGBA(logImage, fbuf, 0) == 0);
-    MEM_freeN(fbuf);
+    MEM_delete(fbuf);
   }
 
   logImageClose(logImage);
@@ -188,3 +191,5 @@ ImBuf *imb_load_cineon(const uchar *mem, size_t size, int flags, ImFileColorSpac
   }
   return imb_load_dpx_cineon(mem, size, 1, flags, r_colorspace);
 }
+
+}  // namespace blender

@@ -57,7 +57,7 @@ static eLightType to_light_type(short blender_light_type,
 void Light::sync(ShadowModule &shadows,
                  float4x4 object_to_world,
                  char visibility_flag,
-                 const ::Light *la,
+                 const blender::Light *la,
                  const LightLinking *light_linking /* = nullptr */,
                  float threshold)
 {
@@ -124,7 +124,7 @@ void Light::sync(ShadowModule &shadows,
   this->initialized = true;
 }
 
-float Light::shadow_lod_min_get(const ::Light *la)
+float Light::shadow_lod_min_get(const blender::Light *la)
 {
   /* Property is in mm. Convert to unit. */
   float max_res_unit = la->shadow_maximum_resolution;
@@ -157,7 +157,9 @@ void Light::shadow_ensure(ShadowModule &shadows)
   }
 }
 
-float Light::attenuation_radius_get(const ::Light *la, float light_threshold, float light_power)
+float Light::attenuation_radius_get(const blender::Light *la,
+                                    float light_threshold,
+                                    float light_power)
 {
   if (la->mode & LA_CUSTOM_ATTENUATION) {
     return la->att_dist;
@@ -168,7 +170,7 @@ float Light::attenuation_radius_get(const ::Light *la, float light_threshold, fl
   return sqrtf(light_power / light_threshold);
 }
 
-void Light::shape_parameters_set(const ::Light *la,
+void Light::shape_parameters_set(const blender::Light *la,
                                  const float3 &scale,
                                  const float3 &z_axis,
                                  const float threshold,
@@ -360,7 +362,7 @@ void LightModule::add_world_sun_light(const ObjectKey &key, bool use_diffuse, bo
 {
   /* Create a placeholder light to be fed by the GPU after sunlight extraction.
    * Sunlight is disabled if power is zero. */
-  ::Light la = {};
+  blender::Light la = {};
   la.type = LA_SUN;
   /* Set on the GPU. */
   la.r = la.g = la.b = -1.0f; /* Tag as world sun light. */
@@ -419,9 +421,9 @@ void LightModule::begin_sync()
   }
 }
 
-void LightModule::sync_light(const Object *ob, ObjectHandle &handle)
+void LightModule::sync_light(const ObjectRef &ob_ref)
 {
-  const ::Light &la = DRW_object_get_data_for_drawing<const ::Light>(*ob);
+  const blender::Light &la = DRW_object_get_data_for_drawing<const blender::Light>(*ob_ref.object);
   if (use_scene_lights_ == false) {
     return;
   }
@@ -432,15 +434,15 @@ void LightModule::sync_light(const Object *ob, ObjectHandle &handle)
     }
   }
 
-  Light &light = light_map_.lookup_or_add_default(handle.object_key);
+  Light &light = light_map_.lookup_or_add_default(ObjectKey(ob_ref));
   light.used = true;
-  if (handle.recalc != 0 || !light.initialized) {
+  if (inst_.get_recalc_flags(ob_ref) != 0 || !light.initialized) {
     light.initialized = true;
     light.sync(inst_.shadows,
-               ob->object_to_world(),
-               ob->visibility_flag,
+               ob_ref.object_to_world(),
+               ob_ref.object->visibility_flag,
                &la,
-               ob->light_linking,
+               ob_ref.light_linking(),
                light_threshold_);
   }
   sun_lights_len_ += int(is_sun_light(light.type));

@@ -455,14 +455,21 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
 
         layout.separator()
 
-        heading = layout.column(align=True, heading="Scrambling Distance")
-        # Tabulated Sobol is used when the debug UI is turned off.
-        heading.active = cscene.sampling_pattern == 'TABULATED_SOBOL'
-        heading.prop(cscene, "auto_scrambling_distance", text="Automatic")
-        heading.prop(cscene, "preview_scrambling_distance", text="Viewport")
-        heading.prop(cscene, "scrambling_distance", text="Multiplier")
+        prefs = context.preferences
+        use_debug = prefs.experimental.use_cycles_debug and prefs.view.show_developer_ui
+        if use_debug:
+            row = layout.row(align=True)
+            row.prop(cscene, "use_pixel_jitter")
 
-        layout.separator()
+            layout.separator()
+
+        if cscene.sampling_pattern == 'TABULATED_SOBOL':
+            heading = layout.column(align=True, heading="Scrambling Distance")
+            heading.prop(cscene, "auto_scrambling_distance", text="Automatic")
+            heading.prop(cscene, "preview_scrambling_distance", text="Viewport")
+            heading.prop(cscene, "scrambling_distance", text="Multiplier")
+
+            layout.separator()
 
         col = layout.column(align=True)
         col.prop(cscene, "min_light_bounces")
@@ -876,6 +883,41 @@ class CYCLES_RENDER_PT_performance_memory(CyclesButtonsPanel, Panel):
         cscene = scene.cycles
 
         layout.prop(cscene, "tile_size")
+
+
+class CYCLES_RENDER_PT_performance_texture_cache(CyclesButtonsPanel, Panel):
+    bl_label = "Texture Cache"
+    bl_parent_id = "CYCLES_RENDER_PT_performance"
+
+    def draw_header(self, context):
+        rd = context.scene.render
+        self.layout.prop(rd, "use_texture_cache", text="")
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        rd = context.scene.render
+
+        col = layout.column()
+        col.active = rd.use_texture_cache
+
+        col.prop(rd, "use_auto_generate_texture_cache", text="Auto Generate")
+
+        row = col.split(factor=0.4)
+        row.label()
+        row.operator("render.generate_texture_cache", text="Generate All")
+
+        prefs = context.preferences
+        if prefs.experimental.use_cycles_debug and prefs.view.show_developer_ui:
+            cscene = context.scene.cycles
+            col = layout.column(heading="Debug")
+            col.active = rd.use_texture_cache
+            col.prop(cscene, "debug_use_texture_cache_eviction")
+            sub = col.column()
+            sub.active = cscene.debug_use_texture_cache_eviction
+            sub.prop(cscene, "debug_texture_cache_preserve_unused")
 
 
 class CYCLES_RENDER_PT_performance_acceleration_structure(CyclesButtonsPanel, Panel):
@@ -1481,12 +1523,8 @@ class CYCLES_OBJECT_PT_visibility_culling(CyclesButtonsPanel, Panel):
         row.prop(cob, "use_distance_cull")
 
 
-def panel_node_draw(layout, id_data, output_type, input_name):
+def panel_node_draw(layout, id_data, input_name):
     from bpy_extras.node_utils import find_node_input
-
-    if output_type not in ('OUTPUT_WORLD', 'OUTPUT_MATERIAL') and not id_data.use_nodes:
-        layout.operator("cycles.use_shading_nodes", icon='NODETREE')
-        return False
 
     ntree = id_data.node_tree
 
@@ -1646,7 +1684,7 @@ class CYCLES_LIGHT_PT_nodes(CyclesButtonsPanel, Panel):
         layout.use_property_split = True
 
         light = context.light
-        panel_node_draw(layout, light, 'OUTPUT_LIGHT', 'Surface')
+        panel_node_draw(layout, light, 'Surface')
 
 
 class CYCLES_LIGHT_PT_beam_shape(CyclesButtonsPanel, Panel):
@@ -1701,7 +1739,7 @@ class CYCLES_WORLD_PT_surface(CyclesButtonsPanel, Panel):
 
         world = context.world
 
-        if not panel_node_draw(layout, world, 'OUTPUT_WORLD', 'Surface'):
+        if not panel_node_draw(layout, world, 'Surface'):
             layout.prop(world, "color")
 
 
@@ -1722,7 +1760,7 @@ class CYCLES_WORLD_PT_volume(CyclesButtonsPanel, Panel):
         layout.use_property_split = True
 
         world = context.world
-        panel_node_draw(layout, world, 'OUTPUT_WORLD', 'Volume')
+        panel_node_draw(layout, world, 'Volume')
 
 
 class CYCLES_WORLD_PT_mist(CyclesButtonsPanel, Panel):
@@ -1823,6 +1861,7 @@ class CYCLES_WORLD_PT_settings_surface(CyclesButtonsPanel, Panel):
         subsub.prop(cworld, "sample_map_resolution")
         sub.prop(cworld, "max_bounces")
         sub.prop(cworld, "is_caustics_light", text="Shadow Caustics")
+        sub.prop(cworld, "use_shadows", text="Cast Shadow")
 
 
 class CYCLES_WORLD_PT_settings_volume(CyclesButtonsPanel, Panel):
@@ -1915,7 +1954,7 @@ class CYCLES_MATERIAL_PT_surface(CyclesButtonsPanel, Panel):
         layout.use_property_split = True
 
         mat = context.material
-        if not panel_node_draw(layout, mat, 'OUTPUT_MATERIAL', 'Surface'):
+        if not panel_node_draw(layout, mat, 'Surface'):
             layout.prop(mat, "diffuse_color")
 
 
@@ -1938,7 +1977,7 @@ class CYCLES_MATERIAL_PT_volume(CyclesButtonsPanel, Panel):
         mat = context.material
         # cmat = mat.cycles
 
-        panel_node_draw(layout, mat, 'OUTPUT_MATERIAL', 'Volume')
+        panel_node_draw(layout, mat, 'Volume')
 
 
 class CYCLES_MATERIAL_PT_displacement(CyclesButtonsPanel, Panel):
@@ -1956,7 +1995,7 @@ class CYCLES_MATERIAL_PT_displacement(CyclesButtonsPanel, Panel):
         layout.use_property_split = True
 
         mat = context.material
-        panel_node_draw(layout, mat, 'OUTPUT_MATERIAL', 'Displacement')
+        panel_node_draw(layout, mat, 'Displacement')
 
 
 class CYCLES_MATERIAL_PT_settings(CyclesButtonsPanel, Panel):
@@ -2300,7 +2339,7 @@ class CYCLES_RENDER_PT_simplify_viewport(CyclesButtonsPanel, Panel):
         col = layout.column()
         col.prop(rd, "simplify_subdivision", text="Max Subdivision")
         col.prop(rd, "simplify_child_particles", text="Child Particles")
-        col.prop(cscene, "texture_limit", text="Texture Limit")
+        col.prop(cscene, "texture_resolution", text="Texture Resolution")
         col.prop(rd, "simplify_volumes", text="Volume Resolution")
         col.prop(rd, "use_simplify_normals", text="Normals")
 
@@ -2326,7 +2365,7 @@ class CYCLES_RENDER_PT_simplify_render(CyclesButtonsPanel, Panel):
 
         col.prop(rd, "simplify_subdivision_render", text="Max Subdivision")
         col.prop(rd, "simplify_child_particles_render", text="Child Particles")
-        col.prop(cscene, "texture_limit_render", text="Texture Limit")
+        col.prop(cscene, "texture_resolution_render", text="Texture Resolution")
 
 
 class CYCLES_RENDER_PT_simplify_culling(CyclesButtonsPanel, Panel):
@@ -2556,6 +2595,7 @@ classes = (
     CYCLES_RENDER_PT_performance_compositor_denoise_settings,
     CYCLES_RENDER_PT_performance_threads,
     CYCLES_RENDER_PT_performance_memory,
+    CYCLES_RENDER_PT_performance_texture_cache,
     CYCLES_RENDER_PT_performance_acceleration_structure,
     CYCLES_RENDER_PT_performance_final_render,
     CYCLES_RENDER_PT_performance_viewport,

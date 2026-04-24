@@ -28,27 +28,30 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
 #include "NOD_socket.hh"
 
 #include "node_intern.hh"
 
-using blender::nodes::geo_eval_log::GeometryInfoLog;
+namespace blender {
 
-namespace blender::ed::space_node {
+using nodes::eval_log::GeometryInfoLog;
+
+namespace ed::space_node {
 
 struct LayerSearchData {
   int32_t node_id;
   char socket_identifier[MAX_NAME];
 };
 
-/* This class must not have a destructor, since it is used by buttons and freed with #MEM_freeN. */
+/* This class must not have a destructor, since it is used by buttons and freed with
+ * #MEM_delete_void. */
 BLI_STATIC_ASSERT(std::is_trivially_destructible_v<LayerSearchData>, "");
 
 static Vector<const std::string *> get_layer_names_from_context(const bContext &C,
                                                                 LayerSearchData &data)
 {
-  using namespace nodes::geo_eval_log;
+  using namespace nodes::eval_log;
 
   SpaceNode *snode = CTX_wm_space_node(&C);
   if (!snode) {
@@ -69,14 +72,14 @@ static Vector<const std::string *> get_layer_names_from_context(const bContext &
   if (!tree_zones) {
     return {};
   }
-  const ContextualGeoTreeLogs tree_logs = GeoNodesLog::get_contextual_tree_logs(*snode);
+  const ContextualNodeTreeLogs tree_logs = NodesEvalLog::get_contextual_tree_logs(*snode);
 
   Set<StringRef> names;
 
   /* For the named layer selection input node, collect layer names from all nodes in the group. */
   if (node->type_legacy == GEO_NODE_INPUT_NAMED_LAYER_SELECTION) {
     Vector<const std::string *> layer_names;
-    tree_logs.foreach_tree_log([&](GeoTreeLog &tree_log) {
+    tree_logs.foreach_tree_log([&](NodeTreeLog &tree_log) {
       tree_log.ensure_socket_values();
       tree_log.ensure_layer_names();
       for (const std::string &name : tree_log.all_layer_names) {
@@ -88,12 +91,12 @@ static Vector<const std::string *> get_layer_names_from_context(const bContext &
     });
     return layer_names;
   }
-  GeoTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
+  NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
   if (!tree_log) {
     return {};
   }
   tree_log->ensure_socket_values();
-  GeoNodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
+  NodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
   if (node_log == nullptr) {
     return {};
   }
@@ -198,7 +201,7 @@ void node_geometry_add_layer_search_button(const bContext & /*C*/,
   button_placeholder_set(but, placeholder);
 
   const bNodeSocket &socket = *static_cast<const bNodeSocket *>(socket_ptr.data);
-  LayerSearchData *data = MEM_callocN<LayerSearchData>(__func__);
+  LayerSearchData *data = MEM_new_zeroed<LayerSearchData>(__func__);
   data->node_id = node.identifier;
   STRNCPY_UTF8(data->socket_identifier, socket.identifier);
 
@@ -214,4 +217,6 @@ void node_geometry_add_layer_search_button(const bContext & /*C*/,
                          nullptr);
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace ed::space_node
+
+}  // namespace blender

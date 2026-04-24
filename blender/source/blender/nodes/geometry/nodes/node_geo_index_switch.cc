@@ -31,7 +31,9 @@
 
 #include "GPU_material.hh"
 
-namespace blender::nodes::node_geo_index_switch_cc {
+namespace blender {
+
+namespace nodes::node_geo_index_switch_cc {
 
 NODE_STORAGE_FUNCS(NodeIndexSwitch)
 
@@ -89,9 +91,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bool supports_fields = socket_type_supports_fields(data_type) &&
                                ntree->type == NTREE_GEOMETRY;
 
-  StructureType value_structure_type = socket_type_always_single(data_type) ?
-                                           StructureType::Single :
-                                           StructureType::Dynamic;
+  StructureType value_structure_type = StructureType::Dynamic;
   StructureType index_structure_type = value_structure_type;
 
   if (ntree->type == NTREE_COMPOSIT) {
@@ -104,14 +104,15 @@ static void node_declare(NodeDeclarationBuilder &b)
   }
 
   const Span<IndexSwitchItem> items = storage.items_span();
-  auto &index = b.add_input<decl::Int>("Index").min(0).max(std::max<int>(0, items.size() - 1));
+  auto &index =
+      b.add_input<decl::Int>("Index"_ustr).min(0).max(std::max<int>(0, items.size() - 1));
   if (supports_fields) {
     index.supports_field().structure_type(index_structure_type);
   }
 
   for (const int i : items.index_range()) {
     const std::string identifier = IndexSwitchItemsAccessor::socket_identifier_for_item(items[i]);
-    auto &input = b.add_input(data_type, std::to_string(i), std::move(identifier));
+    auto &input = b.add_input(data_type, UString(std::to_string(i)), UString(identifier));
     input.custom_draw(
         [index = i](CustomSocketDrawParams &params) { draw_item_socket(params, index); });
     if (supports_fields) {
@@ -131,7 +132,7 @@ static void node_declare(NodeDeclarationBuilder &b)
     input.structure_type(value_structure_type);
   }
 
-  auto &output = b.add_output(data_type, "Output");
+  auto &output = b.add_output(data_type, "Output"_ustr);
   if (supports_fields) {
     output.dependent_field().reference_pass_all();
   }
@@ -143,12 +144,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   }
   output.structure_type(value_structure_type);
 
-  b.add_input<decl::Extend>("", "__extend__").custom_draw([](CustomSocketDrawParams &params) {
-    ui::Layout &layout = params.layout;
-    layout.emboss_set(ui::EmbossType::None);
-    PointerRNA op_ptr = layout.op("node.index_switch_item_add", "", ICON_ADD);
-    RNA_int_set(&op_ptr, "node_identifier", params.node.identifier);
-  });
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
+      .custom_draw([](CustomSocketDrawParams &params) {
+        ui::Layout &layout = params.layout;
+        layout.emboss_set(ui::EmbossType::None);
+        PointerRNA op_ptr = layout.op("node.index_switch_item_add", "", ICON_ADD);
+        RNA_int_set(&op_ptr, "node_identifier", params.node.identifier);
+      });
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -192,13 +194,13 @@ static void node_operators()
 
 static void node_init(bNodeTree *tree, bNode *node)
 {
-  NodeIndexSwitch *data = MEM_new_for_free<NodeIndexSwitch>(__func__);
+  NodeIndexSwitch *data = MEM_new<NodeIndexSwitch>(__func__);
   data->data_type = tree->type == NTREE_GEOMETRY ? SOCK_FLOAT : SOCK_RGBA;
   data->next_identifier = 0;
 
   BLI_assert(data->items == nullptr);
   const int default_items_num = 2;
-  data->items = MEM_new_array_for_free<IndexSwitchItem>(default_items_num, __func__);
+  data->items = MEM_new_array<IndexSwitchItem>(default_items_num, __func__);
   for (const int i : IndexRange(default_items_num)) {
     data->items[i].identifier = data->next_identifier++;
   }
@@ -211,17 +213,17 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   if (params.in_out() == SOCK_OUT) {
     params.add_item(IFACE_("Output"), [](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeIndexSwitch");
+      bNode &node = params.add_node("GeometryNodeIndexSwitch"_ustr);
       node_storage(node).data_type = params.socket.type;
-      params.update_and_connect_available_socket(node, "Output");
+      params.update_and_connect_available_socket(node, "Output"_ustr);
     });
   }
   else {
     const eNodeSocketDatatype other_type = eNodeSocketDatatype(params.other_socket().type);
     if (params.node_tree().typeinfo->validate_link(other_type, SOCK_INT)) {
       params.add_item(IFACE_("Index"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeIndexSwitch");
-        params.update_and_connect_available_socket(node, "Index");
+        bNode &node = params.add_node("GeometryNodeIndexSwitch"_ustr);
+        params.update_and_connect_available_socket(node, "Index"_ustr);
       });
     }
   }
@@ -428,7 +430,7 @@ class IndexSwitchOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new IndexSwitchOperation(context, node);
 }
@@ -440,7 +442,7 @@ static const EnumPropertyItem *data_type_items_callback(bContext * /*C*/,
 {
   *r_free = true;
   const bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(ptr->owner_id);
-  blender::bke::bNodeTreeType *ntree_type = ntree.typeinfo;
+  bke::bNodeTreeType *ntree_type = ntree.typeinfo;
   return enum_items_filter(
       rna_enum_node_socket_data_type_items, [&](const EnumPropertyItem &item) -> bool {
         bke::bNodeSocketType *socket_type = bke::node_socket_type_find_static(item.value);
@@ -463,14 +465,13 @@ static void node_rna(StructRNA *srna)
 static void node_free_storage(bNode *node)
 {
   socket_items::destruct_array<IndexSwitchItemsAccessor>(*node);
-  MEM_freeN(reinterpret_cast<NodeIndexSwitch *>(node->storage));
+  MEM_delete(reinterpret_cast<NodeIndexSwitch *>(node->storage));
 }
 
 static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
   const NodeIndexSwitch &src_storage = node_storage(*src_node);
-  auto *dst_storage = MEM_new_for_free<NodeIndexSwitch>(__func__,
-                                                        blender::dna::shallow_copy(src_storage));
+  auto *dst_storage = MEM_new<NodeIndexSwitch>(__func__, dna::shallow_copy(src_storage));
   dst_node->storage = dst_storage;
 
   socket_items::copy_array<IndexSwitchItemsAccessor>(*src_node, *dst_node);
@@ -506,9 +507,9 @@ static const bNodeSocket *node_internally_linked_input(const bNodeTree & /*tree*
 
 static void register_node()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_cmp_node_type_base(&ntype, "GeometryNodeIndexSwitch", GEO_NODE_INDEX_SWITCH);
+  geo_cmp_node_type_base(&ntype, "GeometryNodeIndexSwitch"_ustr, GEO_NODE_INDEX_SWITCH);
   ntype.ui_name = "Index Switch";
   ntype.ui_description = "Choose between an arbitrary number of values with an index";
   ntype.enum_name_legacy = "INDEX_SWITCH";
@@ -516,7 +517,7 @@ static void register_node()
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
   ntype.insert_link = node_insert_link;
-  blender::bke::node_type_storage(ntype, "NodeIndexSwitch", node_free_storage, node_copy_storage);
+  bke::node_type_storage(ntype, "NodeIndexSwitch", node_free_storage, node_copy_storage);
   ntype.gather_link_search_ops = node_gather_link_searches;
   ntype.draw_buttons = node_layout;
   ntype.draw_buttons_ex = node_layout_ex;
@@ -526,15 +527,15 @@ static void register_node()
   ntype.blend_data_read_storage_content = node_blend_read;
   ntype.internally_linked_input = node_internally_linked_input;
   ntype.get_compositor_operation = get_compositor_operation;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(register_node)
 
-}  // namespace blender::nodes::node_geo_index_switch_cc
+}  // namespace nodes::node_geo_index_switch_cc
 
-namespace blender::nodes {
+namespace nodes {
 
 std::unique_ptr<LazyFunction> get_index_switch_node_lazy_function(
     const bNode &node, GeometryNodesLazyFunctionGraphInfo &lf_graph_info)
@@ -544,7 +545,7 @@ std::unique_ptr<LazyFunction> get_index_switch_node_lazy_function(
   return std::make_unique<LazyFunctionForIndexSwitchNode>(node, lf_graph_info);
 }
 
-StructRNA *IndexSwitchItemsAccessor::item_srna = &RNA_IndexSwitchItem;
+StructRNA **IndexSwitchItemsAccessor::item_srna = &RNA_IndexSwitchItem;
 
 void IndexSwitchItemsAccessor::blend_write_item(BlendWriter * /*writer*/, const ItemT & /*item*/)
 {
@@ -554,14 +555,16 @@ void IndexSwitchItemsAccessor::blend_read_data_item(BlendDataReader * /*reader*/
 {
 }
 
-}  // namespace blender::nodes
+}  // namespace nodes
 
-blender::Span<IndexSwitchItem> NodeIndexSwitch::items_span() const
+Span<IndexSwitchItem> NodeIndexSwitch::items_span() const
 {
-  return blender::Span<IndexSwitchItem>(items, items_num);
+  return Span<IndexSwitchItem>(items, items_num);
 }
 
-blender::MutableSpan<IndexSwitchItem> NodeIndexSwitch::items_span()
+MutableSpan<IndexSwitchItem> NodeIndexSwitch::items_span()
 {
-  return blender::MutableSpan<IndexSwitchItem>(items, items_num);
+  return MutableSpan<IndexSwitchItem>(items, items_num);
 }
+
+}  // namespace blender

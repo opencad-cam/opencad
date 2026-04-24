@@ -300,6 +300,10 @@ RenderWork RenderScheduler::get_render_work()
   if (done()) {
     RenderWork render_work;
     render_work.resolution_divider = state_.resolution_divider;
+    render_work.denoised_resolution_divider = state_.resolution_divider;
+    if (denoiser_params_.use) {
+      render_work.resolution_divider *= denoiser_params_.upscale_factor;
+    }
 
     if (!set_postprocess_render_work(&render_work)) {
       set_full_frame_render_work(&render_work);
@@ -321,7 +325,7 @@ RenderWork RenderScheduler::get_render_work()
       /* Don't progress the resolution divider as the user is currently navigating in the scene. */
       state_.user_is_navigating = false;
     }
-    else {
+    else if (default_start_resolution_divider_ != 0) {
       /* If the resolution divider is greater than or equal to default_start_resolution_divider_,
        * drop the resolution divider down to 4. This is so users with slow hardware and thus high
        * resolution dividers (E.G. 16), get an update to let them know something is happening
@@ -337,6 +341,10 @@ RenderWork RenderScheduler::get_render_work()
   }
 
   render_work.resolution_divider = state_.resolution_divider;
+  render_work.denoised_resolution_divider = state_.resolution_divider;
+  if (denoiser_params_.use) {
+    render_work.resolution_divider *= denoiser_params_.upscale_factor;
+  }
 
   render_work.path_trace.start_sample = get_start_sample_to_path_trace();
   render_work.path_trace.num_samples = get_num_samples_to_path_trace();
@@ -354,6 +362,9 @@ RenderWork RenderScheduler::get_render_work()
   render_work.adaptive_sampling.filter = work_need_adaptive_filter();
   render_work.adaptive_sampling.threshold = work_adaptive_threshold();
   render_work.adaptive_sampling.reset = false;
+
+  /* Denoise volume guiding at power of two samples, but not needed when done. */
+  render_work.volume_guiding_denoise = is_power_of_two(state_.num_rendered_samples) && !done();
 
   bool denoiser_delayed;
   bool denoiser_ready_to_display;
@@ -655,11 +666,23 @@ string RenderScheduler::full_report() const
     result += "  Start Sample: " + to_string(denoiser_params_.start_sample) + "\n";
 
     string passes = "Color";
-    if (denoiser_params_.use_pass_albedo) {
+    if (denoiser_params_.passes & DENOISER_PASS_ALBEDO) {
       passes += ", Albedo";
     }
-    if (denoiser_params_.use_pass_normal) {
+    if (denoiser_params_.passes & DENOISER_PASS_SPECULAR_ALBEDO) {
+      passes += ", Specular Albedo";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_NORMAL) {
       passes += ", Normal";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_ROUGHNESS) {
+      passes += ", Roughness";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_DEPTH) {
+      passes += ", Depth";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_MOTION) {
+      passes += ", Motion";
     }
 
     result += "  Passes: " + passes + "\n";
@@ -989,20 +1012,6 @@ float RenderScheduler::work_adaptive_threshold() const
   }
 
   return max(state_.adaptive_sampling_threshold, adaptive_sampling_.threshold);
-}
-
-bool RenderScheduler::volume_guiding_need_denoise() const
-{
-  if (!is_power_of_two(get_num_rendered_samples())) {
-    return false;
-  }
-
-  if (done()) {
-    /* No need to denoise after the last sample. */
-    return false;
-  }
-
-  return true;
 }
 
 bool RenderScheduler::work_need_denoise(bool &delayed, bool &ready_to_display)

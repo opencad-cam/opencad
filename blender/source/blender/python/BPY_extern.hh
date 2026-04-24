@@ -14,10 +14,10 @@
 #include "BLI_sys_types.h"
 
 #ifdef WITH_INTERNATIONAL
-
 #  include "BLI_string_ref.hh"
-
 #endif
+
+namespace blender {
 
 struct ARegionType;
 struct AnimationEvalContext;
@@ -106,9 +106,14 @@ void BPY_DECREF_RNA_INVALIDATE(void *pyob_ptr);
 [[nodiscard]] bool BPY_context_member_get(bContext *C,
                                           const char *member,
                                           bContextDataResult *result);
+/**
+ * Set the global `bpy.context` for Python.
+ * \param C: The context to set. In rare cases C can be null.
+ */
 void BPY_context_set(bContext *C);
 /**
  * Use for updating while a python script runs - in case of file load.
+ * \param C: The context to activate as `bpy.context`. In rare cases C can be null.
  */
 void BPY_context_update(bContext *C);
 
@@ -142,7 +147,7 @@ void BPY_free_srna_pytype(StructRNA *srna);
  * Get current Python stack location.
  * Returns a string like `filename.py:123` if available, #std::nullopt otherwise.
  */
-[[nodiscard]] std::optional<std::string> BPY_python_current_file_and_line(void);
+[[nodiscard]] std::optional<std::string> BPY_python_current_file_and_line();
 
 /* `bpy_rna_callback.cc` */
 
@@ -151,6 +156,8 @@ void BPY_callback_wm_free(wmWindowManager *wm);
 
 /* I18n for addons */
 #ifdef WITH_INTERNATIONAL
-[[nodiscard]] std::optional<blender::StringRefNull> BPY_app_translations_py_pgettext(
-    blender::StringRef msgctxt, blender::StringRef msgid);
+[[nodiscard]] std::optional<StringRefNull> BPY_app_translations_py_pgettext(StringRef msgctxt,
+                                                                            StringRef msgid);
 #endif
+
+}  // namespace blender

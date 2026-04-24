@@ -4,9 +4,9 @@
 
 # Libraries configuration for Apple.
 
-macro(find_package_wrapper)
-  # do nothing, just satisfy the macro
-endmacro()
+function(find_package_wrapper)
+  # do nothing, just satisfy the function
+endfunction()
 
 function(print_found_status
   lib_name
@@ -159,10 +159,10 @@ add_bundled_libraries(openexr/lib)
 add_bundled_libraries(imath/lib)
 
 string(APPEND PLATFORM_CFLAGS " -pipe -funsigned-char -fno-strict-aliasing -ffp-contract=off")
-set(PLATFORM_LINKFLAGS
-  "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework AppKit -framework Cocoa \
-   -framework Carbon -framework AudioUnit -framework AudioToolbox -framework CoreAudio -framework Metal \
-   -framework QuartzCore"
+set(PLATFORM_LINKFLAGS "\
+-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework AppKit -framework Cocoa \
+-framework Carbon -framework AudioUnit -framework AudioToolbox -framework CoreAudio -framework Metal \
+-framework QuartzCore"
 )
 
 if(WITH_CODEC_FFMPEG)
@@ -241,45 +241,13 @@ find_package(JPEG REQUIRED)
 set(TIFF_ROOT ${LIBDIR}/tiff)
 find_package(TIFF REQUIRED)
 
+set(fmt_ROOT ${LIBDIR}/fmt)
+find_package(fmt REQUIRED)
+
 if(WITH_IMAGE_WEBP)
   set(WEBP_ROOT_DIR ${LIBDIR}/webp)
   find_package(WebP REQUIRED)
 endif()
-
-# With Blender 4.4 libraries there is no more Boost. This code is only
-# here until we can reasonably assume everyone has upgraded to them.
-if(WITH_BOOST)
-  if(DEFINED LIBDIR AND NOT EXISTS "${LIBDIR}/boost")
-    set(WITH_BOOST OFF)
-    set(BOOST_LIBRARIES)
-    set(BOOST_PYTHON_LIBRARIES)
-    set(BOOST_INCLUDE_DIR)
-  endif()
-endif()
-
-if(WITH_BOOST)
-  set(Boost_NO_BOOST_CMAKE ON)
-  set(Boost_ROOT ${LIBDIR}/boost)
-  set(Boost_NO_SYSTEM_PATHS ON)
-  set(_boost_FIND_COMPONENTS)
-  if(WITH_USD AND USD_PYTHON_SUPPORT)
-    list(APPEND _boost_FIND_COMPONENTS python${PYTHON_VERSION_NO_DOTS})
-  endif()
-  set(Boost_NO_WARN_NEW_VERSIONS ON)
-  find_package(Boost COMPONENTS ${_boost_FIND_COMPONENTS})
-
-  # Boost Python is the only library Blender directly depends on, though USD headers.
-  if(WITH_USD AND USD_PYTHON_SUPPORT)
-    set(BOOST_PYTHON_LIBRARIES ${Boost_PYTHON${PYTHON_VERSION_NO_DOTS}_LIBRARY})
-  endif()
-  set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
-  set(BOOST_DEFINITIONS)
-
-  mark_as_advanced(Boost_LIBRARIES)
-  mark_as_advanced(Boost_INCLUDE_DIRS)
-  unset(_boost_FIND_COMPONENTS)
-endif()
-add_bundled_libraries(boost/lib)
 
 if(WITH_CODEC_FFMPEG)
   string(APPEND PLATFORM_LINKFLAGS " -liconv") # ffmpeg needs it !
@@ -292,9 +260,7 @@ endif()
 find_package(OpenImageIO REQUIRED)
 add_bundled_libraries(openimageio/lib)
 
-if(WITH_OPENCOLORIO)
-  find_package(OpenColorIO 2.0.0 REQUIRED)
-endif()
+find_package(OpenColorIO 2.0.0 REQUIRED CONFIG)
 add_bundled_libraries(opencolorio/lib)
 
 if(WITH_OPENVDB)
@@ -305,7 +271,9 @@ if(WITH_OPENVDB)
   else()
     unset(BLOSC_LIBRARIES CACHE)
   endif()
-  set(OPENVDB_DEFINITIONS)
+  if(OPENVDB_FOUND)
+    set(OPENVDB_DEFINITIONS "")
+  endif()
 endif()
 add_bundled_libraries(openvdb/lib)
 
@@ -336,6 +304,8 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
   find_package(OSL 1.13.4 REQUIRED)
 endif()
 add_bundled_libraries(osl/lib)
+# OSL dependency
+add_bundled_libraries(openjph/lib)
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
   find_package(Embree 4.0.0 REQUIRED)
@@ -393,6 +363,13 @@ if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
   endif()
 endif()
 
+find_package(Eigen3 REQUIRED CONFIG)
+
+if(WITH_LIBMV)
+  find_package(Ceres REQUIRED CONFIG)
+endif()
+add_bundled_libraries(ceres/lib)
+
 set(ZSTD_ROOT_DIR ${LIBDIR}/zstd)
 find_package(Zstd REQUIRED)
 
@@ -428,9 +405,7 @@ string(APPEND CMAKE_CXX_FLAGS " -ftemplate-depth=1024")
 # Avoid conflicts with Luxrender, and other plug-ins that may use the same
 # libraries as Blender with a different version or build options.
 set(PLATFORM_SYMBOLS_MAP ${CMAKE_SOURCE_DIR}/source/creator/symbols_apple.map)
-string(APPEND PLATFORM_LINKFLAGS
-  " -Wl,-unexported_symbols_list,'${PLATFORM_SYMBOLS_MAP}'"
-)
+set(PLATFORM_LINKFLAGS_SYMBOL_HIDING "-Wl,-unexported_symbols_list,'${PLATFORM_SYMBOLS_MAP}'")
 
 if(${XCODE_VERSION} VERSION_EQUAL 15.0)
   # V4.5 specific workaround: Enforce the legacy Xcode linker to avoid incorrect
@@ -454,6 +429,13 @@ elseif(${XCODE_VERSION} VERSION_GREATER_EQUAL 15.0)
     # it is corrected in CMake 3.29:
     #    https://gitlab.kitware.com/cmake/cmake/-/issues/25297
     string(APPEND PLATFORM_LINKFLAGS " -Xlinker -no_warn_duplicate_libraries")
+
+    # Silence: ld: warning: reducing alignment of section __DATA,__common from 0x8000
+    #          to 0x4000 because it exceeds segment maximum alignment
+    # The flag to silence this warning is only available on Xcode 26.4 and above.
+    if(${XCODE_VERSION} VERSION_GREATER_EQUAL 26.4)
+      string(APPEND PLATFORM_LINKFLAGS " -Xlinker -no_warn_reduced_section_align")
+    endif()
   endif()
 endif()
 
@@ -502,7 +484,7 @@ if(PLATFORM_BUNDLED_LIBRARIES)
     list(APPEND CMAKE_INSTALL_RPATH "@loader_path/../Resources/lib")
   endif()
 
-  # For binaries that are built but not installed (like makesdan or tests), we add
+  # For binaries that are built but not installed (like makesdna or tests), we add
   # the original directory of all shared libraries to the rpath. This is needed because
   # these can be in different folders, and because the build and install folder may be
   # different.

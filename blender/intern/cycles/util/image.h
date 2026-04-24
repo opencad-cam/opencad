@@ -20,12 +20,12 @@ using OIIO::ImageSpec;
 
 template<typename T>
 void util_image_resize_pixels(const vector<T> &input_pixels,
-                              const size_t input_width,
-                              const size_t input_height,
-                              const size_t components,
+                              const int64_t input_width,
+                              const int64_t input_height,
+                              const int64_t components,
                               vector<T> *output_pixels,
-                              size_t *output_width,
-                              size_t *output_height);
+                              int64_t *output_width,
+                              int64_t *output_height);
 
 /* Cast input pixel from unknown storage to float. */
 template<typename T> inline float util_image_cast_to_float(T value);
@@ -97,6 +97,26 @@ template<> inline uint16_t util_image_multiply_native(const uint16_t a, const ui
 template<> inline half util_image_multiply_native(half a, half b)
 {
   return float_to_half_image(half_to_float_image(a) * half_to_float_image(b));
+}
+
+/* Test if value is finite, in native data format. */
+template<typename T> inline T util_image_is_finite(T a);
+
+template<> inline float util_image_is_finite(const float a)
+{
+  return isfinite(a);
+}
+template<> inline uchar util_image_is_finite(const uchar /*a*/)
+{
+  return true;
+}
+template<> inline uint16_t util_image_is_finite(const uint16_t /*a*/)
+{
+  return true;
+}
+template<> inline half util_image_is_finite(half a)
+{
+  return half_is_finite(a);
 }
 
 CCL_NAMESPACE_END

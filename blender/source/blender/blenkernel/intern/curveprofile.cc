@@ -23,6 +23,8 @@
 
 #include "BLO_read_write.hh"
 
+namespace blender {
+
 /** Number of points in high resolution table is dynamic up to a maximum. */
 #define PROF_TABLE_MAX 512
 
@@ -32,7 +34,7 @@
 
 CurveProfile *BKE_curveprofile_add(eCurveProfilePresets preset)
 {
-  CurveProfile *profile = MEM_new_for_free<CurveProfile>(__func__);
+  CurveProfile *profile = MEM_new<CurveProfile>(__func__);
 
   BKE_curveprofile_set_defaults(profile);
   profile->preset = preset;
@@ -44,16 +46,16 @@ CurveProfile *BKE_curveprofile_add(eCurveProfilePresets preset)
 
 void BKE_curveprofile_free_data(CurveProfile *profile)
 {
-  MEM_SAFE_FREE(profile->path);
-  MEM_SAFE_FREE(profile->table);
-  MEM_SAFE_FREE(profile->segments);
+  MEM_SAFE_DELETE(profile->path);
+  MEM_SAFE_DELETE(profile->table);
+  MEM_SAFE_DELETE(profile->segments);
 }
 
 void BKE_curveprofile_free(CurveProfile *profile)
 {
   if (profile) {
     BKE_curveprofile_free_data(profile);
-    MEM_freeN(profile);
+    MEM_delete(profile);
   }
 }
 
@@ -61,9 +63,9 @@ void BKE_curveprofile_copy_data(CurveProfile *target, const CurveProfile *profil
 {
   *target = *profile;
 
-  target->path = (CurveProfilePoint *)MEM_dupallocN(profile->path);
-  target->table = (CurveProfilePoint *)MEM_dupallocN(profile->table);
-  target->segments = (CurveProfilePoint *)MEM_dupallocN(profile->segments);
+  target->path = MEM_dupalloc(profile->path);
+  target->table = MEM_dupalloc(profile->table);
+  target->segments = MEM_dupalloc(profile->segments);
 
   /* Update the reference the points have to the profile. */
   for (int i = 0; i < target->path_len; i++) {
@@ -74,7 +76,7 @@ void BKE_curveprofile_copy_data(CurveProfile *target, const CurveProfile *profil
 CurveProfile *BKE_curveprofile_copy(const CurveProfile *profile)
 {
   if (profile) {
-    CurveProfile *new_prdgt = (CurveProfile *)MEM_dupallocN(profile);
+    CurveProfile *new_prdgt = MEM_dupalloc(profile);
     BKE_curveprofile_copy_data(new_prdgt, profile);
     return new_prdgt;
   }
@@ -84,7 +86,7 @@ CurveProfile *BKE_curveprofile_copy(const CurveProfile *profile)
 void BKE_curveprofile_blend_write(BlendWriter *writer, const CurveProfile *profile)
 {
   writer->write_struct(profile);
-  BLO_write_struct_array(writer, CurveProfilePoint, profile->path_len, profile->path);
+  writer->write_struct_array(profile->path_len, profile->path);
 }
 
 void BKE_curveprofile_blend_read(BlendDataReader *reader, CurveProfile *profile)
@@ -194,6 +196,30 @@ bool BKE_curveprofile_move_point(CurveProfile *profile,
   return false;
 }
 
+void BKE_curveprofile_translate_selection(CurveProfile *profile, const blender::float2 &offset)
+{
+  for (int i = 0; i < profile->path_len; i++) {
+    CurveProfilePoint *pt = &profile->path[i];
+    float delta[2] = {offset.x, offset.y};
+
+    /* The main point is selected or all handles are aligned and selected. */
+    if ((pt->flag & PROF_SELECT) || ((pt->flag & PROF_H1_SELECT && pt->h1 & HD_ALIGN) &&
+                                     (pt->flag & PROF_H2_SELECT && pt->h2 & HD_ALIGN)))
+    {
+      BKE_curveprofile_move_point(profile, pt, false, delta);
+    }
+    else {
+      /* Otherwise, move only handles that are selected. */
+      if (pt->flag & PROF_H1_SELECT) {
+        BKE_curveprofile_move_handle(pt, true, false, delta);
+      }
+      if (pt->flag & PROF_H2_SELECT) {
+        BKE_curveprofile_move_handle(pt, false, false, delta);
+      }
+    }
+  }
+}
+
 bool BKE_curveprofile_remove_point(CurveProfile *profile, CurveProfilePoint *point)
 {
   /* Must have 2 points minimum. */
@@ -206,8 +232,8 @@ bool BKE_curveprofile_remove_point(CurveProfile *profile, CurveProfilePoint *poi
     return false;
   }
 
-  CurveProfilePoint *new_path = MEM_new_array_for_free<CurveProfilePoint>(
-      size_t(profile->path_len), __func__);
+  CurveProfilePoint *new_path = MEM_new_array<CurveProfilePoint>(size_t(profile->path_len),
+                                                                 __func__);
 
   int i_delete = int(point - profile->path);
   BLI_assert(i_delete > 0);
@@ -218,7 +244,7 @@ bool BKE_curveprofile_remove_point(CurveProfile *profile, CurveProfilePoint *poi
          profile->path + i_delete + 1,
          sizeof(CurveProfilePoint) * (profile->path_len - i_delete - 1));
 
-  MEM_freeN(profile->path);
+  MEM_delete(profile->path);
   profile->path = new_path;
   profile->path_len -= 1;
   return true;
@@ -227,8 +253,8 @@ bool BKE_curveprofile_remove_point(CurveProfile *profile, CurveProfilePoint *poi
 void BKE_curveprofile_remove_by_flag(CurveProfile *profile, const short flag)
 {
   /* Copy every point without the flag into the new path. */
-  CurveProfilePoint *new_path = MEM_new_array_for_free<CurveProfilePoint>(
-      size_t(profile->path_len), __func__);
+  CurveProfilePoint *new_path = MEM_new_array<CurveProfilePoint>(size_t(profile->path_len),
+                                                                 __func__);
 
   /* Build the new list without any of the points with the flag. Keep the first and last points. */
   int i_new = 1;
@@ -246,7 +272,7 @@ void BKE_curveprofile_remove_by_flag(CurveProfile *profile, const short flag)
   }
   new_path[i_new] = profile->path[i_old];
 
-  MEM_freeN(profile->path);
+  MEM_delete(profile->path);
   profile->path = new_path;
   profile->path_len -= n_removed;
 }
@@ -288,23 +314,24 @@ CurveProfilePoint *BKE_curveprofile_insert(CurveProfile *profile, float x, float
 
   /* Insert the new point at the location we found and copy all of the old points in as well. */
   profile->path_len++;
-  CurveProfilePoint *new_path = MEM_new_array_for_free<CurveProfilePoint>(
-      size_t(profile->path_len), __func__);
+  CurveProfilePoint *new_path = MEM_new_array<CurveProfilePoint>(size_t(profile->path_len),
+                                                                 __func__);
   CurveProfilePoint *new_pt = nullptr;
   for (int i_new = 0, i_old = 0; i_new < profile->path_len; i_new++) {
     if (i_new != i_insert) {
       /* Insert old points. */
       new_path[i_new] = profile->path[i_old];
-      new_path[i_new].flag &= ~PROF_SELECT; /* Deselect old points. */
+      new_path[i_new].flag &= ~(PROF_SELECT | PROF_H1_SELECT | PROF_H2_SELECT | PROF_ACTIVE |
+                                PROF_H1_ACTIVE | PROF_H2_ACTIVE); /* Deselect old points. */
       i_old++;
     }
     else {
       /* Insert new point. */
       /* Set handles of new point based on its neighbors. */
-      char new_handle_type = (new_path[i_new - 1].h2 == HD_VECT &&
-                              profile->path[i_insert].h1 == HD_VECT) ?
-                                 HD_VECT :
-                                 HD_AUTO;
+      const char new_handle_type = (new_path[i_new - 1].h2 == HD_VECT &&
+                                    profile->path[i_insert].h1 == HD_VECT) ?
+                                       HD_VECT :
+                                       HD_AUTO;
       point_init(&new_path[i_new], x, y, PROF_SELECT, new_handle_type, new_handle_type);
       new_pt = &new_path[i_new];
       /* Give new point a reference to the profile. */
@@ -313,7 +340,7 @@ CurveProfilePoint *BKE_curveprofile_insert(CurveProfile *profile, float x, float
   }
 
   /* Free the old path and use the new one. */
-  MEM_freeN(profile->path);
+  MEM_delete(profile->path);
   profile->path = new_path;
   return new_pt;
 }
@@ -321,7 +348,7 @@ CurveProfilePoint *BKE_curveprofile_insert(CurveProfile *profile, float x, float
 void BKE_curveprofile_selected_handle_set(CurveProfile *profile, int type_1, int type_2)
 {
   for (int i = 0; i < profile->path_len; i++) {
-    if (ELEM(profile->path[i].flag, PROF_SELECT, PROF_H1_SELECT, PROF_H2_SELECT)) {
+    if (profile->path[i].flag & (PROF_SELECT | PROF_H1_SELECT | PROF_H2_SELECT)) {
       profile->path[i].h1 = type_1;
       profile->path[i].h2 = type_2;
 
@@ -346,8 +373,8 @@ void BKE_curveprofile_reverse(CurveProfile *profile)
   if (profile->path_len == 2) {
     return;
   }
-  CurveProfilePoint *new_path = MEM_new_array_for_free<CurveProfilePoint>(
-      size_t(profile->path_len), __func__);
+  CurveProfilePoint *new_path = MEM_new_array<CurveProfilePoint>(size_t(profile->path_len),
+                                                                 __func__);
   /* Mirror the new points across the y = x line */
   for (int i = 0; i < profile->path_len; i++) {
     int i_reversed = profile->path_len - i - 1;
@@ -367,7 +394,7 @@ void BKE_curveprofile_reverse(CurveProfile *profile)
   }
 
   /* Free the old points and use the new ones */
-  MEM_freeN(profile->path);
+  MEM_delete(profile->path);
   profile->path = new_path;
 }
 
@@ -423,7 +450,7 @@ void BKE_curveprofile_reset_view(CurveProfile *profile)
 
 void BKE_curveprofile_reset(CurveProfile *profile)
 {
-  MEM_SAFE_FREE(profile->path);
+  MEM_SAFE_DELETE(profile->path);
 
   eCurveProfilePresets preset = static_cast<eCurveProfilePresets>(profile->preset);
   switch (preset) {
@@ -458,7 +485,7 @@ void BKE_curveprofile_reset(CurveProfile *profile)
       break;
   }
 
-  profile->path = MEM_new_array_for_free<CurveProfilePoint>(profile->path_len, __func__);
+  profile->path = MEM_new_array<CurveProfilePoint>(profile->path_len, __func__);
 
   switch (preset) {
     case PROF_PRESET_LINE:
@@ -508,8 +535,37 @@ void BKE_curveprofile_reset(CurveProfile *profile)
     profile->path[i].profile = profile;
   }
 
-  MEM_SAFE_FREE(profile->table);
+  MEM_SAFE_DELETE(profile->table);
   profile->table = nullptr;
+}
+
+void BKE_curveprofile_activate_nearest_point(CurveProfile *profile, const int i_last)
+{
+  CurveProfilePoint *pts = profile->path;
+  for (int i = 1;; i++) {
+    int k = (i + 1) / 2;
+    int idx = (i & 1) ? (i_last - k) : (i_last + k);
+
+    if (idx < 0 || idx >= profile->path_len) {
+      if (i_last - k < 0 && i_last + k >= profile->path_len) {
+        return;
+      }
+      continue;
+    }
+
+    if (pts[idx].flag & PROF_SELECT) {
+      pts[idx].flag |= PROF_ACTIVE;
+      return;
+    }
+    else if (pts[idx].flag & PROF_H1_SELECT) {
+      pts[idx].flag |= PROF_H1_ACTIVE;
+      return;
+    }
+    else if (pts[idx].flag & PROF_H2_SELECT) {
+      pts[idx].flag |= PROF_H2_ACTIVE;
+      return;
+    }
+  }
 }
 
 /** \} */
@@ -651,8 +707,8 @@ struct CurvatureSortPoint {
  */
 static int sort_points_curvature(const void *in_a, const void *in_b)
 {
-  const CurvatureSortPoint *a = (const CurvatureSortPoint *)in_a;
-  const CurvatureSortPoint *b = (const CurvatureSortPoint *)in_b;
+  const CurvatureSortPoint *a = static_cast<const CurvatureSortPoint *>(in_a);
+  const CurvatureSortPoint *b = static_cast<const CurvatureSortPoint *>(in_b);
 
   if (a->point_curvature > b->point_curvature) {
     return 0;
@@ -688,7 +744,7 @@ static void create_samples(CurveProfile *profile,
   calculate_path_handles(path, totpoints);
 
   /* Create a list of edge indices with the most curved at the start, least curved at the end. */
-  CurvatureSortPoint *curve_sorted = MEM_calloc_arrayN<CurvatureSortPoint>(totedges, __func__);
+  CurvatureSortPoint *curve_sorted = MEM_new_array_zeroed<CurvatureSortPoint>(totedges, __func__);
   for (int i = 0; i < totedges; i++) {
     curve_sorted[i].point_index = i;
     /* Calculate the curvature of each edge once for use when sorting for curvature. */
@@ -697,7 +753,7 @@ static void create_samples(CurveProfile *profile,
   qsort(curve_sorted, totedges, sizeof(CurvatureSortPoint), sort_points_curvature);
 
   /* Assign the number of sampled points for each edge. */
-  int16_t *n_samples = MEM_calloc_arrayN<int16_t>(totedges, "samples numbers");
+  int16_t *n_samples = MEM_new_array_zeroed<int16_t>(totedges, "samples numbers");
   int n_added = 0;
   int n_left;
   if (n_segments >= totedges) {
@@ -796,8 +852,8 @@ static void create_samples(CurveProfile *profile,
     BLI_assert(i_sample <= n_segments);
   }
 
-  MEM_freeN(curve_sorted);
-  MEM_freeN(n_samples);
+  MEM_delete(curve_sorted);
+  MEM_delete(n_samples);
 }
 
 void BKE_curveprofile_set_defaults(CurveProfile *profile)
@@ -808,7 +864,7 @@ void BKE_curveprofile_set_defaults(CurveProfile *profile)
   profile->clip_rect = profile->view_rect;
 
   profile->path_len = 2;
-  profile->path = MEM_new_array_for_free<CurveProfilePoint>(2, __func__);
+  profile->path = MEM_new_array<CurveProfilePoint>(2, __func__);
 
   profile->path[0].x = 1.0f;
   profile->path[0].y = 0.0f;
@@ -923,8 +979,7 @@ static void create_samples_even_spacing(CurveProfile *profile,
 static void curveprofile_make_table(CurveProfile *profile)
 {
   int n_samples = BKE_curveprofile_table_size(profile);
-  CurveProfilePoint *new_table = MEM_new_array_for_free<CurveProfilePoint>((n_samples + 1),
-                                                                           __func__);
+  CurveProfilePoint *new_table = MEM_new_array<CurveProfilePoint>((n_samples + 1), __func__);
 
   if (n_samples > 1) {
     create_samples(profile, n_samples - 1, false, new_table);
@@ -934,7 +989,7 @@ static void curveprofile_make_table(CurveProfile *profile)
   new_table[n_samples - 1].x = 0.0f;
   new_table[n_samples - 1].y = 1.0f;
 
-  MEM_SAFE_FREE(profile->table);
+  MEM_SAFE_DELETE(profile->table);
   profile->table = new_table;
 }
 
@@ -948,8 +1003,7 @@ static void curveprofile_make_segments_table(CurveProfile *profile)
   if (n_samples <= 0) {
     return;
   }
-  CurveProfilePoint *new_table = MEM_new_array_for_free<CurveProfilePoint>((n_samples + 1),
-                                                                           __func__);
+  CurveProfilePoint *new_table = MEM_new_array<CurveProfilePoint>((n_samples + 1), __func__);
 
   if (profile->flag & PROF_SAMPLE_EVEN_LENGTHS) {
     /* Even length sampling incompatible with only straight edge sampling for now. */
@@ -959,7 +1013,7 @@ static void curveprofile_make_segments_table(CurveProfile *profile)
     create_samples(profile, n_samples, profile->flag & PROF_SAMPLE_STRAIGHT_EDGES, new_table);
   }
 
-  MEM_SAFE_FREE(profile->segments);
+  MEM_SAFE_DELETE(profile->segments);
   profile->segments = new_table;
 }
 
@@ -1018,6 +1072,48 @@ void BKE_curveprofile_update(CurveProfile *profile, const int update_flags)
   }
 }
 
+CurveProfilePoint *BKE_curveprofile_active_get(CurveProfile *profile)
+{
+  CurveProfilePoint *active_pt = nullptr;
+  for (int i = 0; i < profile->path_len; i++) {
+    CurveProfilePoint *pt = &profile->path[i];
+    if (pt->flag & (PROF_SELECT | PROF_H1_SELECT | PROF_H2_SELECT)) {
+      active_pt = pt;
+      if (pt->flag & (PROF_ACTIVE | PROF_H1_ACTIVE | PROF_H2_ACTIVE)) {
+        break;
+      }
+    }
+  }
+  return active_pt;
+}
+
+float *BKE_curveprofile_active_location_get(CurveProfilePoint *pt)
+{
+  if (pt->flag & PROF_ACTIVE) {
+    return &pt->x;
+  }
+  else if (pt->flag & PROF_H1_ACTIVE) {
+    return &pt->h1_loc[0];
+  }
+  else if (pt->flag & PROF_H2_ACTIVE) {
+    return &pt->h2_loc[0];
+  }
+  /* If no active point or handles, return the selected location. */
+  else if (pt->flag & PROF_SELECT) {
+    return &pt->x;
+  }
+  else if (pt->flag & PROF_H1_SELECT) {
+    return &pt->h1_loc[0];
+  }
+  else if (pt->flag & PROF_H2_SELECT) {
+    return &pt->h2_loc[0];
+  }
+
+  /* Either the input point itself or its handle should be labeled as active. */
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
 void BKE_curveprofile_evaluate_length_portion(const CurveProfile *profile,
                                               float length_portion,
                                               float *x_out,
@@ -1063,3 +1159,5 @@ void BKE_curveprofile_evaluate_length_portion(const CurveProfile *profile,
 }
 
 /** \} */
+
+}  // namespace blender

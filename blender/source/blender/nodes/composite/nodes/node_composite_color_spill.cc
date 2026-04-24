@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_vector_types.hh"
 
 #include "FN_multi_function_builder.hh"
@@ -47,38 +43,38 @@ static const EnumPropertyItem limit_method_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static void cmp_node_color_spill_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
   b.use_custom_socket_order();
 
-  b.add_output<decl::Color>("Image");
+  b.add_output<decl::Color>("Image"_ustr);
 
-  b.add_input<decl::Color>("Image").default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Float>("Factor", "Fac")
+  b.add_input<decl::Color>("Image"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Float>("Factor"_ustr, "Fac"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Menu>("Spill Channel")
+  b.add_input<decl::Menu>("Spill Channel"_ustr)
       .default_value(RGBChannel::G)
       .static_items(rgb_channel_items)
       .expanded()
       .translation_context(BLT_I18NCONTEXT_COLOR)
       .optional_label();
-  b.add_input<decl::Menu>("Limit Method")
+  b.add_input<decl::Menu>("Limit Method"_ustr)
       .default_value(CMP_NODE_COLOR_SPILL_LIMIT_ALGORITHM_SINGLE)
       .static_items(limit_method_items)
       .expanded()
       .optional_label();
-  b.add_input<decl::Menu>("Limit Channel")
+  b.add_input<decl::Menu>("Limit Channel"_ustr)
       .default_value(RGBChannel::R)
       .static_items(rgb_channel_items)
       .expanded()
       .translation_context(BLT_I18NCONTEXT_COLOR)
       .optional_label()
-      .usage_by_menu("Limit Method", CMP_NODE_COLOR_SPILL_LIMIT_ALGORITHM_SINGLE);
-  b.add_input<decl::Float>("Limit Strength")
+      .usage_by_menu("Limit Method"_ustr, CMP_NODE_COLOR_SPILL_LIMIT_ALGORITHM_SINGLE);
+  b.add_input<decl::Float>("Limit Strength"_ustr)
       .default_value(1.0f)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -86,22 +82,22 @@ static void cmp_node_color_spill_declare(NodeDeclarationBuilder &b)
       .description("Specifies the limiting strength of the limit channel");
 
   PanelDeclarationBuilder &use_spill_strength_panel =
-      b.add_panel("Spill Strength").default_closed(true);
-  use_spill_strength_panel.add_input<decl::Bool>("Use Spill Strength")
+      b.add_panel("Spill Strength"_ustr).default_closed(true);
+  use_spill_strength_panel.add_input<decl::Bool>("Use Spill Strength"_ustr)
       .default_value(false)
       .panel_toggle()
       .description(
           "If enabled, the spill strength for each color channel can be specified. If disabled, "
           "the spill channel will have a unit scale, while other channels will be zero");
-  use_spill_strength_panel.add_input<decl::Color>("Strength", "Spill Strength")
+  use_spill_strength_panel.add_input<decl::Color>("Strength"_ustr, "Spill Strength"_ustr)
       .default_value({0.0f, 1.0f, 0.0f, 1.0f})
       .description("Specifies the spilling strength of each color channel");
 }
 
-static void node_composit_init_color_spill(bNodeTree * /*ntree*/, bNode *node)
+static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
   /* Unused, but allocated for forward compatibility. */
-  node->storage = MEM_new_for_free<NodeColorspill>(__func__);
+  node->storage = MEM_new<NodeColorspill>(__func__);
 }
 
 using namespace blender::compositor;
@@ -164,9 +160,9 @@ static float4 color_spill(const float4 color,
   return float4(map > 0.0f ? color.xyz() + spill_scale * map : color.xyz(), color.w);
 }
 
-using blender::compositor::Color;
+using compositor::Color;
 
-static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+static void node_build_multi_function(nodes::NodeMultiFunctionBuilder &builder)
 {
   static auto function =
       mf::build::SI8_SO<Color, float, MenuValue, MenuValue, MenuValue, float, bool, Color, Color>(
@@ -192,29 +188,27 @@ static void node_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &
   builder.set_matching_fn(function);
 }
 
-}  // namespace blender::nodes::node_composite_color_spill_cc
-
-static void register_node_type_cmp_color_spill()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_color_spill_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeColorSpill", CMP_NODE_COLOR_SPILL);
+  cmp_node_type_base(&ntype, "CompositorNodeColorSpill"_ustr, CMP_NODE_COLOR_SPILL);
   ntype.ui_name = "Color Spill";
   ntype.ui_description =
       "Remove colors from a blue or green screen, by reducing one RGB channel compared to the "
       "others";
   ntype.enum_name_legacy = "COLOR_SPILL";
   ntype.nclass = NODE_CLASS_MATTE;
-  ntype.declare = file_ns::cmp_node_color_spill_declare;
-  ntype.initfunc = file_ns::node_composit_init_color_spill;
-  blender::bke::node_type_storage(
+  ntype.declare = node_declare;
+  ntype.initfunc = node_init;
+  bke::node_type_storage(
       ntype, "NodeColorspill", node_free_standard_storage, node_copy_standard_storage);
-  ntype.gpu_fn = file_ns::node_gpu_material;
-  ntype.build_multi_function = file_ns::node_build_multi_function;
-  blender::bke::node_type_size(ntype, 160, 140, NODE_DEFAULT_MAX_WIDTH);
+  ntype.gpu_fn = node_gpu_material;
+  ntype.build_multi_function = node_build_multi_function;
+  bke::node_type_size(ntype, 160, 140, NODE_DEFAULT_MAX_WIDTH);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_color_spill)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_color_spill_cc

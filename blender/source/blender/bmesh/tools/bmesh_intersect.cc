@@ -19,15 +19,15 @@
  * - No support for holes (cutting a hole into a single face).
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
-#include "BLI_alloca.h"
 #include "BLI_linklist.h"
 #include "BLI_math_geom.h"
 #include "BLI_math_vector.h"
 #include "BLI_memarena.h"
 #include "BLI_set.hh"
-#include "BLI_sort_utils.h"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
@@ -43,6 +43,8 @@
 #include "tools/bmesh_edgesplit.hh"
 
 #include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /*
  * Some of these depend on each other:
@@ -111,7 +113,7 @@ struct ISectState {
   GHash *edgetri_cache; /* int[4]: BMVert */
   GHash *edge_verts;    /* BMEdge: LinkList(of verts), new and original edges */
   GHash *face_edges;    /* BMFace-index: LinkList(of edges), only original faces */
-  blender::Set<BMEdge *> *wire_edges;
+  Set<BMEdge *> *wire_edges;
   LinkNode *vert_dissolve; /* BMVert's */
 
   MemArena *mem_arena;
@@ -166,7 +168,7 @@ static void edge_verts_sort(const float co[3], LinkBase *v_ls_base)
 {
   /* not optimal but list will be typically < 5 */
   uint i;
-  VertSort *vert_sort = BLI_array_alloca(vert_sort, v_ls_base->list_len);
+  Array<VertSort, BM_DEFAULT_TOPOLOGY_STACK_SIZE> vert_sort(v_ls_base->list_len);
   LinkNode *node;
 
   BLI_assert(v_ls_base->list_len > 1);
@@ -178,7 +180,7 @@ static void edge_verts_sort(const float co[3], LinkBase *v_ls_base)
     vert_sort[i].v = v;
   }
 
-  qsort(vert_sort, v_ls_base->list_len, sizeof(*vert_sort), BLI_sortutil_cmp_float);
+  std::ranges::sort(vert_sort, [](const VertSort &a, const VertSort &b) { return a.val < b.val; });
 
   for (i = 0, node = v_ls_base->list; i < v_ls_base->list_len; i++, node = node->next) {
     node->link = vert_sort[i].v;
@@ -190,7 +192,7 @@ static void edge_verts_add(ISectState *s, BMEdge *e, BMVert *v, const bool use_t
 {
   BLI_assert(e->head.htype == BM_EDGE);
   BLI_assert(v->head.htype == BM_VERT);
-  ghash_insert_link(s->edge_verts, (void *)e, v, use_test, s->mem_arena);
+  ghash_insert_link(s->edge_verts, static_cast<void *>(e), v, use_test, s->mem_arena);
 }
 
 static void face_edges_add(ISectState *s, const int f_index, BMEdge *e, const bool use_test)
@@ -213,7 +215,9 @@ static void face_edges_split(BMesh *bm,
 {
   uint i;
   uint edge_arr_len = e_ls_base->list_len;
-  BMEdge **edge_arr = BLI_array_alloca(edge_arr, edge_arr_len);
+  /* NOTE: `edge_arr` pointer may be reassigned to arena memory below. */
+  Array<BMEdge *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> edge_arr_buf(edge_arr_len);
+  BMEdge **edge_arr = edge_arr_buf.data();
   LinkNode *node;
   BLI_assert(f->head.htype == BM_FACE);
 
@@ -305,7 +309,7 @@ static enum ISectType intersect_line_tri(const float p0[3],
             fac = line_point_factor_v3(ix_pair[0], p0, p1);
             if ((fac >= e->eps_margin) && (fac <= 1.0f - e->eps_margin)) {
               copy_v3_v3(r_ix, ix_pair[0]);
-              return ISectType(IX_EDGE_TRI_EDGE0 + (enum ISectType)i_t0);
+              return ISectType(IX_EDGE_TRI_EDGE0 + static_cast<enum ISectType>(i_t0));
             }
           }
         }
@@ -409,7 +413,7 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
 #ifdef USE_DUMP
       printf("# cache hit (%d, %d, %d, %d)\n", UNPACK4(k_arr[i]));
 #endif
-      *r_side = (enum ISectType)i;
+      *r_side = static_cast<enum ISectType>(i);
       return iv;
     }
   }
@@ -845,7 +849,7 @@ finally:
 
 struct RaycastData {
   const float **looptris;
-  blender::Vector<float, 64> *z_buffer;
+  Vector<float, 64> *z_buffer;
 };
 
 #  ifdef USE_KDOPBVH_WATERTIGHT
@@ -894,7 +898,7 @@ static void raycast_callback(void *userdata,
 
 static int isect_bvhtree_point_v3(BVHTree *tree, const float **looptris, const float co[3])
 {
-  blender::Vector<float, 64> z_buffer;
+  Vector<float, 64> z_buffer;
 
   RaycastData raycast_data = {
       looptris,
@@ -929,7 +933,7 @@ static int isect_bvhtree_point_v3(BVHTree *tree, const float **looptris, const f
     const float eps = FLT_EPSILON * 10;
     num_isect = 1; /* always count first */
 
-    std::sort(z_buffer.begin(), z_buffer.end());
+    std::ranges::sort(z_buffer);
 
     const float *depth_arr = z_buffer.data();
     float depth_last = depth_arr[0];
@@ -949,7 +953,7 @@ static int isect_bvhtree_point_v3(BVHTree *tree, const float **looptris, const f
 #endif /* USE_BVH */
 
 bool BM_mesh_intersect(BMesh *bm,
-                       const blender::Span<std::array<BMLoop *, 3>> looptris,
+                       const Span<std::array<BMLoop *, 3>> looptris,
                        int (*test_fn)(BMFace *f, void *user_data),
                        void *user_data,
                        const bool use_self,
@@ -985,7 +989,7 @@ bool BM_mesh_intersect(BMesh *bm,
 
   s.edge_verts = BLI_ghash_ptr_new(__func__);
   s.face_edges = BLI_ghash_int_new(__func__);
-  s.wire_edges = MEM_new<blender::Set<BMEdge *>>(__func__);
+  s.wire_edges = MEM_new<Set<BMEdge *>>(__func__);
   s.vert_dissolve = nullptr;
 
   s.mem_arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
@@ -1032,8 +1036,7 @@ bool BM_mesh_intersect(BMesh *bm,
     float **cos;
     int i, j;
 
-    cos = static_cast<float **>(
-        MEM_mallocN(size_t(looptris.size()) * sizeof(*looptri_coords) * 3, __func__));
+    cos = MEM_new_array_uninitialized<float *>(size_t(looptris.size()) * 3, __func__);
     for (i = 0, j = 0; i < int(looptris.size()); i++) {
       cos[j++] = looptris[i][0]->v->co;
       cos[j++] = looptris[i][1]->v->co;
@@ -1054,7 +1057,7 @@ bool BM_mesh_intersect(BMesh *bm,
             {UNPACK3(looptris[i][2]->v->co)},
         };
 
-        BLI_bvhtree_insert(tree_a, i, (const float *)t_cos, 3);
+        BLI_bvhtree_insert(tree_a, i, reinterpret_cast<const float *>(t_cos), 3);
       }
     }
     BLI_bvhtree_balance(tree_a);
@@ -1071,7 +1074,7 @@ bool BM_mesh_intersect(BMesh *bm,
             {UNPACK3(looptris[i][2]->v->co)},
         };
 
-        BLI_bvhtree_insert(tree_b, i, (const float *)t_cos, 3);
+        BLI_bvhtree_insert(tree_b, i, reinterpret_cast<const float *>(t_cos), 3);
       }
     }
     BLI_bvhtree_balance(tree_b);
@@ -1113,7 +1116,7 @@ bool BM_mesh_intersect(BMesh *bm,
       printf(")),\n");
 #  endif
     }
-    MEM_freeN(overlap);
+    MEM_delete(overlap);
   }
 
   if (boolean_mode == BMESH_ISECT_BOOLEAN_NONE) {
@@ -1245,8 +1248,7 @@ bool BM_mesh_intersect(BMesh *bm,
       }
     }
 
-    splice_ls = static_cast<BMVert *(*)[2]>(
-        MEM_mallocN(size_t(s.wire_edges->size()) * sizeof(*splice_ls), __func__));
+    splice_ls = MEM_new_array_uninitialized<BMVert *[2]>(size_t(s.wire_edges->size()), __func__);
     STACK_INIT(splice_ls, s.wire_edges->size());
 
     for (node = s.vert_dissolve; node; node = node->next) {
@@ -1410,7 +1412,7 @@ bool BM_mesh_intersect(BMesh *bm,
 
     /* Remove verts! */
     {
-      blender::Set<BMVert *> verts_invalid;
+      Set<BMVert *> verts_invalid;
 
       for (node = s.vert_dissolve; node; node = node->next) {
         /* arena allocated, don't free */
@@ -1439,7 +1441,7 @@ bool BM_mesh_intersect(BMesh *bm,
       }
     }
 
-    MEM_freeN(splice_ls);
+    MEM_delete(splice_ls);
   }
 #endif /* USE_DISSOLVE */
 
@@ -1518,7 +1520,7 @@ bool BM_mesh_intersect(BMesh *bm,
     user_data_wrap.test_fn = test_fn;
     user_data_wrap.user_data = user_data;
 
-    groups_array = MEM_malloc_arrayN<int>(size_t(bm->totface), __func__);
+    groups_array = MEM_new_array_uninitialized<int>(size_t(bm->totface), __func__);
     group_tot = BM_mesh_calc_face_groups(
         bm, groups_array, &group_index, bm_loop_filter_fn, nullptr, &user_data_wrap, 0, BM_EDGE);
 
@@ -1582,8 +1584,8 @@ bool BM_mesh_intersect(BMesh *bm,
       has_edit_boolean |= (do_flip || do_remove);
     }
 
-    MEM_freeN(groups_array);
-    MEM_freeN(group_index);
+    MEM_delete(groups_array);
+    MEM_delete(group_index);
 
 #ifdef USE_DISSOLVE
     /* We have dissolve code above, this is alternative logic,
@@ -1638,7 +1640,7 @@ bool BM_mesh_intersect(BMesh *bm,
   }
 
   if (boolean_mode != BMESH_ISECT_BOOLEAN_NONE) {
-    MEM_freeN(looptri_coords);
+    MEM_delete(looptri_coords);
 
     /* no booleans, just free immediate */
     BLI_bvhtree_free(tree_a);
@@ -1664,3 +1666,5 @@ bool BM_mesh_intersect(BMesh *bm,
 
   return (has_edit_isect || has_edit_boolean);
 }
+
+}  // namespace blender

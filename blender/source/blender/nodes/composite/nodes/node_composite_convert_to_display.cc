@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "DNA_color_types.h"
 
 #include "BKE_colortools.hh"
@@ -33,19 +29,21 @@ NODE_STORAGE_FUNCS(NodeConvertToDisplay)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Bool>("Invert").default_value(false).description(
-      "Convert from display to scene linear instead. Not all view transforms can be inverted "
-      "exactly, and the result may not match the original scene linear image");
+  b.add_input<decl::Bool>("Invert"_ustr)
+      .default_value(false)
+      .description(
+          "Convert from display to scene linear instead. Not all view transforms can be inverted "
+          "exactly, and the result may not match the original scene linear image");
 
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 }
 
 static void node_init(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeConvertToDisplay *nctd = MEM_new_for_free<NodeConvertToDisplay>(__func__);
+  NodeConvertToDisplay *nctd = MEM_new<NodeConvertToDisplay>(__func__);
   BKE_color_managed_display_settings_init(&nctd->display_settings);
   BKE_color_managed_view_settings_init(&nctd->view_settings, &nctd->display_settings, nullptr);
   nctd->view_settings.flag |= COLORMANAGE_VIEW_ONLY_VIEW_LOOK;
@@ -56,12 +54,12 @@ static void node_free(bNode *node)
 {
   NodeConvertToDisplay *nctd = static_cast<NodeConvertToDisplay *>(node->storage);
   BKE_color_managed_view_settings_free(&nctd->view_settings);
-  MEM_freeN(nctd);
+  MEM_delete(nctd);
 }
 
 static void node_copy(bNodeTree * /*dest_ntree*/, bNode *dest_node, const bNode *src_node)
 {
-  NodeConvertToDisplay *dest = MEM_new_for_free<NodeConvertToDisplay>(__func__);
+  NodeConvertToDisplay *dest = MEM_new<NodeConvertToDisplay>(__func__);
   const NodeConvertToDisplay *src = static_cast<const NodeConvertToDisplay *>(src_node->storage);
   BKE_color_managed_view_settings_copy(&dest->view_settings, &src->view_settings);
   BKE_color_managed_display_settings_copy(&dest->display_settings, &src->display_settings);
@@ -82,10 +80,6 @@ static void node_blend_read(bNodeTree & /*tree*/, bNode &node, BlendDataReader &
 
 static void node_draw_buttons(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-#ifndef WITH_OPENCOLORIO
-  layout.label(RPT_("Disabled, built without OpenColorIO"), ICON_ERROR);
-#endif
-
   PointerRNA display_ptr = RNA_pointer_get(ptr, "display_settings");
   PointerRNA view_ptr = RNA_pointer_get(ptr, "view_settings");
 
@@ -155,7 +149,7 @@ class ConvertToDisplayOperation : public NodeOperation {
   void execute_cpu()
   {
     const NodeConvertToDisplay &nctd = node_storage(node());
-    ColormanageProcessor *color_processor = IMB_colormanagement_display_processor_new(
+    ColormanageProcessor color_processor = ColormanageProcessor::display_processor_new(
         &nctd.view_settings, &nctd.display_settings, DISPLAY_SPACE_VIDEO_OUTPUT, do_inverse());
 
     Result &input_image = get_input("Image");
@@ -168,26 +162,23 @@ class ConvertToDisplayOperation : public NodeOperation {
       output_image.store_pixel(texel, input_image.load_pixel<Color>(texel));
     });
 
-    IMB_colormanagement_processor_apply(color_processor,
-                                        static_cast<float *>(output_image.cpu_data().data()),
-                                        domain.data_size.x,
-                                        domain.data_size.y,
-                                        input_image.channels_count(),
-                                        false);
-    IMB_colormanagement_processor_free(color_processor);
+    color_processor.apply(static_cast<float *>(output_image.cpu_data_for_write().data()),
+                          domain.data_size.x,
+                          domain.data_size.y,
+                          input_image.channels_count(),
+                          false);
   }
 
   void execute_single()
   {
     const NodeConvertToDisplay &nctd = node_storage(node());
-    ColormanageProcessor *color_processor = IMB_colormanagement_display_processor_new(
+    ColormanageProcessor color_processor = ColormanageProcessor::display_processor_new(
         &nctd.view_settings, &nctd.display_settings, DISPLAY_SPACE_VIDEO_OUTPUT, do_inverse());
 
     Result &input_image = get_input("Image");
     Color color = input_image.get_single_value<Color>();
 
-    IMB_colormanagement_processor_apply_pixel(color_processor, color, 3);
-    IMB_colormanagement_processor_free(color_processor);
+    color_processor.apply_pixel(color, 3);
 
     Result &output_image = get_result("Image");
     output_image.allocate_single_value();
@@ -195,17 +186,16 @@ class ConvertToDisplayOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new ConvertToDisplayOperation(context, node);
 }
 
-static void register_node_type_cmp_convert_to_display()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_convert_to_display_cc;
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeConvertToDisplay", CMP_NODE_CONVERT_TO_DISPLAY);
+  cmp_node_type_base(&ntype, "CompositorNodeConvertToDisplay"_ustr, CMP_NODE_CONVERT_TO_DISPLAY);
   ntype.ui_name = "Convert to Display";
   ntype.ui_description =
       "Convert from scene linear to display color space, with a view transform and look for tone "
@@ -214,16 +204,16 @@ static void register_node_type_cmp_convert_to_display()
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
   ntype.draw_buttons = node_draw_buttons;
-  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Middle);
+  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
   ntype.initfunc = node_init;
-  blender::bke::node_type_storage(ntype, "NodeConvertToDisplay", node_free, node_copy);
+  bke::node_type_storage(ntype, "NodeConvertToDisplay", node_free, node_copy);
   ntype.blend_data_read_storage_content = node_blend_read;
   ntype.blend_write_storage_content = node_blend_write;
   ntype.get_compositor_operation = get_compositor_operation;
-  blender::bke::node_type_size(ntype, 240, 150, NODE_DEFAULT_MAX_WIDTH);
+  bke::node_type_size(ntype, 240, 150, NODE_DEFAULT_MAX_WIDTH);
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_convert_to_display)
+NOD_REGISTER_NODE(node_register)
 
 }  // namespace blender::nodes::node_composite_convert_to_display_cc

@@ -182,6 +182,12 @@ RESHAPE(float3x3, mat3x3, mat3x4)
 #define thread
 #define threadgroup
 
+/* MSL component compatibility. */
+#define gatherComp0 0
+#define gatherComp1 1
+#define gatherComp2 2
+#define gatherComp3 3
+
 /**
  * This string type is much like the OSL string.
  * It is merely a hash of the actual string and it immutable.
@@ -208,6 +214,17 @@ float4 texelFetchExtend(sampler2D samp, int2 texel, int lvl)
   texel = clamp(texel, int2(0), textureSize(samp, lvl).xy - 1);
   return texelFetch(samp, texel, lvl);
 }
+
+/* For assert support. */
+#if defined(GPU_VERTEX_SHADER)
+#  define GPU_THREAD uint3(gl_VertexID, gl_InstanceID, 0)
+#elif defined(GPU_FRAGMENT_SHADER)
+#  define GPU_THREAD uint3(gl_FragCoord.x, gl_FragCoord.y, 0)
+#elif defined(GPU_COMPUTE_SHADER)
+#  define GPU_THREAD gl_GlobalInvocationID
+#else
+#  define GPU_THREAD error_not_in_a_shader_question_mark
+#endif
 
 /* Stage agnostic builtin function.
  * GLSL doesn't allow mixing shader stages inside the same source file.

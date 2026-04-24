@@ -2,16 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_base.hh"
-#include "BLI_math_numbers.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
-
-#include "UI_resources.hh"
 
 #include "COM_algorithm_jump_flooding.hh"
 #include "COM_algorithm_symmetric_separable_blur_variable_size.hh"
@@ -20,22 +13,24 @@
 
 #include "node_composite_util.hh"
 
-/* **************** Inpaint/ ******************** */
-
 namespace blender::nodes::node_composite_inpaint_cc {
 
-static void cmp_node_inpaint_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Int>("Size").default_value(0).min(0).description(
-      "The size of the inpaint in pixels");
+  b.add_input<decl::Int>("Size"_ustr)
+      .default_value(0)
+      .min(0)
+      .description("The size of the inpaint in pixels");
 }
 
 using namespace blender::compositor;
@@ -252,7 +247,7 @@ class InpaintOperation : public NodeOperation {
        * inpainting distance since areas outside of the clamp range only indirectly affect the
        * inpainting region due to blurring and thus needn't use higher blur radii. */
       float blur_window_size = math::min(float(max_distance), distance_to_boundary) /
-                               math::numbers::sqrt2;
+                               std::numbers::sqrt2;
       bool skip_smoothing = distance_to_boundary > (max_distance * 2.0f);
       float smoothing_radius = skip_smoothing ? 0.0f : blur_window_size;
       smoothing_radius_image.store_pixel(texel, smoothing_radius);
@@ -349,27 +344,25 @@ class InpaintOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new InpaintOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_inpaint_cc
-
-static void register_node_type_cmp_inpaint()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_inpaint_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodeInpaint", CMP_NODE_INPAINT);
+  cmp_node_type_base(&ntype, "CompositorNodeInpaint"_ustr, CMP_NODE_INPAINT);
   ntype.ui_name = "Inpaint";
   ntype.ui_description = "Extend borders of an image into transparent or masked regions";
   ntype.enum_name_legacy = "INPAINT";
   ntype.nclass = NODE_CLASS_OP_FILTER;
-  ntype.declare = file_ns::cmp_node_inpaint_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_inpaint)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_inpaint_cc

@@ -15,15 +15,7 @@
 
 #include "BLI_sys_types.h"
 
-#define WIN32_LEAN_AND_MEAN
-
-#ifndef NOMINMAX
-#  define NOMINMAX
-#  include <windows.h>
-#  undef NOMINMAX
-#else
-#  include <windows.h>
-#endif
+#include <windows.h>
 
 #undef rad
 #undef rad1
@@ -74,6 +66,8 @@ DIR *opendir(const char *path);
 struct dirent *readdir(DIR *dp);
 int closedir(DIR *dp);
 const char *dirname(char *path);
+
+namespace blender {
 
 /* Windows utility functions. */
 
@@ -147,3 +141,5 @@ enum class QoSPrecedence {
  * \param qos_precedence: The precedence of the caller (higher wins).
  */
 void BLI_windows_process_set_qos(QoSMode qos_mode, QoSPrecedence qos_precedence);
+
+}  // namespace blender

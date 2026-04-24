@@ -267,6 +267,10 @@ class VKDevice : public NonCopyable {
     PFN_vkCopyMemoryToImageEXT vkCopyMemoryToImage = nullptr;
     PFN_vkTransitionImageLayoutEXT vkTransitionImageLayout = nullptr;
 
+    /* Extension: VK_KHR_mainentance4 */
+    PFN_vkGetDeviceImageMemoryRequirements vkGetDeviceImageMemoryRequirements = nullptr;
+    PFN_vkGetDeviceBufferMemoryRequirements vkGetDeviceBufferMemoryRequirements = nullptr;
+
 #ifdef _WIN32
     /* Extension: VK_KHR_external_memory_win32 */
     PFN_vkGetMemoryWin32HandleKHR vkGetMemoryWin32Handle = nullptr;
@@ -363,7 +367,7 @@ class VKDevice : public NonCopyable {
     return samplers_;
   }
 
-  void init(void *ghost_context);
+  void init(GHOST_IContext *ghost_context);
   void reinit();
   void deinit();
   bool is_initialized() const
@@ -408,6 +412,7 @@ class VKDevice : public NonCopyable {
   TimelineValue render_graph_submit(render_graph::VKRenderGraph *render_graph,
                                     VKDiscardPool &context_discard_pool,
                                     bool submit_to_device,
+                                    bool wait_for_submission,
                                     bool wait_for_completion,
                                     VkPipelineStageFlags wait_dst_stage_mask,
                                     VkSemaphore wait_semaphore,
@@ -452,8 +457,7 @@ class VKDevice : public NonCopyable {
   Span<std::reference_wrapper<VKContext>> contexts_get() const;
 
   void memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb) const;
-  static void debug_print(std::ostream &os, const VKDiscardPool &discard_pool);
-  void debug_print();
+  void debug_print() const;
 
   /** \} */
 

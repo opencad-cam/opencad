@@ -268,16 +268,16 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
   }
 
   /* Count. */
-  LISTBASE_FOREACH (MaskLayer *, masklay, &mask->masklayers) {
-    if (masklay->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &masklay : mask->masklayers) {
+    if (masklay.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
-    LISTBASE_FOREACH (MaskSpline *, spline, &masklay->splines) {
+    for (MaskSpline &spline : masklay.splines) {
       int i;
 
-      for (i = 0; i < spline->tot_point; i++) {
-        MaskSplinePoint *point = &spline->points[i];
+      for (i = 0; i < spline.tot_point; i++) {
+        MaskSplinePoint *point = &spline.points[i];
 
         if (BKE_mask_point_selected(point)) {
           if (BKE_mask_point_selected_knot(point)) {
@@ -314,25 +314,26 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
   ED_mask_get_aspect(t->area, t->region, &asp[0], &asp[1]);
 
   tc->data_len = (is_prop_edit) ? count : countsel;
-  td = tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, "TransObData(Mask Editing)");
+  td = tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransObData(Mask Editing)");
   /* For each 2d uv coord a 3d vector is allocated, so that they can be
    * treated just as if they were 3d verts. */
-  td2d = tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len, "TransObData2D(Mask Editing)");
-  tc->custom.type.data = tdm = MEM_calloc_arrayN<TransDataMasking>(
+  td2d = tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len,
+                                                         "TransObData2D(Mask Editing)");
+  tc->custom.type.data = tdm = MEM_new_array_zeroed<TransDataMasking>(
       tc->data_len, "TransDataMasking(Mask Editing)");
   tc->custom.type.use_free = true;
 
   /* Create data. */
-  LISTBASE_FOREACH (MaskLayer *, masklay, &mask->masklayers) {
-    if (masklay->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &masklay : mask->masklayers) {
+    if (masklay.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
-    LISTBASE_FOREACH (MaskSpline *, spline, &masklay->splines) {
+    for (MaskSpline &spline : masklay.splines) {
       int i;
 
-      for (i = 0; i < spline->tot_point; i++) {
-        MaskSplinePoint *point = &spline->points[i];
+      for (i = 0; i < spline.tot_point; i++) {
+        MaskSplinePoint *point = &spline.points[i];
 
         if (is_prop_edit || BKE_mask_point_selected(point)) {
           MaskPointToTransData(scene, point, td, td2d, tdm, is_prop_edit, asp);

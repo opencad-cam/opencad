@@ -29,11 +29,11 @@ static void copy_layer_groups_without_layers(GreasePencil &dst_grease_pencil,
 {
   using namespace bke::greasepencil;
   /* Note: Don't loop over all children, just the direct children. */
-  LISTBASE_FOREACH (GreasePencilLayerTreeNode *, node, &src_parent.children) {
-    if (!node->wrap().is_group()) {
+  for (GreasePencilLayerTreeNode &node : src_parent.children) {
+    if (!node.wrap().is_group()) {
       continue;
     }
-    const LayerGroup &src_group = node->wrap().as_group();
+    const LayerGroup &src_group = node.wrap().as_group();
     LayerGroup &new_group = dst_grease_pencil.add_layer_group(dst_parent, src_group.name(), false);
     BKE_grease_pencil_copy_layer_group_parameters(src_group, new_group);
     /* Repeat recursively for groups in group. */
@@ -98,7 +98,7 @@ static bke::CurvesGeometry join_curves(const GreasePencil &src_grease_pencil,
     const float4x4 &transform = transforms_to_apply[src_curves_i];
     src_curves.transform(transform);
     Curves *src_curves_id = bke::curves_new_nomain(std::move(src_curves));
-    src_curves_id->mat = static_cast<Material **>(MEM_dupallocN(src_grease_pencil.material_array));
+    src_curves_id->mat = MEM_dupalloc(src_grease_pencil.material_array);
     src_curves_id->totcol = src_grease_pencil.material_array_num;
     src_geometries[src_curves_i].replace_curves(src_curves_id);
   }
@@ -223,7 +223,7 @@ void merge_layers(const GreasePencil &src_grease_pencil,
       for (const FramesMapKeyT key : dst_frames.keys()) {
         sorted_keys[i++] = key;
       }
-      std::sort(sorted_keys.begin(), sorted_keys.end());
+      std::ranges::sort(sorted_keys);
     }
 
     Array<Vector<int>> src_drawing_indices_by_frame(sorted_keys.size());
@@ -273,11 +273,22 @@ void merge_layers(const GreasePencil &src_grease_pencil,
 
   /* The destination layers don't map to the order of elements in #src_layer_indices_by_dst_layer.
    * This map maps between the old order and the final order in the destination Grease Pencil. */
-  Array<int> old_to_new_index_map(num_dst_layers);
+  Array<Vector<int>> src_layers_by_dst_reordered(num_dst_layers);
   for (const int layer_i : dst_grease_pencil.layers().index_range()) {
-    const Layer *layer = &dst_grease_pencil.layer(layer_i);
-    old_to_new_index_map[dst_layer_to_old_index_map.lookup(layer)] = layer_i;
+    const int old_index = dst_layer_to_old_index_map.lookup(&dst_grease_pencil.layer(layer_i));
+    src_layers_by_dst_reordered[layer_i] = src_layer_indices_by_dst_layer[old_index];
   }
+
+  /* TODO: Use GroupedSpan for the function argument instead of Span<Vector>. */
+  Vector<int> offsets;
+  Vector<int> all_indices;
+  offsets.reserve(src_layers_by_dst_reordered.size());
+  offsets.append(0);
+  for (const Span<int> indices : src_layers_by_dst_reordered) {
+    all_indices.extend(indices);
+    offsets.append(all_indices.size());
+  }
+  const GroupedSpan<int> src_layers_by_dst(OffsetIndices<int>(offsets), all_indices);
 
   /* Add all the drawings. */
   if (num_dst_drawings > 0) {
@@ -329,34 +340,24 @@ void merge_layers(const GreasePencil &src_grease_pencil,
   /* Gather all the layer attributes. */
   const bke::AttributeAccessor src_attributes = src_grease_pencil.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_grease_pencil.attributes_for_write();
-  src_attributes.foreach_attribute([&](const blender::bke::AttributeIter &iter) {
-    if (iter.data_type == bke::AttrType::String) {
-      return;
-    }
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     bke::GAttributeReader src_attribute = iter.get();
+    const CommonVArrayInfo info = src_attribute.varray.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src_attribute.varray.type(), info.data));
+      if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+        return;
+      }
+    }
+
     bke::GSpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Layer, iter.data_type);
     if (!dst_attribute) {
       return;
     }
 
-    const CPPType &type = dst_attribute.span.type();
-    bke::attribute_math::convert_to_static_type(type, [&](auto type) {
-      using T = decltype(type);
-      const VArraySpan<T> src_span = src_attribute.varray.typed<T>();
-      MutableSpan<T> new_span = dst_attribute.span.typed<T>();
-
-      bke::attribute_math::DefaultMixer<T> mixer(new_span);
-      for (const int dst_layer_i : IndexRange(num_dst_layers)) {
-        const Span<int> src_layer_indices = src_layer_indices_by_dst_layer[dst_layer_i];
-        const int new_index = old_to_new_index_map[dst_layer_i];
-        for (const int src_layer_i : src_layer_indices) {
-          const T &src_value = src_span[src_layer_i];
-          mixer.mix_in(new_index, src_value);
-        }
-      }
-      mixer.finalize();
-    });
+    const GVArraySpan src_span(src_attribute.varray);
+    bke::attribute_math::mix_groups(src_span, src_layers_by_dst, dst_attribute.span);
 
     dst_attribute.finish();
   });

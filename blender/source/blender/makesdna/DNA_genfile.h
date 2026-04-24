@@ -11,8 +11,6 @@
 
 #include "intern/dna_utils.h"
 
-struct SDNA;
-
 /**
  * DNAstr contains the prebuilt SDNA structure defining the layouts of the types
  * used by this version of Blender. It is defined in a file dna.c, which is
@@ -21,6 +19,10 @@ struct SDNA;
 extern const unsigned char DNAstr[];
 /** Length of DNAstr. */
 extern const int DNAlen;
+
+namespace blender {
+
+struct SDNA;
 
 /**
  * Primitive (non-struct, non-pointer/function/array) types,
@@ -47,7 +49,7 @@ enum eSDNA_Type {
   SDNA_TYPE_UINT64 = 11,
   SDNA_TYPE_INT8 = 12,
   /**
-   * Type used for untyped raw bytes buffers (written by #BLO_write_raw and read by
+   * Type used for untyped raw bytes buffers (written by #BlendWriter::write_raw and read by
    * #BLO_read_data_address).
    *
    * Technically, it also covers all 'raw data' types above.
@@ -79,10 +81,10 @@ struct SDNA *DNA_sdna_from_data(
 void DNA_sdna_free(struct SDNA *sdna);
 
 /* Access for current Blender versions SDNA. */
-void DNA_sdna_current_init(void);
+void DNA_sdna_current_init();
 /* borrowed reference */
-const struct SDNA *DNA_sdna_current_get(void);
-void DNA_sdna_current_free(void);
+const struct SDNA *DNA_sdna_current_get();
+void DNA_sdna_current_free();
 
 struct DNA_ReconstructInfo;
 /**
@@ -238,3 +240,5 @@ void DNA_sdna_alias_data_ensure_structs_map(struct SDNA *sdna);
 #  define DNA_struct_member_exists(sdna, stype, vartype, name) \
     DNA_struct_member_exists_with_alias(sdna, stype, vartype, name)
 #endif
+
+}  // namespace blender

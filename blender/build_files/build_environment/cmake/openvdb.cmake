@@ -27,11 +27,9 @@ set(OPENVDB_EXTRA_ARGS
   -DOPENVDB_CORE_STATIC=OFF
   -DOPENVDB_BUILD_BINARIES=OFF
   -DCMAKE_DEBUG_POSTFIX=_d
-  -DBLOSC_USE_STATIC_LIBS=ON
   -DUSE_NANOVDB=ON
   -DOPENVDB_BUILD_PYTHON_MODULE=ON
   -DOPENVDB_PYTHON_WRAP_ALL_GRID_TYPES=ON
-  -DUSE_NUMPY=ON
   -DPython_EXECUTABLE=${PYTHON_BINARY}
   -Dnanobind_DIR=${LIBDIR}/nanobind/nanobind/cmake/
   # Needed to still build with VS2019
@@ -49,14 +47,11 @@ set(OPENVDB_EXTRA_ARGS
 
 set(OPENVDB_PATCH
   ${PATCH_CMD} -p 1 -d
-    ${BUILD_DIR}/openvdb/src/openvdb <
-    ${PATCH_DIR}/openvdb.diff &&
-  ${PATCH_CMD} -p 1 -d
-    ${BUILD_DIR}/openvdb/src/openvdb <
-    ${PATCH_DIR}/openvdb_1977.diff
+    ${BUILD_DIR}/openvdb/src/external_openvdb <
+    ${PATCH_DIR}/openvdb.diff
 )
 
-ExternalProject_Add(openvdb
+ExternalProject_Add(external_openvdb
   URL file://${PACKAGE_DIR}/${OPENVDB_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   URL_HASH ${OPENVDB_HASH_TYPE}=${OPENVDB_HASH}
@@ -73,12 +68,12 @@ ExternalProject_Add(openvdb
 )
 
 add_dependencies(
-  openvdb
+  external_openvdb
   external_tbb
   external_zlib
   external_blosc
   external_python
-  external_numpy
+  external_numpy # Runtime dependency
   external_nanobind
 )
 
@@ -89,7 +84,7 @@ if(WIN32)
     set(OPENVDB_ARCH amd64)
   endif()
   if(BUILD_MODE STREQUAL Release)
-    ExternalProject_Add_Step(openvdb after_install
+    ExternalProject_Add_Step(external_openvdb after_install
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${LIBDIR}/openvdb/include
         ${HARVEST_TARGET}/openvdb/include
@@ -101,12 +96,12 @@ if(WIN32)
         ${HARVEST_TARGET}/openvdb/bin/openvdb.dll
       COMMAND ${CMAKE_COMMAND} -E copy
         ${LIBDIR}/openvdb/lib/python${PYTHON_SHORT_VERSION}/site-packages/openvdb.cp${PYTHON_SHORT_VERSION_NO_DOTS}-win_${OPENVDB_ARCH}.pyd
-        ${HARVEST_TARGET}openvdb/python/openvdb.cp${PYTHON_SHORT_VERSION_NO_DOTS}-win_${OPENVDB_ARCH}.pyd
+        ${HARVEST_TARGET}/openvdb/python/openvdb.cp${PYTHON_SHORT_VERSION_NO_DOTS}-win_${OPENVDB_ARCH}.pyd
       DEPENDEES install
     )
   endif()
   if(BUILD_MODE STREQUAL Debug)
-    ExternalProject_Add_Step(openvdb after_install
+    ExternalProject_Add_Step(external_openvdb after_install
       COMMAND ${CMAKE_COMMAND} -E copy
         ${LIBDIR}/openvdb/lib/openvdb_d.lib
         ${HARVEST_TARGET}/openvdb/lib/openvdb_d.lib
@@ -115,17 +110,17 @@ if(WIN32)
         ${HARVEST_TARGET}/openvdb/bin/openvdb_d.dll
       COMMAND ${CMAKE_COMMAND} -E copy
         ${LIBDIR}/openvdb/lib/python${PYTHON_SHORT_VERSION}/site-packages/openvdb_d.cp${PYTHON_SHORT_VERSION_NO_DOTS}-win_${OPENVDB_ARCH}.pyd
-        ${HARVEST_TARGET}openvdb/python/openvdb_d.cp${PYTHON_SHORT_VERSION_NO_DOTS}-win_${OPENVDB_ARCH}.pyd
+        ${HARVEST_TARGET}/openvdb/python/openvdb_d.cp${PYTHON_SHORT_VERSION_NO_DOTS}-win_${OPENVDB_ARCH}.pyd
 
       DEPENDEES install
     )
   endif()
 else()
-  harvest(openvdb openvdb/include/openvdb openvdb/include/openvdb "*.h")
-  harvest(openvdb openvdb/include/nanovdb openvdb/include/nanovdb "*.h")
-  harvest_rpath_lib(openvdb openvdb/lib openvdb/lib "lib*${SHAREDLIBEXT}*")
+  harvest(external_openvdb openvdb/include/openvdb openvdb/include/openvdb "*.h")
+  harvest(external_openvdb openvdb/include/nanovdb openvdb/include/nanovdb "*.h")
+  harvest_rpath_lib(external_openvdb openvdb/lib openvdb/lib "lib*${SHAREDLIBEXT}*")
   harvest_rpath_python(
-    openvdb
+    external_openvdb
     openvdb/lib/python${PYTHON_SHORT_VERSION}
     python/lib/python${PYTHON_SHORT_VERSION}
     "openvdb*"

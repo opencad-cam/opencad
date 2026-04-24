@@ -195,15 +195,11 @@ static void precalc_uv_layer(const OpenSubdiv_Converter *converter, const int la
   const int num_vert = mesh->verts_num;
   /* Initialize memory required for the operations. */
   if (storage->loop_uv_indices == nullptr) {
-    storage->loop_uv_indices = MEM_malloc_arrayN<int>(size_t(mesh->corners_num),
-                                                      "loop uv vertex index");
+    storage->loop_uv_indices = MEM_new_array_uninitialized<int>(size_t(mesh->corners_num),
+                                                                "loop uv vertex index");
   }
-  UvVertMap *uv_vert_map = BKE_mesh_uv_vert_map_create(storage->faces,
-                                                       storage->corner_verts,
-                                                       uv_map,
-                                                       num_vert,
-                                                       blender::float2(STD_UV_CONNECT_LIMIT),
-                                                       true);
+  UvVertMap *uv_vert_map = BKE_mesh_uv_vert_map_create(
+      storage->faces, storage->corner_verts, uv_map, num_vert, float2(STD_UV_CONNECT_LIMIT), true);
   /* NOTE: First UV vertex is supposed to be always marked as separate. */
   storage->num_uv_coordinates = -1;
   for (int vertex_index = 0; vertex_index < num_vert; vertex_index++) {
@@ -245,10 +241,10 @@ static int get_face_corner_uv_index(const OpenSubdiv_Converter *converter,
 static void free_user_data(const OpenSubdiv_Converter *converter)
 {
   ConverterStorage *user_data = static_cast<ConverterStorage *>(converter->user_data);
-  MEM_SAFE_FREE(user_data->loop_uv_indices);
-  MEM_freeN(user_data->manifold_vertex_index);
-  MEM_freeN(user_data->manifold_vertex_index_reverse);
-  MEM_freeN(user_data->manifold_edge_index_reverse);
+  MEM_SAFE_DELETE(user_data->loop_uv_indices);
+  MEM_delete(user_data->manifold_vertex_index);
+  MEM_delete(user_data->manifold_vertex_index_reverse);
+  MEM_delete(user_data->manifold_edge_index_reverse);
   MEM_delete(user_data);
 }
 
@@ -286,19 +282,25 @@ static void init_functions(OpenSubdiv_Converter *converter)
   converter->freeUserData = free_user_data;
 }
 
-static void initialize_manifold_index_array(const BitSpan not_used_map,
+static void initialize_manifold_index_array(const IndexMask &not_used_mask,
                                             const int num_elements,
                                             int **r_indices,
                                             int **r_indices_reverse,
                                             int *r_num_manifold_elements)
 {
+  BitVector<> not_used_map;
+  if (!not_used_mask.is_empty()) {
+    not_used_map.resize(num_elements);
+    not_used_mask.to_bits(not_used_map);
+  }
   int *indices = nullptr;
   if (r_indices != nullptr) {
-    indices = MEM_malloc_arrayN<int>(size_t(num_elements), "manifold indices");
+    indices = MEM_new_array_uninitialized<int>(size_t(num_elements), "manifold indices");
   }
   int *indices_reverse = nullptr;
   if (r_indices_reverse != nullptr) {
-    indices_reverse = MEM_malloc_arrayN<int>(size_t(num_elements), "manifold indices reverse");
+    indices_reverse = MEM_new_array_uninitialized<int>(size_t(num_elements),
+                                                       "manifold indices reverse");
   }
   int offset = 0;
   for (int i = 0; i < num_elements; i++) {
@@ -329,29 +331,27 @@ static void initialize_manifold_index_array(const BitSpan not_used_map,
 static void initialize_manifold_indices(ConverterStorage *storage)
 {
   const Mesh *mesh = storage->mesh;
-  const bke::LooseVertCache &loose_verts = mesh->verts_no_face();
-  const bke::LooseEdgeCache &loose_edges = mesh->loose_edges();
-  initialize_manifold_index_array(loose_verts.is_loose_bits,
+  const IndexMask &loose_verts = mesh->verts_no_face();
+  const IndexMask &loose_edges = mesh->loose_edges();
+  initialize_manifold_index_array(loose_verts,
                                   mesh->verts_num,
                                   &storage->manifold_vertex_index,
                                   &storage->manifold_vertex_index_reverse,
                                   &storage->num_manifold_vertices);
-  initialize_manifold_index_array(loose_edges.is_loose_bits,
+  initialize_manifold_index_array(loose_edges,
                                   mesh->edges_num,
                                   nullptr,
                                   &storage->manifold_edge_index_reverse,
                                   &storage->num_manifold_edges);
   /* Initialize infinite sharp mapping. */
-  if (loose_edges.count > 0) {
+  if (!loose_edges.is_empty()) {
     const Span<int2> edges = storage->edges;
     storage->infinite_sharp_vertices_map.resize(mesh->verts_num, false);
-    for (int edge_index = 0; edge_index < mesh->edges_num; edge_index++) {
-      if (loose_edges.is_loose_bits[edge_index]) {
-        const int2 edge = edges[edge_index];
-        storage->infinite_sharp_vertices_map[edge[0]].set();
-        storage->infinite_sharp_vertices_map[edge[1]].set();
-      }
-    }
+    loose_edges.foreach_index([&](const int edge_index) {
+      const int2 edge = edges[edge_index];
+      storage->infinite_sharp_vertices_map[edge[0]].set();
+      storage->infinite_sharp_vertices_map[edge[1]].set();
+    });
   }
 }
 

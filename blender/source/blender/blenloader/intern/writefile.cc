@@ -98,6 +98,7 @@
 #include "BLI_endian_defines.h"
 #include "BLI_fileops.hh"
 #include "BLI_implicit_sharing.hh"
+#include "BLI_listbase.h"
 #include "BLI_math_base.h"
 #include "BLI_math_matrix.h"
 #include "BLI_multi_value_map.hh"
@@ -107,7 +108,7 @@
 #include "BLI_threads.h"
 #include "BLI_time.h"
 
-#include "MEM_guardedalloc.h" /* MEM_freeN */
+#include "MEM_guardedalloc.h"
 
 #include "BKE_asset.hh"
 #include "BKE_blender_version.h"
@@ -140,6 +141,8 @@
 #include "writefile.hh"
 
 #include <zstd.h>
+
+namespace blender {
 
 /* Make preferences read-only. */
 #define U (*((const UserDef *)&U))
@@ -221,17 +224,21 @@ bool RawWriteWrap::write(const void *buf, size_t buf_len)
   return ::write(file_handle, buf, buf_len) == buf_len;
 }
 
+struct ThreadSlot;
+
 class ZstdWriteWrap : public WriteWrap {
+  struct ZstdWriteBlockTask;
+
   WriteWrap &base_wrap;
 
-  ListBase threadpool = {};
-  ListBase tasks = {};
+  ListBaseT<ThreadSlot> threadpool = {};
+  ListBaseT<ZstdWriteBlockTask> tasks = {};
   ThreadMutex mutex = {};
   ThreadCondition condition = {};
   int next_frame = 0;
   int num_frames = 0;
 
-  ListBase frames = {};
+  ListBaseT<ZstdFrame> frames = {};
 
   bool write_error = false;
 
@@ -243,7 +250,6 @@ class ZstdWriteWrap : public WriteWrap {
   bool write(const void *buf, size_t buf_len) override;
 
  private:
-  struct ZstdWriteBlockTask;
   void write_task(ZstdWriteBlockTask *task);
   void write_u32_le(uint32_t val);
   void write_seekable_frames();
@@ -267,11 +273,11 @@ struct ZstdWriteWrap::ZstdWriteBlockTask {
 void ZstdWriteWrap::write_task(ZstdWriteBlockTask *task)
 {
   size_t out_buf_len = ZSTD_compressBound(task->size);
-  void *out_buf = MEM_mallocN(out_buf_len, "Zstd out buffer");
+  void *out_buf = MEM_new_uninitialized(out_buf_len, "Zstd out buffer");
   size_t out_size = ZSTD_compress(
       out_buf, out_buf_len, task->data, task->size, ZSTD_COMPRESSION_LEVEL);
 
-  MEM_freeN(task->data);
+  MEM_delete_void(task->data);
 
   BLI_mutex_lock(&mutex);
 
@@ -284,7 +290,7 @@ void ZstdWriteWrap::write_task(ZstdWriteBlockTask *task)
   }
   else {
     if (base_wrap.write(out_buf, out_size)) {
-      ZstdFrame *frameinfo = MEM_mallocN<ZstdFrame>("zstd frameinfo");
+      ZstdFrame *frameinfo = MEM_new_uninitialized<ZstdFrame>("zstd frameinfo");
       frameinfo->uncompressed_size = task->size;
       frameinfo->compressed_size = out_size;
       BLI_addtail(&frames, frameinfo);
@@ -299,7 +305,7 @@ void ZstdWriteWrap::write_task(ZstdWriteBlockTask *task)
   BLI_mutex_unlock(&mutex);
   BLI_condition_notify_all(&condition);
 
-  MEM_freeN(out_buf);
+  MEM_delete_void(out_buf);
 }
 
 bool ZstdWriteWrap::open(const char *filepath)
@@ -346,9 +352,9 @@ void ZstdWriteWrap::write_seekable_frames()
   write_u32_le(frame_size);
 
   /* Write seek table entries. */
-  LISTBASE_FOREACH (ZstdFrame *, frame, &frames) {
-    write_u32_le(frame->compressed_size);
-    write_u32_le(frame->uncompressed_size);
+  for (ZstdFrame &frame : frames) {
+    write_u32_le(frame.compressed_size);
+    write_u32_le(frame.uncompressed_size);
   }
 
   /* Write seek table footer (number of frames, option flags and second magic number). */
@@ -378,8 +384,8 @@ bool ZstdWriteWrap::write(const void *buf, const size_t buf_len)
     return false;
   }
 
-  ZstdWriteBlockTask *task = MEM_mallocN<ZstdWriteBlockTask>(__func__);
-  task->data = MEM_mallocN(buf_len, __func__);
+  ZstdWriteBlockTask *task = MEM_new_uninitialized<ZstdWriteBlockTask>(__func__);
+  task->data = MEM_new_uninitialized(buf_len, __func__);
   memcpy(task->data, buf, buf_len);
   task->size = buf_len;
   task->frame_number = num_frames++;
@@ -401,7 +407,7 @@ bool ZstdWriteWrap::write(const void *buf, const size_t buf_len)
      * always be a free thread. */
     BLI_assert(first_task != task);
     BLI_remlink(&tasks, first_task);
-    MEM_freeN(first_task);
+    MEM_delete(first_task);
   }
   BLI_threadpool_insert(&threadpool, task);
 
@@ -421,8 +427,7 @@ static WriteData *writedata_new(WriteWrap *ww)
   wd->timestamp_init = BLI_time_now_seconds();
 
   wd->sdna = DNA_sdna_current_get();
-  wd->stable_address_ids.sdna_pointers = std::make_unique<blender::dna::pointers::PointersInDNA>(
-      *wd->sdna);
+  wd->stable_address_ids.sdna_pointers = std::make_unique<dna::pointers::PointersInDNA>(*wd->sdna);
 
   wd->ww = ww;
 
@@ -435,7 +440,7 @@ static WriteData *writedata_new(WriteWrap *ww)
       wd->buffer.max_size = ZSTD_BUFFER_SIZE;
       wd->buffer.chunk_size = ZSTD_CHUNK_SIZE;
     }
-    wd->buffer.buf = MEM_malloc_arrayN<uchar>(wd->buffer.max_size, "wd->buffer.buf");
+    wd->buffer.buf = MEM_new_array_uninitialized<uchar>(wd->buffer.max_size, "wd->buffer.buf");
   }
 
   return wd;
@@ -470,7 +475,7 @@ static void writedata_do_write(WriteData *wd, const void *mem, const size_t meml
 static void writedata_free(WriteData *wd)
 {
   if (wd->buffer.buf) {
-    MEM_freeN(wd->buffer.buf);
+    MEM_delete(wd->buffer.buf);
   }
   MEM_delete(wd);
 }
@@ -528,7 +533,7 @@ static void mywrite(WriteData *wd, const void *adr, size_t len)
       do {
         const size_t writelen = std::min(len, wd->buffer.chunk_size);
         writedata_do_write(wd, adr, writelen);
-        adr = (const char *)adr + writelen;
+        adr = static_cast<const char *>(adr) + writelen;
         len -= writelen;
       } while (len > 0);
 
@@ -621,7 +626,7 @@ static uint64_t get_stable_pointer_hint_for_id(const ID &id, const bool is_undo)
      * However, to leave enough 'address space' for all the sub-data pointers, its value is shifted
      * into higher significant bits of the returned value (only shift by 20 bits here, since
      * #stable_id_from_hint also shifts further the generated values by 4, and some of the most
-     * significant bits are also reserved for flags, like the #implicit_sharing_address_id_flag
+     * significant bits are also reserved for flags, like the #generated_address_id_on_undo_flag
      * one). */
     return uint64_t(id.session_uid) << 20;
   }
@@ -693,6 +698,22 @@ static void mywrite_id_end(WriteData *wd, ID * /*id*/)
      * specific ID changed or not. */
     mywrite_flush(wd);
     wd->mem.current_id_session_uid = MAIN_ID_SESSION_UID_UNSET;
+
+    /* In undo case:
+     *   - IDs never get a stable address id;
+     *   - Shared data (implicit sharing) never gets a stable address id.
+     *   - Other addresses (private ID data) should never be shared across IDs.
+     *
+     * So we can clear the stable address ids after each ID writing. This makes the mapping even
+     * smaller, and ensures that data dynamically generated on write (which may re-use the same
+     * addresses between different IDs) do not trigger the assert in
+     * `BLO_write_generated_pointer_tag`.
+     *
+     * Note that `WriteDataStableAddressIDs::used_ids` and
+     * `WriteDataStableAddressIDs::next_id_hint` are kept, to ensure generated address ids are
+     * never re-used in another ID (not strictly necessary, but can helps with debugging etc.).
+     */
+    wd->stable_address_ids.pointer_map.clear();
   }
 
   wd->validation_data.per_id_addresses_set.clear();
@@ -770,8 +791,12 @@ static void write_bhead(WriteData *wd, const BHead &bhead)
   mywrite(wd, &bh, sizeof(bh));
 }
 
-/** This bit is used to mark address ids that use implicit sharing during undo. */
-constexpr uint64_t implicit_sharing_address_id_flag = uint64_t(1) << 63;
+/**
+ * This bit is used to mark address ids that are generated for pointers during undo (when writing
+ * undo steps, most addresses are used as-is). */
+constexpr uint64_t generated_address_id_on_undo_flag = uint64_t(1) << 63;
+/** Mask to remove bits form the generated hash values used as stable addresses. */
+constexpr uint64_t generated_address_id_mask = generated_address_id_on_undo_flag;
 
 static uint64_t stable_id_from_hint(const uint64_t hint)
 {
@@ -782,8 +807,9 @@ static uint64_t stable_id_from_hint(const uint64_t hint)
     /* Null values are reserved for nullptr. */
     stable_id = (1 << 4);
   }
-  /* Remove the first bit as it reserved for pointers for implicit sharing.*/
-  stable_id &= ~implicit_sharing_address_id_flag;
+  /* Remove the first bits, which are reserved for certain types of generated values (like
+   * actual stable ids used in some cases when writing undo steps). */
+  stable_id &= ~generated_address_id_mask;
   return stable_id;
 }
 
@@ -801,44 +827,19 @@ static uint64_t get_next_stable_address_id(WriteData &wd, uint64_t &hint)
   return stable_id;
 }
 
-/**
- * When writing an undo step, implicitly shared pointers do not use stable-pointers because that
- * would lead to incorrect detection if a data-block has been changed between undo steps. That's
- * because different shared data could be mapped to the same stable pointer, leading to
- * #is_memchunk_identical to being true even if the referenced data is actually different.
- *
- * Another way to look at it is that implicit-sharing is a system for stable pointers (at runtime)
- * itself. So it does not need an additional layer of stable pointers on top.
- */
-static uint64_t get_address_id_for_implicit_sharing_data(const void *data)
-{
-  BLI_assert(data != nullptr);
-  uint64_t address_id = uint64_t(data);
-  /* Adding this bit so that it never overlap with an id generated by #stable_id_from_hint.
-   * Assuming that the given pointer is an actual pointer, it will stay unique when the
-   * #implicit_sharing_address_id_flag bit is set. That's because the upper bits of the pointer
-   * are effectively unused nowadays. */
-  address_id |= implicit_sharing_address_id_flag;
-  return address_id;
-}
-
 static uint64_t get_address_id_int(WriteData &wd, const void *address)
 {
   if (address == nullptr) {
     return 0;
   }
+  /* In undo case, addresses are kept as-is, unless they have been tagged by specific functions
+   * like `BLO_write_generated_pointer_tag`, in which case their value will already be in the
+   * `pointer_map`. */
+  if (wd.use_memfile) {
+    return wd.stable_address_ids.pointer_map.lookup_default_as(
+        address, reinterpret_cast<const uint64_t>(address));
+  }
   /* Either reuse an existing identifier or create a new one. */
-  /* NOTE: In undo case, the stable address data is re-used from the previously written undo step.
-   * This means that the address may already be in the map.
-   * However, in very rare cases, it could be from another, implicitly-shared data (i.e. have the
-   * `implicit_sharing_address_id_flag` flag set).
-   *
-   * This is handled properly by both #BLO_write_shared_tag and #prepare_stable_data_block_ids,
-   * but doing so here would add a significant overhead to a very often used function. Further
-   * more, there is no expected actual issue currently if such 'wrongly categorized' stable address
-   * values are used. The only really critical thing is that all written stable addresses remain
-   * unique, which should remain true even if this ever happens.
-   */
   return wd.stable_address_ids.pointer_map.lookup_or_add_cb(address, [&]() {
     return get_next_stable_address_id(wd, wd.stable_address_ids.next_id_hint);
   });
@@ -849,6 +850,21 @@ static const void *get_address_id(WriteData &wd, const void *address)
   return reinterpret_cast<const void *>(get_address_id_int(wd, address));
 }
 
+/**
+ * When writing an undo step, most pointers do not use generated stable addresses, since by
+ * definition if a pointer address changes, it owning data is also changed, and getting a stable
+ * value here might actually lead to _preventing_ proper change detection.
+ *
+ * However, there are a few pointers, used for data generated at runtime as part of the writefile
+ * process, that do need to be kept 'stable', since by definition they change on every write
+ * operation.
+ */
+static uint64_t get_address_id_for_undo(WriteData &wd)
+{
+  return get_next_stable_address_id(wd, wd.stable_address_ids.next_id_hint) |
+         generated_address_id_on_undo_flag;
+}
+
 static void writestruct_at_address_nr(WriteData *wd,
                                       const int filecode,
                                       const int struct_nr,
@@ -856,7 +872,7 @@ static void writestruct_at_address_nr(WriteData *wd,
                                       const void *adr,
                                       const void *data)
 {
-  BLI_assert(struct_nr > 0 && struct_nr <= blender::dna::sdna_struct_id_get_max());
+  BLI_assert(struct_nr > 0 && struct_nr <= dna::sdna_struct_id_get_max());
 
   if (adr == nullptr || data == nullptr || nr == 0) {
     return;
@@ -879,14 +895,15 @@ static void writestruct_at_address_nr(WriteData *wd,
   /* Get the address identifier that will be written to the file.*/
   const void *address_id = get_address_id(*wd, adr);
 
-  const blender::dna::pointers::StructInfo &struct_info =
+  const void *data_to_write;
+  DynamicStackBuffer<16 * 1024> buffer_owner(len_in_bytes, 64);
+  const dna::pointers::StructInfo &struct_info =
       wd->stable_address_ids.sdna_pointers->get_for_struct(struct_nr);
   const bool can_write_raw_runtime_data = struct_info.pointers.is_empty();
 
-  blender::DynamicStackBuffer<16 * 1024> buffer_owner(len_in_bytes, 64);
-  const void *data_to_write;
   if (can_write_raw_runtime_data) {
-    /* The passed in data contains no pointers, so it can be written without an additional copy. */
+    /* The passed in data contains no pointers, so it can be written without an additional copy.
+     */
     data_to_write = data;
   }
   else {
@@ -895,8 +912,8 @@ static void writestruct_at_address_nr(WriteData *wd,
     memcpy(buffer, data, len_in_bytes);
 
     /* Overwrite pointers with their corresponding address identifiers. */
-    for (const int i : blender::IndexRange(nr)) {
-      for (const blender::dna::pointers::PointerInfo &pointer_info : struct_info.pointers) {
+    for (const int i : IndexRange(nr)) {
+      for (const dna::pointers::PointerInfo &pointer_info : struct_info.pointers) {
         const int offset = i * struct_info.size_in_bytes + pointer_info.offset;
         const void **p_ptr = reinterpret_cast<const void **>(POINTER_OFFSET(buffer, offset));
         const void *p_ptr_address_id = get_address_id(*wd, *p_ptr);
@@ -917,7 +934,7 @@ static void writestruct_at_address_nr(WriteData *wd,
   }
 
   if (wd->debug_dst) {
-    blender::dna::print_structs_at_address(
+    dna::print_structs_at_address(
         *wd->sdna, struct_nr, data_to_write, address_id, nr, *wd->debug_dst);
   }
 
@@ -1042,11 +1059,10 @@ static void writelist_id(WriteData *wd, const int filecode, const char *structna
 #endif
 
 #define writestruct_at_address(wd, filecode, struct_id, nr, adr, data) \
-  writestruct_at_address_nr( \
-      wd, filecode, blender::dna::sdna_struct_id_get<struct_id>(), nr, adr, data)
+  writestruct_at_address_nr(wd, filecode, dna::sdna_struct_id_get<struct_id>(), nr, adr, data)
 
 #define writestruct(wd, filecode, struct_id, nr, adr) \
-  writestruct_nr(wd, filecode, blender::dna::sdna_struct_id_get<struct_id>(), nr, adr)
+  writestruct_nr(wd, filecode, dna::sdna_struct_id_get<struct_id>(), nr, adr)
 
 /** \} */
 
@@ -1119,14 +1135,14 @@ static void write_renderinfo(WriteData *wd, Main *mainvar)
   /* XXX: in future, handle multiple windows with multiple screens? */
   current_screen_compat(mainvar, false, &curscreen, &curscene, &view_layer);
 
-  LISTBASE_FOREACH (Scene *, sce, &mainvar->scenes) {
-    if (!ID_IS_LINKED(sce) && (sce == curscene || (sce->r.scemode & R_BG_RENDER))) {
+  for (Scene &sce : mainvar->scenes) {
+    if (!ID_IS_LINKED(&sce) && (&sce == curscene || (sce.r.scemode & R_BG_RENDER))) {
       RenderInfo data;
-      data.sfra = sce->r.sfra;
-      data.efra = sce->r.efra;
+      data.sfra = sce.r.sfra;
+      data.efra = sce.r.efra;
       memset(data.scene_name, 0, sizeof(data.scene_name));
 
-      STRNCPY(data.scene_name, sce->id.name + 2);
+      STRNCPY(data.scene_name, sce.id.name + 2);
 
       writedata(wd, BLO_CODE_REND, sizeof(data), &data);
     }
@@ -1145,91 +1161,89 @@ static void write_userdef(BlendWriter *writer, const UserDef *userdef)
 {
   writestruct(writer->wd, BLO_CODE_USER, UserDef, 1, userdef);
 
-  LISTBASE_FOREACH (const bTheme *, btheme, &userdef->themes) {
-    writer->write_struct(btheme);
+  for (const bTheme &btheme : userdef->themes) {
+    writer->write_struct(&btheme);
   }
 
-  LISTBASE_FOREACH (const wmKeyMap *, keymap, &userdef->user_keymaps) {
-    writer->write_struct(keymap);
+  for (const wmKeyMap &keymap : userdef->user_keymaps) {
+    writer->write_struct(&keymap);
 
-    LISTBASE_FOREACH (const wmKeyMapDiffItem *, kmdi, &keymap->diff_items) {
-      writer->write_struct(kmdi);
-      if (kmdi->remove_item) {
-        write_keymapitem(writer, kmdi->remove_item);
+    for (const wmKeyMapDiffItem &kmdi : keymap.diff_items) {
+      writer->write_struct(&kmdi);
+      if (kmdi.remove_item) {
+        write_keymapitem(writer, kmdi.remove_item);
       }
-      if (kmdi->add_item) {
-        write_keymapitem(writer, kmdi->add_item);
+      if (kmdi.add_item) {
+        write_keymapitem(writer, kmdi.add_item);
       }
     }
 
-    LISTBASE_FOREACH (const wmKeyMapItem *, kmi, &keymap->items) {
-      write_keymapitem(writer, kmi);
+    for (const wmKeyMapItem &kmi : keymap.items) {
+      write_keymapitem(writer, &kmi);
     }
   }
 
-  LISTBASE_FOREACH (const wmKeyConfigPref *, kpt, &userdef->user_keyconfig_prefs) {
-    writer->write_struct(kpt);
-    if (kpt->prop) {
-      IDP_BlendWrite(writer, kpt->prop);
+  for (const wmKeyConfigPref &kpt : userdef->user_keyconfig_prefs) {
+    writer->write_struct(&kpt);
+    if (kpt.prop) {
+      IDP_BlendWrite(writer, kpt.prop);
     }
   }
 
-  LISTBASE_FOREACH (const bUserMenu *, um, &userdef->user_menus) {
-    writer->write_struct(um);
-    LISTBASE_FOREACH (const bUserMenuItem *, umi, &um->items) {
-      if (umi->type == USER_MENU_TYPE_OPERATOR) {
-        const bUserMenuItem_Op *umi_op = (const bUserMenuItem_Op *)umi;
+  for (const bUserMenu &um : userdef->user_menus) {
+    writer->write_struct(&um);
+    for (const bUserMenuItem &umi : um.items) {
+      if (umi.type == USER_MENU_TYPE_OPERATOR) {
+        const bUserMenuItem_Op *umi_op = reinterpret_cast<const bUserMenuItem_Op *>(&umi);
         writer->write_struct(umi_op);
         if (umi_op->prop) {
           IDP_BlendWrite(writer, umi_op->prop);
         }
       }
-      else if (umi->type == USER_MENU_TYPE_MENU) {
-        const bUserMenuItem_Menu *umi_mt = (const bUserMenuItem_Menu *)umi;
+      else if (umi.type == USER_MENU_TYPE_MENU) {
+        const bUserMenuItem_Menu *umi_mt = reinterpret_cast<const bUserMenuItem_Menu *>(&umi);
         writer->write_struct(umi_mt);
       }
-      else if (umi->type == USER_MENU_TYPE_PROP) {
-        const bUserMenuItem_Prop *umi_pr = (const bUserMenuItem_Prop *)umi;
+      else if (umi.type == USER_MENU_TYPE_PROP) {
+        const bUserMenuItem_Prop *umi_pr = reinterpret_cast<const bUserMenuItem_Prop *>(&umi);
         writer->write_struct(umi_pr);
       }
       else {
-        writer->write_struct(umi);
+        writer->write_struct(&umi);
       }
     }
   }
 
-  LISTBASE_FOREACH (const bAddon *, bext, &userdef->addons) {
-    writer->write_struct(bext);
-    if (bext->prop) {
-      IDP_BlendWrite(writer, bext->prop);
+  for (const bAddon &bext : userdef->addons) {
+    writer->write_struct(&bext);
+    if (bext.prop) {
+      IDP_BlendWrite(writer, bext.prop);
     }
   }
 
-  LISTBASE_FOREACH (const bPathCompare *, path_cmp, &userdef->autoexec_paths) {
-    writer->write_struct(path_cmp);
+  for (const bPathCompare &path_cmp : userdef->autoexec_paths) {
+    writer->write_struct(&path_cmp);
   }
 
-  LISTBASE_FOREACH (const bUserScriptDirectory *, script_dir, &userdef->script_directories) {
-    writer->write_struct(script_dir);
+  for (const bUserScriptDirectory &script_dir : userdef->script_directories) {
+    writer->write_struct(&script_dir);
   }
 
-  LISTBASE_FOREACH (const bUserAssetLibrary *, asset_library_ref, &userdef->asset_libraries) {
-    writer->write_struct(asset_library_ref);
+  for (const bUserAssetLibrary &asset_library_ref : userdef->asset_libraries) {
+    writer->write_struct(&asset_library_ref);
   }
 
-  LISTBASE_FOREACH (const bUserExtensionRepo *, repo_ref, &userdef->extension_repos) {
-    writer->write_struct(repo_ref);
-    BKE_preferences_extension_repo_write_data(writer, repo_ref);
+  for (const bUserExtensionRepo &repo_ref : userdef->extension_repos) {
+    writer->write_struct(&repo_ref);
+    BKE_preferences_extension_repo_write_data(writer, &repo_ref);
   }
-  LISTBASE_FOREACH (
-      const bUserAssetShelfSettings *, shelf_settings, &userdef->asset_shelves_settings)
-  {
-    writer->write_struct(shelf_settings);
-    BKE_asset_catalog_path_list_blend_write(writer, shelf_settings->enabled_catalog_paths);
+  for (const bUserAssetShelfSettings &shelf_settings : userdef->asset_shelves_settings) {
+    writer->write_struct(&shelf_settings);
+    BKE_asset_catalog_path_list_blend_write(writer, shelf_settings.enabled_catalog_paths);
   }
 
-  LISTBASE_FOREACH (const uiStyle *, style, &userdef->uistyles) {
-    writer->write_struct(style);
+  for (const uiStyle &style : userdef->uistyles) {
+    writer->write_struct(&style);
   }
 }
 
@@ -1266,7 +1280,7 @@ static void write_libraries(WriteData *wd, Main *bmain)
   const bool is_undo = wd->use_memfile;
 
   /* Gather IDs coming from each library. */
-  blender::MultiValueMap<Library *, ID *> linked_ids_by_library;
+  MultiValueMap<Library *, ID *> linked_ids_by_library;
   {
     ID *id;
     FOREACH_MAIN_ID_BEGIN (bmain, id) {
@@ -1279,13 +1293,13 @@ static void write_libraries(WriteData *wd, Main *bmain)
     FOREACH_MAIN_ID_END;
   }
 
-  blender::Set<Library *> written_libraries;
-  LISTBASE_FOREACH (Library *, library_ptr, &bmain->libraries) {
-    Library &library = *library_ptr;
-    const blender::Span<ID *> ids = linked_ids_by_library.lookup(&library);
+  Set<Library *> written_libraries;
+  for (Library &library_ptr : bmain->libraries) {
+    Library &library = library_ptr;
+    const Span<ID *> ids = linked_ids_by_library.lookup(&library);
 
     /* Gather IDs that are somehow directly referenced by data in the current blend file. */
-    blender::Vector<ID *> ids_used_from_library;
+    Vector<ID *> ids_used_from_library;
     if (is_undo) {
       /* Always write placeholders for all linked IDs in undo case. This allows to properly remove
        * linked data that should not exist on undo/redo. See also #read_undo_move_libmain_data,
@@ -1380,7 +1394,9 @@ static void write_libraries(WriteData *wd, Main *bmain)
         write_id(wd, id);
       }
       else {
-        if (!BKE_idtype_idcode_is_linkable(GS(id->name))) {
+        /* In undo case, all existing linked IDs get a placeholder, even the ones not directly
+         * linkable. */
+        if (!is_undo && !BKE_idtype_idcode_is_linkable(GS(id->name))) {
           CLOG_ERROR(&LOG,
                      "Data-block '%s' from lib '%s' is not linkable, but is flagged as "
                      "directly linked",
@@ -1628,9 +1644,9 @@ static void write_blend_file_header(WriteData *wd)
 /**
  * Gathers all local IDs that should be written to the file.
  */
-static blender::Vector<ID *> gather_local_ids_to_write(Main *bmain, const bool is_undo)
+static Vector<ID *> gather_local_ids_to_write(Main *bmain, const bool is_undo)
 {
-  blender::Vector<ID *> local_ids_to_write;
+  Vector<ID *> local_ids_to_write;
   ID *id;
   FOREACH_MAIN_ID_BEGIN (bmain, id) {
     if (GS(id->name) == ID_LI) {
@@ -1702,21 +1718,11 @@ static void prepare_stable_data_block_ids(WriteData &wd, Main &bmain)
   ID *id;
   FOREACH_MAIN_ID_BEGIN (&bmain, id) {
     /* Ensure no other stable pointer has been created before. */
+    BLI_assert(!wd.stable_address_ids.pointer_map.contains(id));
+
+    /* IDs themselves never need to get stable addresses in undo case. */
     if (wd.use_memfile) {
-      /* In undo case, the stable address data is re-used from the previously written undo step.
-       * This means that the ID address may already be in the map.
-       *
-       * However, in very rare cases, it could be from another, implicitly-shared data, in which
-       * case the ID address 'stable value' needs to be re-generated and re-inserted. */
-      uint64_t address_id = wd.stable_address_ids.pointer_map.lookup_default(id, 0);
-      if (address_id != 0) {
-        if (LIKELY((address_id & implicit_sharing_address_id_flag) == 0)) {
-          continue;
-        }
-      }
-    }
-    else {
-      BLI_assert(!wd.stable_address_ids.pointer_map.contains(id));
+      continue;
     }
 
     /* Derive the stable pointer from the id/library name which is independent of the write-order
@@ -1726,7 +1732,7 @@ static void prepare_stable_data_block_ids(WriteData &wd, Main &bmain)
 
     /* Store the computed stable pointer so that it is used whenever the data-block is written or
      * referenced. */
-    wd.stable_address_ids.pointer_map.add_overwrite(id, address_id);
+    wd.stable_address_ids.pointer_map.add(id, address_id);
   }
   FOREACH_MAIN_ID_END;
 }
@@ -1751,6 +1757,8 @@ static bool write_file_handle(Main *mainvar,
   wd = mywrite_begin(ww, compare, current);
   wd->debug_dst = debug_dst;
   BlendWriter writer = {wd};
+
+  BKE_main_view_layers_synced_ensure(mainvar);
 
   prepare_stable_data_block_ids(*wd, *mainvar);
 
@@ -1809,7 +1817,7 @@ static bool write_file_handle(Main *mainvar,
   mywrite_flush(wd);
 
   const bool is_undo = wd->use_memfile;
-  blender::Vector<ID *> local_ids_to_write = gather_local_ids_to_write(mainvar, is_undo);
+  Vector<ID *> local_ids_to_write = gather_local_ids_to_write(mainvar, is_undo);
 
   if (!is_undo) {
     /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
@@ -2049,7 +2057,11 @@ static bool BLO_write_file_impl(Main *mainvar,
           BKE_bpath_relative_rebase(mainvar, dir_src, dir_dst, nullptr);
           break;
         case BLO_WRITE_PATH_REMAP_RELATIVE_ALL:
-          /* Make all relative (when requested or unsaved). */
+          /* If saved, make relative paths relative to new location (if possible). */
+          if (relbase_valid && (BLI_path_cmp(dir_dst, dir_src) != 0)) {
+            BKE_bpath_relative_rebase(mainvar, dir_src, dir_dst, nullptr);
+          }
+          /* Make all absolute paths relative (when requested or unsaved). */
           BKE_bpath_relative_convert(mainvar, dir_dst, nullptr);
           break;
         case BLO_WRITE_PATH_REMAP_ABSOLUTE:
@@ -2067,8 +2079,8 @@ static bool BLO_write_file_impl(Main *mainvar,
   }
 
 #if GENERATE_DEBUG_BLEND_FILE
-  std::string debug_dst_path = blender::StringRef(filepath) + DEBUG_BLEND_FILE_SUFFIX;
-  blender::fstream debug_dst_file(debug_dst_path, std::ios::out);
+  std::string debug_dst_path = StringRef(filepath) + DEBUG_BLEND_FILE_SUFFIX;
+  fstream debug_dst_file(debug_dst_path, std::ios::out);
   std::ostream *debug_dst = &debug_dst_file;
 #else
   std::ostream *debug_dst = nullptr;
@@ -2150,11 +2162,6 @@ bool BLO_write_file_mem(Main *mainvar, MemFile *compare, MemFile *current, const
  * API to write chunks of data.
  */
 
-void BLO_write_raw(BlendWriter *writer, const size_t size_in_bytes, const void *data_ptr)
-{
-  writedata(writer->wd, BLO_CODE_DATA, size_in_bytes, data_ptr);
-}
-
 void BlendWriter::write_struct_by_name(const char *struct_name, const void *data)
 {
   this->write_struct_array_by_name(struct_name, 1, data);
@@ -2164,7 +2171,7 @@ void BlendWriter::write_struct_array_by_name(const char *struct_name,
                                              const int64_t array_size,
                                              const void *data)
 {
-  int struct_id = BLO_get_struct_id_by_name(this, struct_name);
+  int struct_id = this->struct_id_by_name(struct_name);
   if (UNLIKELY(struct_id == -1)) {
     CLOG_ERROR(&LOG, "Can't find SDNA code <%s>", struct_name);
     return;
@@ -2214,7 +2221,7 @@ void BlendWriter::write_struct_list_by_id(const int struct_id, const ListBase *l
 
 void BlendWriter::write_struct_list_by_name(const char *struct_name, ListBase *list)
 {
-  int struct_id = BLO_get_struct_id_by_name(this, struct_name);
+  int struct_id = this->struct_id_by_name(struct_name);
   if (UNLIKELY(struct_id == -1)) {
     CLOG_ERROR(&LOG, "Can't find SDNA code <%s>", struct_name);
     return;
@@ -2222,86 +2229,83 @@ void BlendWriter::write_struct_list_by_name(const char *struct_name, ListBase *l
   this->write_struct_list_by_id(struct_id, list);
 }
 
-void blo_write_id_struct(BlendWriter *writer,
-                         const int struct_id,
-                         const void *id_address,
-                         const ID *id)
+int BlendWriter::struct_id_by_name(const char *struct_name) const
 {
-  writestruct_at_address_nr(writer->wd, GS(id->name), struct_id, 1, id_address, id);
-}
-
-int BLO_get_struct_id_by_name(const BlendWriter *writer, const char *struct_name)
-{
-  int struct_id = DNA_struct_find_with_alias(writer->wd->sdna, struct_name);
+  int struct_id = DNA_struct_find_with_alias(this->wd->sdna, struct_name);
   return struct_id;
 }
 
-void BLO_write_char_array(BlendWriter *writer, const int64_t num, const char *data_ptr)
+void BlendWriter::write_raw(size_t size_in_bytes, const void *data)
 {
-  BLO_write_raw(writer, sizeof(char) * size_t(num), data_ptr);
+  writedata(this->wd, BLO_CODE_DATA, size_in_bytes, data);
 }
 
-void BLO_write_int8_array(BlendWriter *writer, const int64_t num, const int8_t *data_ptr)
+void BlendWriter::write_char_array(int64_t num, const char *data)
 {
-  BLO_write_raw(writer, sizeof(int8_t) * size_t(num), data_ptr);
+  this->write_raw(sizeof(char) * size_t(num), data);
 }
 
-void BLO_write_int16_array(BlendWriter *writer, const int64_t num, const int16_t *data_ptr)
+void BlendWriter::write_int8_array(int64_t num, const int8_t *data)
 {
-  BLO_write_raw(writer, sizeof(int16_t) * size_t(num), data_ptr);
+  this->write_raw(sizeof(int8_t) * size_t(num), data);
 }
 
-void BLO_write_uint8_array(BlendWriter *writer, const int64_t num, const uint8_t *data_ptr)
+void BlendWriter::write_int16_array(int64_t num, const int16_t *data)
 {
-  BLO_write_raw(writer, sizeof(uint8_t) * size_t(num), data_ptr);
+  this->write_raw(sizeof(int16_t) * size_t(num), data);
 }
 
-void BLO_write_int32_array(BlendWriter *writer, const int64_t num, const int32_t *data_ptr)
+void BlendWriter::write_uint8_array(int64_t num, const uint8_t *data)
 {
-  BLO_write_raw(writer, sizeof(int32_t) * size_t(num), data_ptr);
+  this->write_raw(sizeof(uint8_t) * size_t(num), data);
 }
 
-void BLO_write_uint32_array(BlendWriter *writer, const int64_t num, const uint32_t *data_ptr)
+void BlendWriter::write_int32_array(int64_t num, const int32_t *data)
 {
-  BLO_write_raw(writer, sizeof(uint32_t) * size_t(num), data_ptr);
+  this->write_raw(sizeof(int32_t) * size_t(num), data);
 }
 
-void BLO_write_float_array(BlendWriter *writer, const int64_t num, const float *data_ptr)
+void BlendWriter::write_uint32_array(int64_t num, const uint32_t *data)
 {
-  BLO_write_raw(writer, sizeof(float) * size_t(num), data_ptr);
+  this->write_raw(sizeof(uint32_t) * size_t(num), data);
 }
 
-void BLO_write_double_array(BlendWriter *writer, const int64_t num, const double *data_ptr)
+void BlendWriter::write_float_array(int64_t num, const float *data)
 {
-  BLO_write_raw(writer, sizeof(double) * size_t(num), data_ptr);
+  this->write_raw(sizeof(float) * size_t(num), data);
 }
 
-void BLO_write_pointer_array(BlendWriter *writer, const int64_t num, const void *data_ptr)
+void BlendWriter::write_double_array(int64_t num, const double *data)
+{
+  this->write_raw(sizeof(double) * size_t(num), data);
+}
+
+void BlendWriter::write_float3_array(int64_t num, const float *data)
+{
+  this->write_raw(sizeof(float[3]) * size_t(num), data);
+}
+
+void BlendWriter::write_pointer_array(int64_t num, const void *data_ptr)
 {
   /* Create a temporary copy of the pointer array, because all pointers need to be remapped to
    * their stable address ids. */
-  blender::Array<const void *, 32> data = blender::Span<const void *>(
+  Array<const void *, 32> data = Span<const void *>(
       reinterpret_cast<const void *const *>(data_ptr), num);
   for (const int64_t i : data.index_range()) {
-    data[i] = get_address_id(*writer->wd, data[i]);
+    data[i] = get_address_id(*this->wd, data[i]);
   }
 
-  writedata(writer->wd, BLO_CODE_DATA, data.data(), data.as_span().size_in_bytes(), data_ptr);
+  writedata(this->wd, BLO_CODE_DATA, data.data(), data.as_span().size_in_bytes(), data_ptr);
 }
 
-void BLO_write_float3_array(BlendWriter *writer, const int64_t num, const float *data_ptr)
+void BlendWriter::write_string(const char *data)
 {
-  BLO_write_raw(writer, sizeof(float[3]) * size_t(num), data_ptr);
-}
-
-void BLO_write_string(BlendWriter *writer, const char *data_ptr)
-{
-  if (data_ptr != nullptr) {
-    BLO_write_raw(writer, strlen(data_ptr) + 1, data_ptr);
+  if (data != nullptr) {
+    this->write_raw(strlen(data) + 1, data);
   }
 }
 
-void BLO_write_shared_tag(BlendWriter *writer, const void *data)
+void BLO_write_generated_pointer_tag(BlendWriter *writer, const void *data)
 {
   if (!data) {
     return;
@@ -2309,37 +2313,21 @@ void BLO_write_shared_tag(BlendWriter *writer, const void *data)
   if (!BLO_write_is_undo(writer)) {
     return;
   }
-
-  const uint64_t address_id = get_address_id_for_implicit_sharing_data(data);
-  /* Check that the pointer has not been written before it was tagged as being shared. */
-  /* In undo case, the stable address data is re-used from the previously written undo step.
-   * This means that the shared data address may already be in the map.
-   *
-   * However, in very rare cases, it could be from another, regular (non-shared) data previously
-   * using the same memory address, in which case the data address 'stable value' needs to be
-   * re-inserted. */
-#ifndef NDEBUG
-  {
-    const uint64_t existing_address_id = writer->wd->stable_address_ids.pointer_map.lookup_default(
-        data, address_id);
-    BLI_assert(existing_address_id == address_id ||
-               (existing_address_id & implicit_sharing_address_id_flag) == 0);
-  }
-#endif
-  writer->wd->stable_address_ids.pointer_map.add_overwrite(data, address_id);
+  const uint64_t address_id = get_address_id_for_undo(*writer->wd);
+  /* Check that the pointer has not been written before it was tagged as being generated. */
+  BLI_assert(writer->wd->stable_address_ids.pointer_map.lookup_default(data, address_id) ==
+             address_id);
+  writer->wd->stable_address_ids.pointer_map.add(data, address_id);
 }
 
 void BLO_write_shared(BlendWriter *writer,
                       const void *data,
                       const size_t approximate_size_in_bytes,
-                      const blender::ImplicitSharingInfo *sharing_info,
-                      const blender::FunctionRef<void()> write_fn)
+                      const ImplicitSharingInfo *sharing_info,
+                      const FunctionRef<void()> write_fn)
 {
   if (data == nullptr) {
     return;
-  }
-  if (sharing_info) {
-    BLO_write_shared_tag(writer, data);
   }
   const uint64_t address_id = get_address_id_int(*writer->wd, data);
   if (BLO_write_is_undo(writer)) {
@@ -2373,3 +2361,5 @@ bool BLO_write_is_undo(BlendWriter *writer)
 }
 
 /** \} */
+
+}  // namespace blender

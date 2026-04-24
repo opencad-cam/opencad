@@ -128,6 +128,7 @@ TEST_F(VKRenderGraphTestTransfer, clear_clear_copy_and_read_back)
   VKCopyImageNode::CreateInfo copy_image = {};
   copy_image.node_data.src_image = src_image;
   copy_image.node_data.dst_image = dst_image;
+  copy_image.node_data.mip_levels = 1u;
   copy_image.node_data.region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   copy_image.node_data.region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   copy_image.vk_image_aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -357,18 +358,10 @@ TEST_F(VKRenderGraphTestTransfer, copy_buffer_modify_data)
   copy_buffer_data.region.size = 64;
   submit(render_graph, command_buffer);
 
-  EXPECT_EQ(2, log.size());
-  EXPECT_EQ(
-      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, "
-      "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
-          endl() +
-          " - buffer_barrier(src_access_mask=, dst_access_mask=VK_ACCESS_TRANSFER_READ_BIT, "
-          "buffer=0x1, offset=0, size=18446744073709551615)" +
-          endl() + ")",
-      log[0]);
+  EXPECT_EQ(1, log.size());
   EXPECT_EQ("copy_buffer(src_buffer=0x1, dst_buffer=0x2" + endl() +
                 " - region(src_offset=0, dst_offset=0, size=64)" + endl() + ")",
-            log[1]);
+            log[0]);
 }
 
 }  // namespace blender::gpu::render_graph

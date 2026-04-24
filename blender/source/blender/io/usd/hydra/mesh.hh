@@ -12,10 +12,12 @@
 #include "material.hh"
 #include "object.hh"
 
+namespace blender {
+
 struct Mesh;
 struct Object;
 
-namespace blender::io::hydra {
+namespace io::hydra {
 
 class HydraSceneDelegate;
 
@@ -45,13 +47,11 @@ class MeshData : public ObjectData {
 
   pxr::VtValue get_data(pxr::TfToken const &key) const override;
   pxr::VtValue get_data(pxr::SdfPath const &id, pxr::TfToken const &key) const override;
-  pxr::SdfPath material_id(pxr::SdfPath const &id) const override;
   void available_materials(Set<pxr::SdfPath> &paths) const override;
 
   pxr::HdMeshTopology topology(pxr::SdfPath const &id) const;
   pxr::HdPrimvarDescriptorVector primvar_descriptors(pxr::HdInterpolation interpolation) const;
-  pxr::HdCullStyle cull_style(pxr::SdfPath const &id) const;
-  bool double_sided(pxr::SdfPath const &id) const;
+  MaterialData *get_material_data(pxr::SdfPath const &id) const override;
   void update_double_sided(MaterialData *mat_data);
   pxr::SdfPathVector submesh_paths() const;
 
@@ -65,4 +65,5 @@ class MeshData : public ObjectData {
   void update_prims();
 };
 
-}  // namespace blender::io::hydra
+}  // namespace io::hydra
+}  // namespace blender

@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -14,23 +10,23 @@
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
 
-#include "UI_resources.hh"
-
 #include "node_composite_util.hh"
-
-/* **************** Pixelate ******************** */
 
 namespace blender::nodes::node_composite_pixelate_cc {
 
-static void cmp_node_pixelate_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Color").structure_type(StructureType::Dynamic).hide_value();
-  b.add_output<decl::Color>("Color").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_input<decl::Color>("Color"_ustr).structure_type(StructureType::Dynamic).hide_value();
+  b.add_output<decl::Color>("Color"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Int>("Size").default_value(1).min(1).description(
-      "The number of pixels that correspond to the same output pixel");
+  b.add_input<decl::Int>("Size"_ustr)
+      .default_value(1)
+      .min(1)
+      .description("The number of pixels that correspond to the same output pixel");
 }
 
 using namespace blender::compositor;
@@ -113,29 +109,27 @@ class PixelateOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new PixelateOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_pixelate_cc
-
-static void register_node_type_cmp_pixelate()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_pixelate_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
-
-  cmp_node_type_base(&ntype, "CompositorNodePixelate", CMP_NODE_PIXELATE);
+  cmp_node_type_base(&ntype, "CompositorNodePixelate"_ustr, CMP_NODE_PIXELATE);
   ntype.ui_name = "Pixelate";
   ntype.ui_description =
       "Reduce detail in an image by making individual pixels more prominent, for a blocky or "
       "mosaic-like appearance";
   ntype.enum_name_legacy = "PIXELATE";
   ntype.nclass = NODE_CLASS_OP_FILTER;
-  ntype.declare = file_ns::cmp_node_pixelate_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_pixelate)
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_pixelate_cc

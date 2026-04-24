@@ -32,11 +32,11 @@ static wmOperatorStatus separate_exec(bContext *C, wmOperator * /*op*/)
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   VectorSet<PointCloud *> src_pointclouds;
   for (Base *base_src : bases) {
-    src_pointclouds.add(static_cast<PointCloud *>(base_src->object->data));
+    src_pointclouds.add(id_cast<PointCloud *>(base_src->object->data));
   }
 
   /* Modify new point clouds and generate new point clouds in parallel. */
@@ -68,7 +68,7 @@ static wmOperatorStatus separate_exec(bContext *C, wmOperator * /*op*/)
 
   /* Skip processing objects with no selected elements. */
   bases.remove_if([&](Base *base) {
-    PointCloud *pointcloud = static_cast<PointCloud *>(base->object->data);
+    PointCloud *pointcloud = id_cast<PointCloud *>(base->object->data);
     return dst_pointclouds[src_pointclouds.index_of(pointcloud)] == nullptr;
   });
 
@@ -78,14 +78,14 @@ static wmOperatorStatus separate_exec(bContext *C, wmOperator * /*op*/)
 
   /* Add new objects for the new point clouds. */
   for (Base *base_src : bases) {
-    PointCloud *src = static_cast<PointCloud *>(base_src->object->data);
+    PointCloud *src = id_cast<PointCloud *>(base_src->object->data);
     PointCloud *dst = dst_pointclouds[src_pointclouds.index_of(src)];
 
     Base *base_dst = object::add_duplicate(
         bmain, scene, view_layer, base_src, eDupli_ID_Flags(U.dupflag) & USER_DUP_ACT);
     Object *object_dst = base_dst->object;
     object_dst->mode = OB_MODE_OBJECT;
-    object_dst->data = dst;
+    object_dst->data = id_cast<ID *>(dst);
 
     DEG_id_tag_update(&src->id, ID_RECALC_GEOMETRY);
     DEG_id_tag_update(&dst->id, ID_RECALC_GEOMETRY);

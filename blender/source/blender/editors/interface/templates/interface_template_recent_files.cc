@@ -29,6 +29,7 @@
 #include "RNA_access.hh"
 
 #include "UI_interface_layout.hh"
+#include "WM_types.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {
@@ -38,7 +39,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
                                                Button * /*but*/,
                                                void *argN)
 {
-  char *path = (char *)argN;
+  char *path = static_cast<char *>(argN);
 
   /* File name and path. */
   char dirname[FILE_MAX];
@@ -50,7 +51,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
   tooltip_text_field_add(tip, {}, {}, TIP_STYLE_SPACER, TIP_LC_NORMAL);
 
   if (!BLI_exists(path)) {
-    tooltip_text_field_add(tip, N_("File Not Found"), {}, TIP_STYLE_NORMAL, TIP_LC_ALERT);
+    tooltip_text_field_add(tip, TIP_("File Not Found"), {}, TIP_STYLE_NORMAL, TIP_LC_ALERT);
     return;
   }
 
@@ -87,11 +88,10 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
     BLI_filelist_entry_datetime_to_string(
         nullptr, int64_t(status.st_mtime), false, time_st, date_str, &is_today, &is_yesterday);
     if (is_today || is_yesterday) {
-      day_string = (is_today ? N_("Today") : N_("Yesterday")) + std::string(" ");
+      day_string = (is_today ? TIP_("Today") : TIP_("Yesterday")) + std::string(" ");
     }
     tooltip_text_field_add(tip,
-                           fmt::format("{}: {}{}{}",
-                                       N_("Modified"),
+                           fmt::format(fmt::runtime(TIP_("Modified: {}{}{}")),
                                        day_string,
                                        (is_today || is_yesterday) ? "" : date_str,
                                        (is_today || is_yesterday) ? time_st : ""),
@@ -102,8 +102,11 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
     if (status.st_size > 0) {
       char size[16];
       BLI_filelist_entry_size_to_string(nullptr, status.st_size, false, size);
-      tooltip_text_field_add(
-          tip, fmt::format("{}: {}", N_("Size"), size), {}, TIP_STYLE_NORMAL, TIP_LC_NORMAL);
+      tooltip_text_field_add(tip,
+                             fmt::format(fmt::runtime(TIP_("Size: {}")), size),
+                             {},
+                             TIP_STYLE_NORMAL,
+                             TIP_LC_NORMAL);
     }
   }
 
@@ -112,7 +115,7 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
     BlendThumbnail *data = BLO_thumbnail_from_file(path);
     thumb = BKE_main_thumbnail_to_imbuf(nullptr, data);
     if (data) {
-      MEM_freeN(data);
+      MEM_delete(data);
     }
   }
 
@@ -136,25 +139,26 @@ static void template_recent_files_tooltip_func(bContext & /*C*/,
 int template_recent_files(Layout *layout, int rows)
 {
   int i = 0;
-  LISTBASE_FOREACH_INDEX (RecentFile *, recent, &G.recent_files, i) {
+  for (RecentFile &recent : G.recent_files) {
     if (i >= rows) {
       break;
     }
 
-    const char *filename = BLI_path_basename(recent->filepath);
+    const char *filename = BLI_path_basename(recent.filepath);
     PointerRNA ptr = layout->op("WM_OT_open_mainfile",
                                 filename,
                                 BKE_blendfile_extension_check(filename) ? ICON_FILE_BLEND :
                                                                           ICON_FILE_BACKUP,
                                 wm::OpCallContext::InvokeDefault,
                                 UI_ITEM_NONE);
-    RNA_string_set(&ptr, "filepath", recent->filepath);
+    RNA_string_set(&ptr, "filepath", recent.filepath);
     RNA_boolean_set(&ptr, "display_file_selector", false);
 
     Block *block = layout->block();
     Button *but = button_last(block);
     button_func_tooltip_custom_set(
-        but, template_recent_files_tooltip_func, BLI_strdup(recent->filepath), MEM_freeN);
+        but, template_recent_files_tooltip_func, BLI_strdup(recent.filepath), MEM_delete_void);
+    i++;
   }
 
   return i;

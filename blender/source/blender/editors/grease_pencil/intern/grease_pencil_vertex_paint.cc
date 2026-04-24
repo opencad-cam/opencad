@@ -8,6 +8,8 @@
 
 #include "BLI_math_color.h"
 
+#include "BLT_translation.hh"
+
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_curves.hh"
@@ -22,7 +24,9 @@
 #include "ED_curves.hh"
 #include "ED_grease_pencil.hh"
 
-namespace blender::ed::greasepencil {
+namespace blender {
+
+namespace ed::greasepencil {
 
 enum class VertexColorMode : int8_t {
   Stroke = 0,
@@ -56,12 +60,14 @@ static bool apply_color_operation_for_mode(const VertexColorMode mode,
                                        object, info.drawing, info.layer_index, memory);
       if (!points.is_empty()) {
         MutableSpan<ColorGeometry4f> vertex_colors = info.drawing.vertex_colors_for_write();
-        points.foreach_index(GrainSize(4096), [&](const int64_t point_i) {
-          ColorGeometry4f &color = vertex_colors[point_i];
-          if (color.a > 0.0f) {
-            color = fn(color);
-          }
-        });
+        points.foreach_index(
+            [&](const int64_t point_i) {
+              ColorGeometry4f &color = vertex_colors[point_i];
+              if (color.a > 0.0f) {
+                color = fn(color);
+              }
+            },
+            exec_mode::grain_size(4096));
         changed = true;
       }
     }
@@ -75,12 +81,14 @@ static bool apply_color_operation_for_mode(const VertexColorMode mode,
                                         object, info.drawing, info.layer_index, memory);
       if (!strokes.is_empty()) {
         MutableSpan<ColorGeometry4f> fill_colors = info.drawing.fill_colors_for_write();
-        strokes.foreach_index(GrainSize(1024), [&](const int64_t curve_i) {
-          ColorGeometry4f &color = fill_colors[curve_i];
-          if (color.a > 0.0f) {
-            color = fn(color);
-          }
-        });
+        strokes.foreach_index(
+            [&](const int64_t curve_i) {
+              ColorGeometry4f &color = fill_colors[curve_i];
+              if (color.a > 0.0f) {
+                color = fn(color);
+              }
+            },
+            exec_mode::grain_size(1024));
         changed = true;
       }
     }
@@ -93,7 +101,7 @@ static wmOperatorStatus grease_pencil_vertex_paint_brightness_contrast_exec(bCon
 {
   const Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const float brightness = RNA_float_get(op->ptr, "brightness");
   const float contrast = RNA_float_get(op->ptr, "contrast");
@@ -169,7 +177,7 @@ static wmOperatorStatus grease_pencil_vertex_paint_hsv_exec(bContext *C, wmOpera
 {
   const Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const float hue = RNA_float_get(op->ptr, "h");
   const float sat = RNA_float_get(op->ptr, "s");
@@ -235,14 +243,16 @@ static void GREASE_PENCIL_OT_vertex_color_hsv(wmOperatorType *ot)
       ot->srna, "mode", prop_grease_pencil_vertex_mode, int(VertexColorMode::Both), "Mode", "");
   RNA_def_float(ot->srna, "h", 0.5f, 0.0f, 1.0f, "Hue", "", 0.0f, 1.0f);
   RNA_def_float(ot->srna, "s", 1.0f, 0.0f, 2.0f, "Saturation", "", 0.0f, 2.0f);
-  RNA_def_float(ot->srna, "v", 1.0f, 0.0f, 2.0f, "Value", "", 0.0f, 2.0f);
+
+  ot->prop = RNA_def_float(ot->srna, "v", 1.0f, 0.0f, 2.0f, "Value", "", 0.0f, 2.0f);
+  RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_COLOR);
 }
 
 static wmOperatorStatus grease_pencil_vertex_paint_invert_exec(bContext *C, wmOperator *op)
 {
   const Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const bool use_selection_mask = ED_grease_pencil_any_vertex_mask_selection(scene.toolsettings);
 
@@ -295,7 +305,7 @@ static wmOperatorStatus grease_pencil_vertex_paint_levels_exec(bContext *C, wmOp
 {
   const Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const float gain = RNA_float_get(op->ptr, "gain");
   const float offset = RNA_float_get(op->ptr, "offset");
@@ -357,7 +367,7 @@ static wmOperatorStatus grease_pencil_vertex_paint_set_exec(bContext *C, wmOpera
   Object &object = *CTX_data_active_object(C);
   Paint &paint = *BKE_paint_get_active_from_context(C);
   const Brush &brush = *BKE_paint_brush(&paint);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const float factor = RNA_float_get(op->ptr, "factor");
   const bool use_selection_mask = ED_grease_pencil_any_vertex_mask_selection(scene.toolsettings);
@@ -405,7 +415,7 @@ static void GREASE_PENCIL_OT_vertex_color_set(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Vertex Paint Set Color";
   ot->idname = "GREASE_PENCIL_OT_vertex_color_set";
-  ot->description = "Set active color to all selected vertex";
+  ot->description = "Set active color to all selected vertices";
 
   /* API callbacks. */
   ot->exec = grease_pencil_vertex_paint_set_exec;
@@ -424,7 +434,7 @@ static wmOperatorStatus grease_pencil_vertex_paint_reset_exec(bContext *C, wmOpe
 {
   const Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(object.data);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));
   const bool use_selection_mask = ED_grease_pencil_any_vertex_mask_selection(scene.toolsettings);
 
@@ -486,7 +496,7 @@ static void GREASE_PENCIL_OT_stroke_reset_vertex_color(wmOperatorType *ot)
       ot->srna, "mode", prop_grease_pencil_vertex_mode, int(VertexColorMode::Both), "Mode", "");
 }
 
-}  // namespace blender::ed::greasepencil
+}  // namespace ed::greasepencil
 
 void ED_operatortypes_grease_pencil_vertex_paint()
 {
@@ -498,3 +508,5 @@ void ED_operatortypes_grease_pencil_vertex_paint()
   WM_operatortype_append(GREASE_PENCIL_OT_vertex_color_set);
   WM_operatortype_append(GREASE_PENCIL_OT_stroke_reset_vertex_color);
 }
+
+}  // namespace blender

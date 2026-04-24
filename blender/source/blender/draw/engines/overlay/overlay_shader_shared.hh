@@ -42,9 +42,11 @@ enum [[host_shared]] OVERLAY_GridBits : uint32_t {
   PLANE_XZ = (1u << 6u),
   PLANE_YZ = (1u << 7u),
 
-  GRID_SIMA = (1u << 8u),       /* Grid is in SpaceImage view. */
-  GRID_OVER_IMAGE = (1u << 9u), /* Grid is shown in front of SpaceImage, not behind. */
-  GRID_CAMERA = (1u << 10u)     /* Grid is shown in selected camera. */
+  GRID_ALIGNED = (1u << 8u),         /* Grid is in an axis-aligned view (PLANE_XY, ...). */
+  GRID_SIMA = (1u << 9u),            /* Grid is in SpaceImage view. */
+  GRID_CAMERA = (1u << 10u),         /* Grid is shown in selected camera. */
+  GRID_OVER_IMAGE = (1u << 11u),     /* Grid is shown in front of SpaceImage, not behind. */
+  GRID_BEHIND_GEOMETRY = (1u << 12u) /* Grid is shown behind geometry, on the far plane. */
 };
 #ifndef GPU_SHADER
 ENUM_OPERATORS(OVERLAY_GridBits)
@@ -173,6 +175,10 @@ struct [[host_shared]] OVERLAY_GridData {
 #  define MOTIONPATH_VERT_KEY (1u << 1)
 
 #else
+#  define CURVE_HANDLE_SELECTED blender::CURVE_HANDLE_SELECTED
+#  define CURVE_HANDLE_ALL blender::CURVE_HANDLE_ALL
+#  define MOTIONPATH_VERT_SEL blender::MOTIONPATH_VERT_SEL
+#  define MOTIONPATH_VERT_KEY blender::MOTIONPATH_VERT_KEY
 /* TODO(fclem): Find a better way to share enums/defines from DNA files with GLSL. */
 BLI_STATIC_ASSERT(CURVE_HANDLE_SELECTED == 0u, "Ensure value is sync");
 BLI_STATIC_ASSERT(CURVE_HANDLE_ALL == 1u, "Ensure value is sync");

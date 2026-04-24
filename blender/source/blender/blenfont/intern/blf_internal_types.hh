@@ -25,20 +25,22 @@
 
 #include <ft2build.h>
 
+namespace blender {
+
 struct FontBLF;
 struct GlyphCacheBLF;
 struct GlyphBLF;
 
-namespace blender::gpu {
+namespace gpu {
 class Batch;
 class VertBuf;
-}  // namespace blender::gpu
+}  // namespace gpu
 struct GPUVertBufRaw;
 
-namespace blender::ocio {
+namespace ocio {
 class ColorSpace;
-}  // namespace blender::ocio
-using ColorSpace = blender::ocio::ColorSpace;
+}  // namespace ocio
+using ColorSpace = ocio::ColorSpace;
 
 #include FT_MULTIPLE_MASTERS_H /* Variable font support. */
 
@@ -111,8 +113,8 @@ inline ft_pix ft_pix_from_float(float v)
 struct BatchBLF {
   /** Can only batch glyph from the same font. */
   FontBLF *font;
-  blender::gpu::Batch *batch;
-  blender::gpu::StorageBuf *glyph_buf;
+  gpu::Batch *batch;
+  gpu::StorageBuf *glyph_buf;
   int glyph_len;
   /** Copy of `font->pos`. */
   int ofs[2];
@@ -143,7 +145,7 @@ struct GlyphCacheKey {
   }
   uint64_t hash() const
   {
-    return blender::get_default_hash(charcode, subpixel);
+    return get_default_hash(charcode, subpixel);
   }
 };
 
@@ -163,10 +165,10 @@ struct GlyphCacheBLF {
   int fixed_width;
 
   /** The glyphs. */
-  blender::Map<GlyphCacheKey, std::unique_ptr<GlyphBLF>> glyphs;
+  Map<GlyphCacheKey, std::unique_ptr<GlyphBLF>> glyphs;
 
   /** Texture array, to draw the glyphs. */
-  blender::gpu::Texture *texture;
+  gpu::Texture *texture;
   char *bitmap_result;
   int bitmap_len;
   int bitmap_len_landed;
@@ -231,10 +233,15 @@ struct FontBufInfoBLF {
   /** Buffer size, keep signed so comparisons with negative values work. */
   int dims[2];
 
+  /** The number of channels in the buffer. Can be either 1 or 4 for grayscale and color buffers
+   * respectively. The red channel of the color is used in case of a grayscale buffer. */
+  int channel_count;
+
   /** Color-space of the byte buffer (float is scene linear). */
   const ColorSpace *colorspace;
 
-  /** The color, the alphas is get from the glyph! (color is sRGB space). */
+  /** The color, the alphas is get from the glyph! (color is sRGB space). The red channel of the
+   * color is used in case of a grayscale buffer. */
   float col_init[4];
   /** Cached conversion from 'col_init'. */
   unsigned char col_char[4];
@@ -312,7 +319,7 @@ struct FontBLF {
   char *filepath;
 
   /** Pointer to in-memory font, or NULL when from a file. */
-  void *mem;
+  const void *mem;
   size_t mem_size;
   /** Handle for in-memory fonts to avoid loading them multiple times. */
   char *mem_name;
@@ -383,7 +390,7 @@ struct FontBLF {
    * List of glyph caches (#GlyphCacheBLF) for this font for size, DPI, bold, italic.
    * Use `blf_glyph_cache_acquire(font)` and `blf_glyph_cache_release(font)` to access cache!
    */
-  blender::Vector<std::unique_ptr<GlyphCacheBLF>> cache;
+  Vector<std::unique_ptr<GlyphCacheBLF>> cache;
 
   /** Cache of unscaled kerning values. Will be NULL if font does not have kerning. */
   KerningCacheBLF *kerning_cache;
@@ -407,5 +414,7 @@ struct FontBLF {
   FontBufInfoBLF buf_info;
 
   /** Mutex lock for glyph cache. */
-  blender::Mutex glyph_cache_mutex;
+  Mutex glyph_cache_mutex;
 };
+
+}  // namespace blender

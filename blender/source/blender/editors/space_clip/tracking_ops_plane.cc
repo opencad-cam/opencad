@@ -29,6 +29,8 @@
 #include "clip_intern.hh"
 #include "tracking_ops_intern.hh"
 
+namespace blender {
+
 /********************** Create plane track operator *********************/
 
 static wmOperatorStatus create_plane_track_tracks_exec(bContext *C, wmOperator *op)
@@ -54,7 +56,7 @@ static wmOperatorStatus create_plane_track_tracks_exec(bContext *C, wmOperator *
   tracking_object->active_track = nullptr;
   tracking_object->active_plane_track = plane_track;
 
-  /* Compute homoraphies and apply them on marker's corner, so we've got
+  /* Compute homographies and apply them on marker's corner, so we've got
    * quite nice motion from the very beginning.
    */
   BKE_tracking_track_plane_from_existing_motion(plane_track, framenr);
@@ -146,7 +148,7 @@ static SlidePlaneMarkerData *slide_plane_marker_customdata(bContext *C, const wm
   if (plane_track) {
     MovieTrackingPlaneMarker *plane_marker;
 
-    customdata = MEM_callocN<SlidePlaneMarkerData>("slide plane marker data");
+    customdata = MEM_new_zeroed<SlidePlaneMarkerData>("slide plane marker data");
 
     customdata->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
 
@@ -205,7 +207,7 @@ static void cancel_mouse_slide_plane_marker(SlidePlaneMarkerData *data)
 
 static void free_slide_plane_marker_data(SlidePlaneMarkerData *data)
 {
-  MEM_freeN(data);
+  MEM_delete(data);
 }
 
 static void slide_plane_marker_update_homographies(SpaceClip *sc, SlidePlaneMarkerData *data)
@@ -219,7 +221,7 @@ static wmOperatorStatus slide_plane_marker_modal(bContext *C, wmOperator *op, co
 {
   SpaceClip *sc = CTX_wm_space_clip(C);
   MovieClip *clip = ED_space_clip_get_clip(sc);
-  SlidePlaneMarkerData *data = (SlidePlaneMarkerData *)op->customdata;
+  SlidePlaneMarkerData *data = static_cast<SlidePlaneMarkerData *>(op->customdata);
   float dx, dy, mdelta[2];
   int next_corner_index, prev_corner_index, diag_corner_index;
   const float *next_corner, *prev_corner, *diag_corner;
@@ -352,3 +354,5 @@ void CLIP_OT_slide_plane_marker(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_CURSOR_XY | OPTYPE_BLOCKING;
 }
+
+}  // namespace blender

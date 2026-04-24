@@ -7,13 +7,17 @@ set(INC
 )
 
 set(INC_SYS
-  ${ZSTD_INCLUDE_DIRS}
 )
 
 set(SRC
   aligned_malloc.cpp
+  colorspace.cpp
   debug.cpp
+  guarded_allocator.cpp
   ies.cpp
+  image_maketx.cpp
+  image_metadata.cpp
+  implicit_sharing.cpp
   log.cpp
   math_cdf.cpp
   md5.cpp
@@ -33,8 +37,18 @@ set(SRC
 )
 
 set(LIB
-  ${TBB_LIBRARIES}
-  ${ZSTD_LIBRARIES}
+  PUBLIC bf::dependencies::openimageio
+  PRIVATE bf::dependencies::jpeg
+  PUBLIC bf::dependencies::optional::tbb
+  PUBLIC bf::dependencies::optional::embree
+  PUBLIC bf::dependencies::optional::openpgl
+  PUBLIC bf::dependencies::optional::openvdb
+  PRIVATE bf::dependencies::opencolorio
+  PRIVATE bf::dependencies::zstd
+  PRIVATE bf::dependencies::openexr
+  # Used by OpenImageIO headers, which fallback to a bundled version. But we
+  # need to use the same version as Blender to avoid symbol conflicts.
+  PRIVATE bf::dependencies::fmt
 )
 
 set(SRC_HEADERS
@@ -44,14 +58,15 @@ set(SRC_HEADERS
   array.h
   atomic.h
   boundbox.h
+  cache_limiter.h
   color.h
+  colorspace.h
   concurrent_set.h
   concurrent_vector.h
   debug.h
   defines.h
   deque.h
   disjoint_set.h
-  guarded_allocator.cpp
   guarded_allocator.h
   guiding.h
   half.h
@@ -59,6 +74,9 @@ set(SRC_HEADERS
   ies.h
   image.h
   image_impl.h
+  image_maketx.h
+  image_metadata.h
+  implicit_sharing.h
   list.h
   log.h
   map.h
@@ -89,7 +107,9 @@ set(SRC_HEADERS
   projection.h
   projection_inverse.h
   queue.h
+  random_access_iterator_mixin.h
   rect.h
+  scoped_defer.h
   set.h
   simd.h
   semaphore.h
@@ -100,7 +120,6 @@ set(SRC_HEADERS
   system.h
   task.h
   tbb.h
-  texture.h
   thread.h
   time.h
   transform.h
@@ -110,10 +129,12 @@ set(SRC_HEADERS
   types_float3.h
   types_float4.h
   types_float8.h
+  types_image.h
   types_int2.h
   types_int3.h
   types_int4.h
   types_int8.h
+  types_normal.h
   types_spectrum.h
   types_rgbe.h
   types_uchar2.h
@@ -139,15 +160,13 @@ endif()
 include_directories(${INC})
 include_directories(SYSTEM ${INC_SYS})
 
-if(WITH_OPENVDB)
-  list(APPEND LIB
-    ${OPENVDB_LIBRARIES}
-  )
+# This works around the issue described in #120317 and https://github.com/AcademySoftwareFoundation/openvdb/pull/1786
+if(WITH_OPENVDB AND MSVC_CLANG)
+  set_source_files_properties(openvdb.cpp PROPERTIES COMPILE_FLAGS -fno-delayed-template-parsing)
+endif()
 
-  # This works around the issue described in #120317 and https://github.com/AcademySoftwareFoundation/openvdb/pull/1786
-  if(MSVC_CLANG)
-    set_source_files_properties(openvdb.cpp PROPERTIES COMPILE_FLAGS -fno-delayed-template-parsing)
-  endif()
+if(WIN32 AND NOT USD_OVERRIDE_OPENCOLORIO)
+  add_definitions(-DOpenColorIO_SKIP_IMPORTS)
 endif()
 
 cycles_add_library(cycles_util "${LIB}" ${SRC} ${SRC_HEADERS})

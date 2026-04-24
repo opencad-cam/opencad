@@ -36,6 +36,8 @@
 #include "WM_message.hh"
 #include "WM_types.hh"
 
+namespace blender {
+
 /* ******************** default callbacks for topbar space ***************** */
 
 static SpaceLink *topbar_create(const ScrArea * /*area*/, const Scene * /*scene*/)
@@ -43,7 +45,7 @@ static SpaceLink *topbar_create(const ScrArea * /*area*/, const Scene * /*scene*
   ARegion *region;
   SpaceTopBar *stopbar;
 
-  stopbar = MEM_new_for_free<SpaceTopBar>("init topbar");
+  stopbar = MEM_new<SpaceTopBar>("init topbar");
   stopbar->spacetype = SPACE_TOPBAR;
 
   /* header */
@@ -61,7 +63,7 @@ static SpaceLink *topbar_create(const ScrArea * /*area*/, const Scene * /*scene*
   BLI_addtail(&stopbar->regionbase, region);
   region->regiontype = RGN_TYPE_WINDOW;
 
-  return (SpaceLink *)stopbar;
+  return reinterpret_cast<SpaceLink *>(stopbar);
 }
 
 /* Doesn't free the space-link itself. */
@@ -72,11 +74,11 @@ static void topbar_init(wmWindowManager * /*wm*/, ScrArea * /*area*/) {}
 
 static SpaceLink *topbar_duplicate(SpaceLink *sl)
 {
-  SpaceTopBar *stopbarn = static_cast<SpaceTopBar *>(MEM_dupallocN(sl));
+  SpaceTopBar *stopbarn = MEM_dupalloc(reinterpret_cast<SpaceTopBar *>(sl));
 
   /* clear or remove stuff from old */
 
-  return (SpaceLink *)stopbarn;
+  return reinterpret_cast<SpaceLink *>(stopbarn);
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
@@ -88,8 +90,7 @@ static void topbar_main_region_init(wmWindowManager *wm, ARegion *region)
   if (ELEM(RGN_ALIGN_ENUM_FROM_MASK(region->alignment), RGN_ALIGN_RIGHT)) {
     region->flag |= RGN_FLAG_DYNAMIC_SIZE;
   }
-  blender::ui::view2d_region_reinit(
-      &region->v2d, blender::ui::V2D_COMMONVIEW_HEADER, region->winx, region->winy);
+  ui::view2d_region_reinit(&region->v2d, ui::V2D_COMMONVIEW_HEADER, region->winx, region->winy);
 
   keymap = WM_keymap_ensure(
       wm->runtime->defaultconf, "View2D Buttons List", SPACE_EMPTY, RGN_TYPE_WINDOW);
@@ -189,8 +190,8 @@ static void topbar_header_region_message_subscribe(const wmRegionMessageSubscrib
 
 static void recent_files_menu_draw(const bContext *C, Menu *menu)
 {
-  blender::ui::Layout &layout = *menu->layout;
-  layout.operator_context_set(blender::wm::OpCallContext::InvokeDefault);
+  ui::Layout &layout = *menu->layout;
+  layout.operator_context_set(wm::OpCallContext::InvokeDefault);
   const bool is_menu_search = CTX_data_int_get(C, "is_menu_search").value_or(false);
   if (is_menu_search) {
     template_recent_files(&layout, U.recent_files);
@@ -214,7 +215,7 @@ static void recent_files_menu_register()
 {
   MenuType *mt;
 
-  mt = MEM_callocN<MenuType>("spacetype info menu recent files");
+  mt = MEM_new_zeroed<MenuType>("spacetype info menu recent files");
   STRNCPY_UTF8(mt->idname, "TOPBAR_MT_file_open_recent");
   STRNCPY_UTF8(mt->label, N_("Open Recent"));
   STRNCPY_UTF8(mt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
@@ -231,16 +232,16 @@ static void undo_history_draw_menu(const bContext *C, Menu *menu)
 
   int undo_step_count = 0;
   int undo_step_count_all = 0;
-  LISTBASE_FOREACH_BACKWARD (UndoStep *, us, &wm->runtime->undo_stack->steps) {
+  for (UndoStep &us : wm->runtime->undo_stack->steps.items_reversed()) {
     undo_step_count_all += 1;
-    if (us->skip) {
+    if (us.skip) {
       continue;
     }
     undo_step_count += 1;
   }
 
-  blender::ui::Layout &split = menu->layout->split(0.0f, false);
-  blender::ui::Layout *column = nullptr;
+  ui::Layout &split = menu->layout->split(0.0f, false);
+  ui::Layout *column = nullptr;
 
   const int col_size = 20 + (undo_step_count / 12);
 
@@ -258,7 +259,7 @@ static void undo_history_draw_menu(const bContext *C, Menu *menu)
       column = &split.column(false);
     }
     const bool is_active = (us == wm->runtime->undo_stack->step_active);
-    blender::ui::Layout &row = column->row(false);
+    ui::Layout &row = column->row(false);
     row.enabled_set(!is_active);
     PointerRNA op_ptr = row.op("ED_OT_undo_history",
                                CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, us->name),
@@ -272,7 +273,7 @@ static void undo_history_menu_register()
 {
   MenuType *mt;
 
-  mt = MEM_callocN<MenuType>(__func__);
+  mt = MEM_new_zeroed<MenuType>(__func__);
   STRNCPY_UTF8(mt->idname, "TOPBAR_MT_undo_history");
   STRNCPY_UTF8(mt->label, N_("Undo History"));
   STRNCPY_UTF8(mt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
@@ -302,7 +303,7 @@ void ED_spacetype_topbar()
   st->blend_write = topbar_space_blend_write;
 
   /* regions: main window */
-  art = MEM_callocN<ARegionType>("spacetype topbar main region");
+  art = MEM_new_zeroed<ARegionType>("spacetype topbar main region");
   art->regionid = RGN_TYPE_WINDOW;
   art->init = topbar_main_region_init;
   art->layout = ED_region_header_layout;
@@ -314,7 +315,7 @@ void ED_spacetype_topbar()
   BLI_addhead(&st->regiontypes, art);
 
   /* regions: header */
-  art = MEM_callocN<ARegionType>("spacetype topbar header region");
+  art = MEM_new_zeroed<ARegionType>("spacetype topbar header region");
   art->regionid = RGN_TYPE_HEADER;
   art->prefsizey = HEADERY;
   art->prefsizex = UI_UNIT_X * 5; /* Mainly to avoid glitches */
@@ -332,3 +333,5 @@ void ED_spacetype_topbar()
 
   BKE_spacetype_register(std::move(st));
 }
+
+}  // namespace blender

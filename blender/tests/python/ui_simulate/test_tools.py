@@ -5,45 +5,21 @@
 """
 This file does not run anything, its methods are accessed for tests by ``run_blender_setup.py``.
 """
-
-
-def _test_window(windows_exclude=None):
-    import bpy
-    wm = bpy.data.window_managers[0]
-    if windows_exclude is None:
-        return wm.windows[0]
-    for window in wm.windows:
-        if window not in windows_exclude:
-            return window
-    return None
-
-
-def _test_vars(window):
-    import unittest
-    from modules.easy_keys import EventGenerate
-    return (
-        EventGenerate(window),
-        unittest.TestCase(),
-    )
-
-
-def _window_area_get_by_type(window, space_type):
-    for area in window.screen.areas:
-        if area.type == space_type:
-            return area
+import modules.ui_test_utils as ui
 
 
 def sculpt_mode_toolbar():
-    e, t = _test_vars(window := _test_window())
+    import sys
+    e, t, window = ui.test_window()
 
     # In the default properties area, set it to the tool tab to force access of all
     # tool properties when a tool is activated.
-    properties_area = _window_area_get_by_type(window, 'PROPERTIES')
+    properties_area = ui.get_window_area_by_type(window, 'PROPERTIES')
     properties_area.spaces[0].context = 'TOOL'
 
     yield e.ctrl.tab().s()              # Sculpt via pie menu.
 
-    area = _window_area_get_by_type(window, 'VIEW_3D')
+    area = ui.get_window_area_by_type(window, 'VIEW_3D')
     position = (area.x + int(area.width * 0.05), area.y + area.height // 2)
     e.cursor_position_set(*position, move=True)     # Move mouse over the toolbar
 
@@ -64,35 +40,60 @@ def sculpt_mode_toolbar():
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin_brush.draw_face_sets")
 
     yield e.shift.space()
+    yield e.five()
+    t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.primitive_cube_add")
+
+    yield e.shift.space()
+    yield e.six()
+    t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.primitive_cone_add")
+
+    yield e.shift.space()
+    yield e.seven()
+    t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.primitive_cylinder_add")
+
+    yield e.shift.space()
+    yield e.eight()
+    t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.primitive_uv_sphere_add")
+
+    yield e.shift.space()
+    yield e.nine()
+    t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.primitive_ico_sphere_add")
+
+    yield e.shift.space()
     yield e.b()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.box_mask")
 
     yield e.shift.space()
-    yield e.eight()
+    yield e.shift.three()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.box_hide")
 
     yield e.shift.space()
-    yield e.shift.two()
+    yield e.shift.seven()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.box_face_set")
 
     yield e.shift.space()
-    yield e.shift.six()
+    yield e.ctrl.one()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.box_trim")
 
     yield e.shift.space()
-    yield e.shift.zero()
+    yield e.ctrl.five()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.line_project")
 
     yield e.shift.space()
-    yield e.ctrl.one()
+    yield e.ctrl.six()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.mesh_filter")
 
     yield e.shift.space()
-    yield e.ctrl.two()
+    yield e.ctrl.seven()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.cloth_filter")
 
     yield e.shift.space()
-    yield e.ctrl.three()
+    if sys.platform == "darwin":
+        # Assigning a keymap entry to Ctrl on MacOS also assigns it to Command. In most cases, either
+        # keybind is accepted. However, the toolbar specifically responds to Command, not Ctrl
+        yield e.oskey.x()
+    else:
+        yield e.ctrl.x()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.color_filter")
 
     yield e.shift.space()
@@ -100,19 +101,19 @@ def sculpt_mode_toolbar():
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.face_set_edit")
 
     yield e.shift.space()
-    yield e.ctrl.four()
+    yield e.ctrl.eight()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.mask_by_color")
 
     yield e.shift.space()
-    yield e.ctrl.five()
+    yield e.ctrl.nine()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.move")
 
     yield e.shift.space()
-    yield e.ctrl.six()
+    yield e.ctrl.zero()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.rotate")
 
     yield e.shift.space()
-    yield e.ctrl.seven()
+    yield e.alt.one()
     t.assertEqual(window.workspace.tools.from_space_view3d_mode('SCULPT').idname, "builtin.scale")
 
     yield e.shift.space()

@@ -18,7 +18,8 @@ class TileManager;
 
 class RenderWork {
  public:
-  int resolution_divider = 1;
+  float resolution_divider = 1;
+  float denoised_resolution_divider = 1;
 
   /* Initialize render buffers.
    * Includes steps like zeroing the buffer on the device, and optional reading of pixels from the
@@ -77,6 +78,9 @@ class RenderWork {
    * Note that the scheduler does not know anything about devices, so if there is only a single
    * device used, then it is up for the PathTracer to ignore the balancing. */
   bool rebalance = false;
+
+  /* Perform volume guiding buffer denoise. */
+  bool volume_guiding_denoise = false;
 
   /* Conversion to bool, to simplify checks about whether there is anything to be done for this
    * work. */
@@ -208,8 +212,6 @@ class RenderScheduler {
                              const double time,
                              bool balance_changed);
   void report_volume_guiding_denoise_time(const RenderWork &render_work, const double time);
-
-  bool volume_guiding_need_denoise() const;
 
   /* Generate full multi-line report of the rendering process, including rendering parameters,
    * times, and so on. */

@@ -24,6 +24,13 @@
 
 #include "RNA_access.hh"  // IWYU pragma: export
 
-void fn_node_type_base(blender::bke::bNodeType *ntype,
-                       std::string idname,
+namespace blender {
+
+void fn_node_type_base(bke::bNodeType *ntype,
+                       UString idname,
                        std::optional<int16_t> legacy_type = std::nullopt);
+void fn_cmp_node_type_base(bke::bNodeType *ntype,
+                           UString idname,
+                           std::optional<int16_t> legacy_type = std::nullopt);
+
+}  // namespace blender

@@ -23,12 +23,12 @@ struct IconViewMenuArgs {
 };
 
 /* ID Search browse menu, open */
-static Block *ui_icon_view_menu_cb(bContext *C, ARegion *region, void *arg_litem)
+static Block *icon_view_menu_cb(bContext *C, ARegion *region, void *arg_litem)
 {
   static IconViewMenuArgs args;
 
   /* arg_litem is malloced, can be freed by parent button */
-  args = *((IconViewMenuArgs *)arg_litem);
+  args = *(static_cast<IconViewMenuArgs *>(arg_litem));
   const int w = UI_UNIT_X * (args.icon_scale);
   const int h = UI_UNIT_X * (args.icon_scale + args.show_labels);
 
@@ -85,7 +85,7 @@ static Block *ui_icon_view_menu_cb(bContext *C, ARegion *region, void *arg_litem
   block_direction_set(block, UI_DIR_DOWN);
 
   if (free) {
-    MEM_freeN(item);
+    MEM_delete(item);
   }
 
   return block;
@@ -144,7 +144,7 @@ void template_icon_view(Layout *layout,
     cb_args->icon_scale = icon_scale_popup;
 
     but = uiDefBlockButN(block,
-                         ui_icon_view_menu_cb,
+                         icon_view_menu_cb,
                          cb_args,
                          "",
                          0,
@@ -172,7 +172,7 @@ void template_icon_view(Layout *layout,
   def_but_icon(but, icon, UI_HAS_ICON | BUT_ICON_PREVIEW);
 
   if (free_items) {
-    MEM_freeN(items);
+    MEM_delete(items);
   }
 }
 

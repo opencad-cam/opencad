@@ -91,7 +91,8 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
 
   void draw_top_row_cell(int column_index, const CellDrawParams &params) const final
   {
-    const StringRefNull name = spreadsheet_layout_.columns[column_index].values->name();
+    const ColumnValues &values = *spreadsheet_layout_.columns[column_index].values;
+    const StringRefNull name = values.name();
     ui::Button *but = uiDefIconTextBut(params.block,
                                        ui::ButtonType::Label,
                                        ICON_NONE,
@@ -102,12 +103,15 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
                                        params.height,
                                        nullptr,
                                        std::nullopt);
+    std::string description = values.description().is_empty() ?
+                                  std::string(name) :
+                                  fmt::format("{}\n{}", name, values.description());
     button_func_tooltip_set(
         but,
         [](bContext * /*C*/, void *arg, StringRef /*tip*/) {
           return *static_cast<std::string *>(arg);
         },
-        MEM_new<std::string>(__func__, name),
+        MEM_new<std::string>(__func__, std::move(description)),
         [](void *arg) { MEM_delete(static_cast<std::string *>(arg)); });
     /* Center-align column headers. */
     button_drawflag_disable(but, ui::BUT_TEXT_LEFT);
@@ -213,10 +217,10 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
       button_func_tooltip_set(
           but,
           [](bContext * /*C*/, void *argN, const StringRef /*tip*/) {
-            return fmt::format("{:f}", *((float *)argN));
+            return fmt::format("{:f}", *(static_cast<float *>(argN)));
           },
-          MEM_dupallocN<float>(__func__, value),
-          MEM_freeN);
+          MEM_new<float>(__func__, value),
+          MEM_delete_void);
       /* Right-align Floats. */
       button_drawflag_disable(but, ui::BUT_TEXT_LEFT);
       button_drawflag_enable(but, ui::BUT_TEXT_RIGHT);
@@ -246,6 +250,11 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
     if (type.is<float3>()) {
       const float3 value = *value_ptr.get<float3>();
       this->draw_float_vector(params, Span(&value.x, 3));
+      return;
+    }
+    if (type.is<float4>()) {
+      const float4 value = *value_ptr.get<float4>();
+      this->draw_float_vector(params, Span(&value.x, 4));
       return;
     }
     if (type.is<ColorGeometry4f>()) {
@@ -297,7 +306,7 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
       return;
     }
     if (type.is<MStringProperty>()) {
-      MStringProperty *prop = MEM_callocN<MStringProperty>(__func__);
+      MStringProperty *prop = MEM_new_zeroed<MStringProperty>(__func__);
       *prop = *value_ptr.get<MStringProperty>();
       ui::Button *but = uiDefIconTextBut(params.block,
                                          ui::ButtonType::Label,
@@ -317,7 +326,7 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
             return std::string(StringRef(prop.s, prop.s_len));
           },
           prop,
-          MEM_freeN);
+          MEM_delete_void);
       return;
     }
     if (type.is<nodes::BundleItemValue>()) {
@@ -326,11 +335,8 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
               std::get_if<nodes::BundleItemSocketValue>(&value.value))
       {
         const bke::SocketValueVariant &value_variant = socket_value->value;
-        if (value_variant.is_single()) {
-          const GPointer single_value_ptr = value_variant.get_single_ptr();
-          this->draw_content_cell_value(single_value_ptr, params, column);
-          return;
-        }
+        this->draw_content_cell_value(&value_variant, params, column);
+        return;
       }
       this->draw_undrawable(params);
       return;
@@ -364,6 +370,16 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
       }
       return;
     }
+    if (type.is<bke::SocketValueVariant>()) {
+      const bke::SocketValueVariant &value_variant = *value_ptr.get<bke::SocketValueVariant>();
+      if (value_variant.is_single()) {
+        const GPointer single_value_ptr = value_variant.get_single_ptr();
+        this->draw_content_cell_value(single_value_ptr, params, column);
+        return;
+      }
+      this->draw_undrawable(params);
+      return;
+    }
     this->draw_undrawable(params);
   }
 
@@ -390,10 +406,10 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
       button_func_tooltip_set(
           but,
           [](bContext * /*C*/, void *argN, const StringRef /*tip*/) {
-            return fmt::format("{:f}", *((float *)argN));
+            return fmt::format("{:f}", *(static_cast<float *>(argN)));
           },
-          MEM_dupallocN<float>(__func__, value),
-          MEM_freeN);
+          MEM_new<float>(__func__, value),
+          MEM_delete_void);
       /* Right-align Floats. */
       button_drawflag_disable(but, ui::BUT_TEXT_LEFT);
       button_drawflag_enable(but, ui::BUT_TEXT_RIGHT);
@@ -435,21 +451,21 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
             but,
             [](bContext * /*C*/, void *argN, const StringRef /*tip*/) {
               char dst[BLI_STR_FORMAT_INT64_GROUPED_SIZE];
-              BLI_str_format_int64_grouped(dst, *(int64_t *)argN);
+              BLI_str_format_int64_grouped(dst, *static_cast<int64_t *>(argN));
               return fmt::format("{} {}", dst, TIP_("bytes"));
             },
-            MEM_dupallocN<int64_t>(__func__, value),
-            MEM_freeN);
+            MEM_new<int64_t>(__func__, value),
+            MEM_delete_void);
         break;
       }
       default: {
         button_func_tooltip_set(
             but,
             [](bContext * /*C*/, void *argN, const StringRef /*tip*/) {
-              return fmt::format("{}", *(int64_t *)argN);
+              return fmt::format("{}", *static_cast<int64_t *>(argN));
             },
-            MEM_dupallocN<int64_t>(__func__, value),
-            MEM_freeN);
+            MEM_new<int64_t>(__func__, value),
+            MEM_delete_void);
         break;
       }
     }
@@ -480,10 +496,10 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
       button_func_tooltip_set(
           but,
           [](bContext * /*C*/, void *argN, const StringRef /*tip*/) {
-            return fmt::format("{}", *((int *)argN));
+            return fmt::format("{}", *(static_cast<int *>(argN)));
           },
-          MEM_dupallocN<int>(__func__, value),
-          MEM_freeN);
+          MEM_new<int>(__func__, value),
+          MEM_delete_void);
       /* Right-align Floats. */
       button_drawflag_disable(but, ui::BUT_TEXT_LEFT);
       button_drawflag_enable(but, ui::BUT_TEXT_RIGHT);
@@ -519,7 +535,8 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
           but,
           [](bContext * /*C*/, void *argN, const StringRef /*tip*/) {
             const uint32_t uint_color = POINTER_AS_UINT(argN);
-            ColorGeometry4b color = *(ColorGeometry4b *)&uint_color;
+            ColorGeometry4b color = *reinterpret_cast<ColorGeometry4b *>(
+                const_cast<uint32_t *>(&uint_color));
             return fmt::format(fmt::runtime(TIP_("Byte Color (sRGB encoded):\n{}  {}  {}  {}")),
                                color.r,
                                color.g,
@@ -543,8 +560,8 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
           tooltip_text_field_add(
               tip, format_matrix_to_grid(matrix), {}, ui::TIP_STYLE_MONO, ui::TIP_LC_VALUE);
         },
-        MEM_dupallocN<float4x4>(__func__, value),
-        MEM_freeN);
+        MEM_new<float4x4>(__func__, value),
+        MEM_delete_void);
   }
 
   ui::Button *draw_undrawable(const CellDrawParams &params) const
@@ -683,6 +700,17 @@ float ColumnValues::fit_column_values_width_px(const std::optional<int64_t> &max
           data_.typed<float3>(),
           [](const float3 value) {
             return fmt::format("{:.3f}  {:.3f}  {:.3f}", value.x, value.y, value.z);
+          });
+    }
+    case SPREADSHEET_VALUE_TYPE_FLOAT4: {
+      return estimate_max_column_width<float4>(
+          get_min_width(12 * SPREADSHEET_WIDTH_UNIT),
+          fontid,
+          max_sample_size,
+          data_.typed<float4>(),
+          [](const float4 value) {
+            return fmt::format(
+                "{:.3f}  {:.3f}  {:.3f}  {:.3f}", value.x, value.y, value.z, value.w);
           });
     }
     case SPREADSHEET_VALUE_TYPE_COLOR: {

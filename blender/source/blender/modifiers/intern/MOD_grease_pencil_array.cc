@@ -69,7 +69,7 @@ static void free_data(ModifierData *md)
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
   auto *mmd = reinterpret_cast<GreasePencilArrayModifierData *>(md);
-  walk(user_data, ob, (ID **)&mmd->object, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&mmd->object), IDWALK_CB_NOP);
   modifier::greasepencil::foreach_influence_ID_link(&mmd->influence, ob, walk, user_data);
 }
 
@@ -164,12 +164,16 @@ static bke::CurvesGeometry create_array_copies(const Object &ob,
   bke::GeometrySet base_geo = bke::GeometrySet::from_curves(base_curves_id);
   bke::GeometrySet filtered_geo = bke::GeometrySet::from_curves(filtered_curves_id);
 
-  std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>();
+  auto instances = std::make_unique<bke::Instances>(mmd.count);
   const int base_handle = instances->add_reference(bke::InstanceReference{base_geo});
   const int filtered_handle = instances->add_reference(bke::InstanceReference{filtered_geo});
 
   /* Always add untouched original curves. */
-  instances->add_instance(base_handle, float4x4::identity());
+  MutableSpan<int> handles = instances->reference_handles_for_write();
+  MutableSpan<float4x4> transforms = instances->transforms_for_write();
+
+  handles.first() = base_handle;
+  transforms.first() = float4x4::identity();
 
   float3 size(0.0f);
   if (mmd.flag & MOD_GREASE_PENCIL_ARRAY_USE_RELATIVE) {
@@ -203,14 +207,16 @@ static bke::CurvesGeometry create_array_copies(const Object &ob,
 
     current_offset *= get_rand_matrix(mmd, ob, elem_id);
 
-    instances->add_instance(filtered_handle, current_offset);
+    handles[elem_id] = filtered_handle;
+    transforms[elem_id] = current_offset;
   }
 
   geometry::RealizeInstancesOptions options;
   options.keep_original_ids = true;
   options.realize_instance_attributes = false; /* Should this be true? */
   bke::GeometrySet result_geo = geometry::realize_instances(
-                                    bke::GeometrySet::from_instances(instances.release()), options)
+                                    bke::GeometrySet::from_instances(std::move(instances)),
+                                    options)
                                     .geometry;
   return std::move(result_geo.get_curves_for_write()->geometry.wrap());
 }
@@ -343,8 +349,6 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &mmd->influence);
 }
 
-}  // namespace blender
-
 ModifierTypeInfo modifierType_GreasePencilArray = {
     /*idname*/ "GreasePencilArrayModifier",
     /*name*/ N_("Array"),
@@ -356,26 +360,28 @@ ModifierTypeInfo modifierType_GreasePencilArray = {
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_SupportsMapping,
     /*icon*/ ICON_MOD_ARRAY,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
+    /*free_data*/ free_data,
     /*is_disabled*/ nullptr,
-    /*update_depsgraph*/ blender::update_depsgraph,
+    /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

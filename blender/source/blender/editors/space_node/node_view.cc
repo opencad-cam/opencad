@@ -37,7 +37,9 @@
 
 #include "node_intern.hh" /* own include */
 
-namespace blender::ed::space_node {
+namespace blender {
+
+namespace ed::space_node {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Functions
@@ -116,13 +118,13 @@ bool space_node_view_flag(
   else {
     if (old_aspect < new_aspect) {
       const float height_new = width / old_aspect;
-      cur_new.ymin = cur_new.ymin - height_new / 2.0f;
-      cur_new.ymax = cur_new.ymax + height_new / 2.0f;
+      cur_new.ymin = cur_new.ymin - height_new / 4.0f;
+      cur_new.ymax = cur_new.ymax + height_new / 4.0f;
     }
     else {
       const float width_new = height * old_aspect;
-      cur_new.xmin = cur_new.xmin - width_new / 2.0f;
-      cur_new.xmax = cur_new.xmax + width_new / 2.0f;
+      cur_new.xmin = cur_new.xmin - width_new / 4.0f;
+      cur_new.xmax = cur_new.xmax + width_new / 4.0f;
     }
 
     /* add some padding */
@@ -215,7 +217,7 @@ static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, con
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   ARegion *region = CTX_wm_region(C);
-  NodeViewMove *nvm = (NodeViewMove *)op->customdata;
+  NodeViewMove *nvm = static_cast<NodeViewMove *>(op->customdata);
 
   switch (event->type) {
     case MOUSEMOVE:
@@ -238,7 +240,7 @@ static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, con
     case LEFTMOUSE:
     case MIDDLEMOUSE:
       if (event->val == KM_RELEASE) {
-        MEM_freeN(nvm);
+        MEM_delete(nvm);
         op->customdata = nullptr;
         return OPERATOR_FINISHED;
       }
@@ -251,7 +253,7 @@ static wmOperatorStatus snode_bg_viewmove_modal(bContext *C, wmOperator *op, con
       WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
       WM_main_add_notifier(NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
 
-      MEM_freeN(nvm);
+      MEM_delete(nvm);
       op->customdata = nullptr;
 
       return OPERATOR_CANCELLED;
@@ -283,7 +285,7 @@ static wmOperatorStatus snode_bg_viewmove_invoke(bContext *C, wmOperator *op, co
     return OPERATOR_CANCELLED;
   }
 
-  nvm = MEM_callocN<NodeViewMove>(__func__);
+  nvm = MEM_new_zeroed<NodeViewMove>(__func__);
   op->customdata = nvm;
   nvm->mvalo.x = event->mval[0];
   nvm->mvalo.y = event->mval[1];
@@ -306,8 +308,8 @@ static wmOperatorStatus snode_bg_viewmove_invoke(bContext *C, wmOperator *op, co
 
 static void snode_bg_viewmove_cancel(bContext * /*C*/, wmOperator *op)
 {
-  NodeViewMove *nvm = (NodeViewMove *)op->customdata;
-  MEM_freeN(nvm);
+  NodeViewMove *nvm = static_cast<NodeViewMove *>(op->customdata);
+  MEM_delete(nvm);
   op->customdata = nullptr;
 }
 
@@ -334,18 +336,76 @@ void NODE_OT_backimage_move(wmOperatorType *ot)
 /** \name Background Image Zoom
  * \{ */
 
+/* Simple struct for background image zoom data */
+struct backImageZoomData {
+  float factor;
+  float2 offset;
+};
+
+static void backimage_zoom_init(bContext *C, wmOperator *op)
+{
+  BLI_assert(space_node_composite_active_view_poll(C));
+
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  backImageZoomData *zdata = MEM_new_zeroed<backImageZoomData>(__func__);
+  op->customdata = zdata;
+
+  zdata->factor = RNA_float_get(op->ptr, "factor");
+  zdata->offset = {snode->xof, snode->yof}; /* Current img offset for execute. */
+}
+
 static wmOperatorStatus backimage_zoom_exec(bContext *C, wmOperator *op)
 {
-  SpaceNode *snode = CTX_wm_space_node(C);
   ARegion *region = CTX_wm_region(C);
-  float fac = RNA_float_get(op->ptr, "factor");
+  SpaceNode *snode = CTX_wm_space_node(C);
 
-  snode->zoom *= fac;
+  /* If executed without invoking, initialize the customdata here. */
+  if (op->customdata == nullptr) {
+    backimage_zoom_init(C, op);
+  }
+
+  backImageZoomData *zdata = static_cast<backImageZoomData *>(op->customdata);
+
+  snode->zoom *= zdata->factor;
+  snode->xof = zdata->offset.x;
+  snode->yof = zdata->offset.y;
+
   ED_region_tag_redraw(region);
   WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
   WM_main_add_notifier(NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
 
+  MEM_SAFE_DELETE(zdata);
+  op->customdata = nullptr;
+
   return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus backimage_zoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  ARegion *region = CTX_wm_region(C);
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  backimage_zoom_init(C, op);
+  backImageZoomData *zdata = static_cast<backImageZoomData *>(op->customdata);
+
+  /* If the not set in the preference, no need to do all the checks below. */
+  if ((U.uiflag & USER_ZOOM_TO_MOUSEPOS) == 0) {
+    return backimage_zoom_exec(C, op);
+  }
+
+  if (RNA_boolean_get(op->ptr, "use_mouse_pos")) {
+    float fac = RNA_float_get(op->ptr, "factor");
+
+    float2 img_center = {snode->xof + region->winx / 2.0f, snode->yof + region->winy / 2.0f};
+
+    float2 img_offset = {snode->xof + (event->mval[0] - img_center.x) * (1 - fac),
+                         snode->yof + (event->mval[1] - img_center.y) * (1 - fac)};
+
+    zdata->offset = {img_offset.x, img_offset.y};
+  }
+
+  return backimage_zoom_exec(C, op);
 }
 
 void NODE_OT_backimage_zoom(wmOperatorType *ot)
@@ -357,6 +417,7 @@ void NODE_OT_backimage_zoom(wmOperatorType *ot)
   ot->description = "Zoom in/out the background image";
 
   /* API callbacks. */
+  ot->invoke = backimage_zoom_invoke;
   ot->exec = backimage_zoom_exec;
   ot->poll = space_node_composite_active_view_poll;
 
@@ -365,6 +426,7 @@ void NODE_OT_backimage_zoom(wmOperatorType *ot)
 
   /* internal */
   RNA_def_float(ot->srna, "factor", 1.2f, 0.0f, 10.0f, "Factor", "", 0.0f, 10.0f);
+  RNA_def_boolean(ot->srna, "use_mouse_pos", true, "Use Mouse Position", "Zoom to mouse position");
 }
 
 /** \} */
@@ -452,7 +514,7 @@ struct ImageSampleInfo {
 static void sample_draw(const bContext *C, ARegion *region, void *arg_info)
 {
   Scene *scene = CTX_data_scene(C);
-  ImageSampleInfo *info = (ImageSampleInfo *)arg_info;
+  ImageSampleInfo *info = static_cast<ImageSampleInfo *>(arg_info);
 
   if (info->draw) {
     ED_image_draw_info(scene,
@@ -468,7 +530,7 @@ static void sample_draw(const bContext *C, ARegion *region, void *arg_info)
   }
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace ed::space_node
 
 bool ED_space_node_get_position(
     Main *bmain, SpaceNode *snode, ARegion *region, const int mval[2], float fpos[2])
@@ -527,20 +589,20 @@ bool ED_space_node_color_sample(
 
   if (fx >= 0.0f && fy >= 0.0f && fx < 1.0f && fy < 1.0f) {
     const float *fp;
-    uchar *cp;
+    const uchar *cp;
     int x = int(fx * ibuf->x), y = int(fy * ibuf->y);
 
     CLAMP(x, 0, ibuf->x - 1);
     CLAMP(y, 0, ibuf->y - 1);
 
-    if (ibuf->float_buffer.data) {
-      fp = (ibuf->float_buffer.data + (ibuf->channels) * (y * ibuf->x + x));
+    if (const float *float_data = ibuf->float_data()) {
+      fp = (float_data + (ibuf->channels) * (y * ibuf->x + x));
       /* #IB_PROFILE_NONE is default but in fact its linear. */
       copy_v3_v3(r_col, fp);
       ret = true;
     }
-    else if (ibuf->byte_buffer.data) {
-      cp = ibuf->byte_buffer.data + 4 * (y * ibuf->x + x);
+    else if (const uchar *byte_data = ibuf->byte_data()) {
+      cp = byte_data + 4 * (y * ibuf->x + x);
       rgb_uchar_to_float(r_col, cp);
       IMB_colormanagement_colorspace_to_scene_linear_v3(r_col, ibuf->byte_buffer.colorspace);
       ret = true;
@@ -552,14 +614,14 @@ bool ED_space_node_color_sample(
   return ret;
 }
 
-namespace blender::ed::space_node {
+namespace ed::space_node {
 
 static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Main *bmain = CTX_data_main(C);
   SpaceNode *snode = CTX_wm_space_node(C);
   ARegion *region = CTX_wm_region(C);
-  ImageSampleInfo *info = (ImageSampleInfo *)op->customdata;
+  ImageSampleInfo *info = static_cast<ImageSampleInfo *>(op->customdata);
   void *lock;
   Image *ima;
   ImBuf *ibuf;
@@ -572,7 +634,7 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
     return;
   }
 
-  if (!ibuf->byte_buffer.data) {
+  if (!ibuf->byte_data()) {
     IMB_byte_from_float(ibuf);
   }
 
@@ -586,7 +648,7 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 
   if (fx >= 0.0f && fy >= 0.0f && fx < 1.0f && fy < 1.0f) {
     const float *fp;
-    uchar *cp;
+    const uchar *cp;
     int x = int(fx * ibuf->x), y = int(fy * ibuf->y);
 
     CLAMP(x, 0, ibuf->x - 1);
@@ -597,8 +659,8 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
     info->draw = 1;
     info->channels = ibuf->channels;
 
-    if (ibuf->byte_buffer.data) {
-      cp = ibuf->byte_buffer.data + 4 * (y * ibuf->x + x);
+    if (const uchar *byte_data = ibuf->byte_data()) {
+      cp = byte_data + 4 * (y * ibuf->x + x);
 
       info->col[0] = cp[0];
       info->col[1] = cp[1];
@@ -616,8 +678,8 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 
       info->color_manage = true;
     }
-    if (ibuf->float_buffer.data) {
-      fp = (ibuf->float_buffer.data + (ibuf->channels) * (y * ibuf->x + x));
+    if (const float *float_data = ibuf->float_data()) {
+      fp = float_data + (ibuf->channels) * (y * ibuf->x + x);
 
       info->colf[0] = fp[0];
       info->colf[1] = fp[1];
@@ -641,12 +703,12 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 
 static void sample_exit(bContext *C, wmOperator *op)
 {
-  ImageSampleInfo *info = (ImageSampleInfo *)op->customdata;
+  ImageSampleInfo *info = static_cast<ImageSampleInfo *>(op->customdata);
 
   ED_node_sample_set(nullptr);
   ED_region_draw_cb_exit(info->art, info->draw_handle);
   ED_area_tag_redraw(CTX_wm_area(C));
-  MEM_freeN(info);
+  MEM_delete(info);
 }
 
 static wmOperatorStatus sample_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -665,7 +727,7 @@ static wmOperatorStatus sample_invoke(bContext *C, wmOperator *op, const wmEvent
     return OPERATOR_CANCELLED;
   }
 
-  info = MEM_callocN<ImageSampleInfo>("ImageSampleInfo");
+  info = MEM_new_zeroed<ImageSampleInfo>("ImageSampleInfo");
   info->art = region->runtime->type;
   info->draw_handle = ED_region_draw_cb_activate(
       region->runtime->type, sample_draw, info, REGION_DRAW_POST_PIXEL);
@@ -723,4 +785,6 @@ void NODE_OT_backimage_sample(wmOperatorType *ot)
 
 /** \} */
 
-}  // namespace blender::ed::space_node
+}  // namespace ed::space_node
+
+}  // namespace blender

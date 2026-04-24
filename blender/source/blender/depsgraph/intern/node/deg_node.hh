@@ -18,10 +18,12 @@
 
 #include "BLI_vector.hh"
 
+namespace blender {
+
 struct ID;
 struct Scene;
 
-namespace blender::deg {
+namespace deg {
 
 struct Depsgraph;
 struct OperationNode;
@@ -71,6 +73,8 @@ enum class NodeType {
   GEOMETRY,
   /* Sequencer Component (Scene Only) */
   SEQUENCER,
+  /* Compositor Component (Scene Only) */
+  COMPOSITOR,
   /* Component which contains all operations needed for layer collections
    * evaluation. */
   LAYER_COLLECTIONS,
@@ -221,4 +225,5 @@ struct Node {
 
 void deg_register_base_depsnodes();
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

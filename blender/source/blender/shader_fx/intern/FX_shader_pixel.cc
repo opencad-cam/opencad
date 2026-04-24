@@ -23,9 +23,11 @@
 #include "FX_shader_types.hh"
 #include "FX_ui_common.hh"
 
+namespace blender {
+
 static void init_data(ShaderFxData *fx)
 {
-  PixelShaderFxData *gpfx = (PixelShaderFxData *)fx;
+  PixelShaderFxData *gpfx = reinterpret_cast<PixelShaderFxData *>(fx);
   ARRAY_SET_ITEMS(gpfx->size, 5, 5);
   ARRAY_SET_ITEMS(gpfx->rgba, 0.0f, 0.0f, 0.0f, 0.9f);
 }
@@ -37,18 +39,13 @@ static void copy_data(const ShaderFxData *md, ShaderFxData *target)
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  blender::ui::Layout &layout = *panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = shaderfx_panel_get_property_pointers(panel, nullptr);
 
   layout.use_property_split_set(true);
 
-  /* Add the X, Y labels manually because size is a #PROP_PIXEL. */
-  blender::ui::Layout &col = layout.column(true);
-  PropertyRNA *prop = RNA_struct_find_property(ptr, "size");
-  col.prop(ptr, prop, 0, 0, UI_ITEM_NONE, IFACE_("Size X"), ICON_NONE);
-  col.prop(ptr, prop, 1, 0, UI_ITEM_NONE, IFACE_("Y"), ICON_NONE);
-
+  layout.prop(ptr, "size", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(ptr, "use_antialiasing", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   shaderfx_panel_end(layout, ptr);
@@ -77,3 +74,5 @@ ShaderFxTypeInfo shaderfx_Type_Pixel = {
     /*foreach_working_space_color*/ nullptr,
     /*panel_register*/ panel_register,
 };
+
+}  // namespace blender

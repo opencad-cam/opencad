@@ -253,7 +253,7 @@ static Image *load_texture_image(Main *bmain, const std::string &file_dir, const
   /* Use embedded data for this image, if we haven't done that yet. */
   if (tex.content.size > 0 && (image == nullptr || !BKE_image_has_packedfile(image))) {
     BKE_image_free_buffers(image); /* Free cached placeholder images. */
-    char *data_dup = MEM_malloc_arrayN<char>(tex.content.size, __func__);
+    char *data_dup = MEM_new_array_uninitialized<char>(tex.content.size, __func__);
     memcpy(data_dup, tex.content.data, tex.content.size);
     BKE_image_packfiles_from_mem(nullptr, image, data_dup, tex.content.size);
 
@@ -449,8 +449,7 @@ Material *import_material(Main *bmain, const std::string &base_dir, const ufbx_m
   Material *mat = BKE_material_add(bmain, fmat.name.data);
   id_us_min(&mat->id);
 
-  bNodeTree *ntree = blender::bke::node_tree_add_tree_embedded(
-      nullptr, &mat->id, "Shader Nodetree", ntreeType_Shader->idname);
+  bNodeTree *ntree = mat->nodetree;
   bNode *bsdf = add_node(ntree, SH_NODE_BSDF_PRINCIPLED, node_locx_bsdf, node_locy_top);
   bNode *output = add_node(ntree, SH_NODE_OUTPUT_MATERIAL, node_locx_output, node_locy_top);
   set_bsdf_socket_values(bsdf, mat, fmat);

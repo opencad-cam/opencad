@@ -4,6 +4,7 @@
 
 #include "node_geometry_util.hh"
 
+#include "BKE_node_runtime.hh"
 #include "BKE_volume_grid_process.hh"
 
 #include "NOD_rna_define.hh"
@@ -28,12 +29,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_default_layout();
-  b.add_input(data_type, "Grid")
+  b.add_input(data_type, "Grid"_ustr)
       .hide_value()
       .structure_type(StructureType::Grid)
       .is_default_link_socket();
-  b.add_output(data_type, "Grid").structure_type(StructureType::Grid).align_with_previous();
-  b.add_input(data_type, "Background").structure_type(StructureType::Single);
+  b.add_output(data_type, "Grid"_ustr).structure_type(StructureType::Grid).align_with_previous();
+  b.add_input(data_type, "Background"_ustr).structure_type(StructureType::Single);
+  b.add_input<decl::Bool>("Update Inactive"_ustr)
+      .description("Override all values stored for inactive voxels as well");
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -75,24 +78,24 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
   if (params.in_out() == SOCK_IN) {
     if (is_grid || is_dynamic) {
       params.add_item(IFACE_("Grid"), [data_type](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeSetGridBackground");
+        bNode &node = params.add_node("GeometryNodeSetGridBackground"_ustr);
         node.custom1 = *data_type;
-        params.update_and_connect_available_socket(node, "Grid");
+        params.update_and_connect_available_socket(node, "Grid"_ustr);
       });
     }
     if (!is_grid || is_dynamic) {
       params.add_item(IFACE_("Background"), [data_type](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeSetGridBackground");
+        bNode &node = params.add_node("GeometryNodeSetGridBackground"_ustr);
         node.custom1 = *data_type;
-        params.update_and_connect_available_socket(node, "Background");
+        params.update_and_connect_available_socket(node, "Background"_ustr);
       });
     }
   }
   else {
     params.add_item(IFACE_("Grid"), [data_type](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeSetGridBackground");
+      bNode &node = params.add_node("GeometryNodeSetGridBackground"_ustr);
       node.custom1 = *data_type;
-      params.update_and_connect_available_socket(node, "Grid");
+      params.update_and_connect_available_socket(node, "Grid"_ustr);
     });
   }
 }
@@ -100,19 +103,27 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
 static void node_geo_exec(GeoNodeExecParams params)
 {
 #ifdef WITH_OPENVDB
-  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid");
+  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid"_ustr);
   if (!grid) {
     params.set_default_remaining_outputs();
     return;
   }
 
-  const auto background = params.extract_input<bke::SocketValueVariant>("Background");
+  auto background_variant = params.extract_input<bke::SocketValueVariant>("Background"_ustr);
+  background_variant.convert_to_single();
+  const GPointer background = background_variant.get_single_ptr();
+
+  const bool update_inactive = params.get_input<bool>("Update Inactive"_ustr);
 
   bke::VolumeTreeAccessToken tree_token;
   openvdb::GridBase &grid_base = grid.get_for_write().grid_for_write(tree_token);
-  bke::volume_grid::set_grid_background(grid_base, background.get_single_ptr());
+  bke::volume_grid::set_grid_background(grid_base, background);
 
-  params.set_output("Grid", std::move(grid));
+  if (update_inactive) {
+    bke::volume_grid::set_inactive_values(grid_base, background);
+  }
+
+  params.set_output("Grid"_ustr, std::move(grid));
 #else
   node_geo_exec_with_missing_openvdb(params);
 #endif
@@ -137,9 +148,9 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetGridBackground");
+  geo_node_type_base(&ntype, "GeometryNodeSetGridBackground"_ustr);
   ntype.ui_name = "Set Grid Background";
   ntype.ui_description = "Set the background value used for inactive voxels and tiles";
   ntype.nclass = NODE_CLASS_GEOMETRY;
@@ -148,7 +159,7 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.declare = node_declare;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

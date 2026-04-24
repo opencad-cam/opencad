@@ -12,6 +12,8 @@
 #include "BLI_math_inline.h"
 #include "BLI_utildefines.h"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Init
  * \{ */
@@ -613,9 +615,6 @@ void add_vn_vnvn(float *array_tar, const float *array_src_a, const float *array_
 void sub_vn_vn(float *array_tar, const float *array_src, int size);
 void sub_vn_vnvn(float *array_tar, const float *array_src_a, const float *array_src_b, int size);
 void interp_vn_vn(float *array_tar, const float *array_src, float t, int size);
-void copy_vn_i(int *array_tar, int size, int val);
-void copy_vn_short(short *array_tar, int size, short val);
-void copy_vn_fl(float *array_tar, int size, float val);
 
 void add_vn_vn_d(double *array_tar, const double *array_src, int size);
 void add_vn_vnvn_d(double *array_tar,
@@ -625,6 +624,8 @@ void add_vn_vnvn_d(double *array_tar,
 void mul_vn_db(double *array_tar, int size, double f);
 
 /** \} */
+
+}  // namespace blender
 
 /* -------------------------------------------------------------------- */
 /** \name Inline Definitions

@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "usd_reader_domelight.hh"
+#include "usd_colorspace_utils.hh"
 #include "usd_light_convert.hh"
 
 #include <pxr/usd/usdLux/domeLight.h>
 #include <pxr/usd/usdLux/domeLight_1.h>
 #include <pxr/usd/usdLux/tokens.h>
+
+namespace blender {
 
 namespace usdtokens {
 // Attribute names.
@@ -17,7 +20,7 @@ static const pxr::TfToken texture_file("texture:file", pxr::TfToken::Immortal);
 static const pxr::TfToken pole_axis("poleAxis", pxr::TfToken::Immortal);
 }  // namespace usdtokens
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /**
  * If the given attribute has an authored value, return its value in the r_value
@@ -78,6 +81,9 @@ static bool get_color(const T &dome_light, const pxr::UsdTimeCode time, pxr::GfV
 {
   bool has_color = get_authored_value(
       dome_light.GetColorAttr(), time, dome_light.GetPrim(), usdtokens::color, color);
+  if (has_color) {
+    colorspace_attr_to_scene_linear(dome_light.GetColorAttr(), *color);
+  }
   return has_color;
 }
 
@@ -114,4 +120,5 @@ void USDDomeLightReader::create_object(Scene *scene, Main *bmain)
   dome_light_to_world_material(import_params_, scene, bmain, dome_light_data, prim_);
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

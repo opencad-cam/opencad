@@ -117,14 +117,14 @@ ccl_device_inline float mat22_inverse(const float4 m, ccl_private float4 &m_inve
 }
 
 /* Manifold vertex setup from ray and intersection data */
-ccl_device_forceinline void mnee_setup_manifold_vertex(KernelGlobals kg,
-                                                       ccl_private ManifoldVertex *vtx,
-                                                       ccl_private ShaderClosure *bsdf,
-                                                       const float eta,
-                                                       const float2 n_offset,
-                                                       const ccl_private Ray *ray,
-                                                       const ccl_private Intersection *isect,
-                                                       ccl_private ShaderData *sd_vtx)
+ccl_device_inline void mnee_setup_manifold_vertex(KernelGlobals kg,
+                                                  ccl_private ManifoldVertex *vtx,
+                                                  ccl_private ShaderClosure *bsdf,
+                                                  const float eta,
+                                                  const float2 n_offset,
+                                                  const ccl_private Ray *ray,
+                                                  const ccl_private Intersection *isect,
+                                                  ccl_private ShaderData *sd_vtx)
 {
   sd_vtx->object = (isect->object == OBJECT_NONE) ? kernel_data_fetch(prim_object, isect->prim) :
                                                     isect->object;
@@ -149,32 +149,24 @@ ccl_device_forceinline void mnee_setup_manifold_vertex(KernelGlobals kg,
   float3 normals[3];
   if (sd_vtx->type & PRIMITIVE_TRIANGLE) {
     /* Load triangle vertices and normals. */
-    triangle_vertices_and_normals(kg, sd_vtx->prim, verts, normals);
-
-    /* Compute refined position (same code as in triangle_point_from_uv). */
-    sd_vtx->P = (1.f - isect->u - isect->v) * verts[0] + isect->u * verts[1] + isect->v * verts[2];
-    if (!(sd_vtx->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
-      const Transform tfm = object_get_transform(kg, sd_vtx);
-      sd_vtx->P = transform_point(&tfm, sd_vtx->P);
-    }
+    triangle_vertices_and_normals(kg, sd_vtx, verts, normals);
   }
   else { /* if (sd_vtx->type & PRIMITIVE_MOTION_TRIANGLE) */
     /* Load triangle vertices and normals. */
-    motion_triangle_vertices_and_normals(
-        kg, sd_vtx->object, sd_vtx->prim, sd_vtx->time, verts, normals);
-
-    /* Compute refined position. */
-    sd_vtx->P = motion_triangle_point_from_uv(kg, sd_vtx, isect->u, isect->v, verts);
+    motion_triangle_vertices_and_normals(kg, sd_vtx, verts, normals);
   }
+
+  /* Compute refined position. */
+  sd_vtx->P = triangle_point_from_uv_and_verts(kg, sd_vtx, isect->u, isect->v, verts);
 
   /* Instance transform. */
   if (!(sd_vtx->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
-    object_position_transform_auto(kg, sd_vtx, &verts[0]);
-    object_position_transform_auto(kg, sd_vtx, &verts[1]);
-    object_position_transform_auto(kg, sd_vtx, &verts[2]);
-    object_normal_transform_auto(kg, sd_vtx, &normals[0]);
-    object_normal_transform_auto(kg, sd_vtx, &normals[1]);
-    object_normal_transform_auto(kg, sd_vtx, &normals[2]);
+    object_position_transform(kg, sd_vtx, &verts[0]);
+    object_position_transform(kg, sd_vtx, &verts[1]);
+    object_position_transform(kg, sd_vtx, &verts[2]);
+    object_normal_transform(kg, sd_vtx, &normals[0]);
+    object_normal_transform(kg, sd_vtx, &normals[1]);
+    object_normal_transform(kg, sd_vtx, &normals[2]);
   }
 
   /* Tangent space (position derivatives) WRT barycentric (u, v). */
@@ -251,7 +243,7 @@ ccl_device_forceinline void mnee_setup_manifold_vertex(KernelGlobals kg,
  * inlined). */
 __attribute__((noinline))
 #else
-ccl_device_forceinline
+ccl_device_inline
 #endif
 bool mnee_compute_constraint_derivatives(
   const int vertex_count,
@@ -373,9 +365,9 @@ bool mnee_compute_constraint_derivatives(
  *  to use for specular manifold walk
  * (See for example http://faculty.washington.edu/finlayso/ebook/algebraic/advanced/LUtri.htm
  *  for block tridiagonal matrix based linear system solve) */
-ccl_device_forceinline bool mnee_solve_matrix_h_to_x(const int vertex_count,
-                                                     ccl_private ManifoldVertex *vertices,
-                                                     ccl_private float2 *dx)
+ccl_device_inline bool mnee_solve_matrix_h_to_x(const int vertex_count,
+                                                ccl_private ManifoldVertex *vertices,
+                                                ccl_private float2 *dx)
 {
   float4 Li[MNEE_MAX_CAUSTIC_CASTERS];
   float2 C[MNEE_MAX_CAUSTIC_CASTERS];
@@ -408,13 +400,13 @@ ccl_device_forceinline bool mnee_solve_matrix_h_to_x(const int vertex_count,
 }
 
 /* Newton solver to walk on specular manifold. */
-ccl_device_forceinline bool mnee_newton_solver(KernelGlobals kg,
-                                               const ccl_private ShaderData *sd,
-                                               ccl_private ShaderData *sd_vtx,
-                                               const ccl_private LightSample *ls,
-                                               const bool light_fixed_direction,
-                                               const int vertex_count,
-                                               ccl_private ManifoldVertex *vertices)
+ccl_device_inline bool mnee_newton_solver(KernelGlobals kg,
+                                          const ccl_private ShaderData *sd,
+                                          ccl_private ShaderData *sd_vtx,
+                                          const ccl_private LightSample *ls,
+                                          const bool light_fixed_direction,
+                                          const int vertex_count,
+                                          ccl_private ManifoldVertex *vertices)
 {
   float2 dx[MNEE_MAX_CAUSTIC_CASTERS];
   ManifoldVertex tentative[MNEE_MAX_CAUSTIC_CASTERS];
@@ -581,11 +573,11 @@ ccl_device_forceinline bool mnee_newton_solver(KernelGlobals kg,
 }
 
 /* Sample bsdf in half-vector measure. */
-ccl_device_forceinline float2 mnee_sample_bsdf_dh(ClosureType type,
-                                                  const float alpha_x,
-                                                  const float alpha_y,
-                                                  const float sample_u,
-                                                  const float sample_v)
+ccl_device_inline float2 mnee_sample_bsdf_dh(ClosureType type,
+                                             const float alpha_x,
+                                             const float alpha_y,
+                                             const float sample_u,
+                                             const float sample_v)
 {
   float alpha2;
   float cos_phi;
@@ -626,10 +618,10 @@ ccl_device_forceinline float2 mnee_sample_bsdf_dh(ClosureType type,
  * We assume here that the pdf (in half-vector measure) is the same as
  * the one calculation when sampling the microfacet normals from the
  * specular chain above: this allows us to simplify the bsdf weight */
-ccl_device_forceinline Spectrum mnee_eval_bsdf_contribution(KernelGlobals kg,
-                                                            ccl_private ShaderClosure *closure,
-                                                            const float3 wi,
-                                                            const float3 wo)
+ccl_device_inline Spectrum mnee_eval_bsdf_contribution(KernelGlobals kg,
+                                                       ccl_private ShaderClosure *closure,
+                                                       const float3 wi,
+                                                       const float3 wo)
 {
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)closure;
 
@@ -668,13 +660,13 @@ ccl_device_forceinline Spectrum mnee_eval_bsdf_contribution(KernelGlobals kg,
 }
 
 /* Compute transfer matrix determinant |T1| = |dx1/dxn| (and |dh/dx| in the process) */
-ccl_device_forceinline bool mnee_compute_transfer_matrix(const ccl_private ShaderData *sd,
-                                                         const ccl_private LightSample *ls,
-                                                         const bool light_fixed_direction,
-                                                         const int vertex_count,
-                                                         ccl_private ManifoldVertex *vertices,
-                                                         ccl_private float *dx1_dxlight,
-                                                         ccl_private float *dh_dx)
+ccl_device_inline bool mnee_compute_transfer_matrix(const ccl_private ShaderData *sd,
+                                                    const ccl_private LightSample *ls,
+                                                    const bool light_fixed_direction,
+                                                    const int vertex_count,
+                                                    ccl_private ManifoldVertex *vertices,
+                                                    ccl_private float *dx1_dxlight,
+                                                    ccl_private float *dh_dx)
 {
   /* Simplified block tridiagonal LU factorization. */
   float4 Li;
@@ -796,15 +788,15 @@ ccl_device_forceinline bool mnee_compute_transfer_matrix(const ccl_private Shade
 }
 
 /* Calculate the path contribution. */
-ccl_device_forceinline bool mnee_path_contribution(KernelGlobals kg,
-                                                   IntegratorState state,
-                                                   ccl_private ShaderData *sd,
-                                                   ccl_private ShaderData *sd_mnee,
-                                                   ccl_private LightSample *ls,
-                                                   const bool light_fixed_direction,
-                                                   const int vertex_count,
-                                                   ccl_private ManifoldVertex *vertices,
-                                                   ccl_private BsdfEval *throughput)
+ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
+                                                          IntegratorState state,
+                                                          ccl_private ShaderData *sd,
+                                                          ccl_private ShaderData *sd_mnee,
+                                                          ccl_private LightSample *ls,
+                                                          const bool light_fixed_direction,
+                                                          const int vertex_count,
+                                                          ccl_private ManifoldVertex *vertices,
+                                                          ccl_private BsdfEval *throughput)
 {
   float wo_len;
   float3 wo = normalize_len(vertices[0].p - sd->P, &wo_len);
@@ -826,30 +818,28 @@ ccl_device_forceinline bool mnee_path_contribution(KernelGlobals kg,
   /* Set diffuse bounce info. */
   INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce + 1;
 
-  /* Evaluate light sample
-   * in case the light has a node-based shader:
-   * 1. sd_mnee will be used to store light data, which is why we need to do
-   *    this evaluation here. sd_mnee needs to contain the solution's last
-   *    interface data at the end of the call for the shadow ray setup to work.
-   * 2. ls needs to contain the last interface data for the light shader to
-   *    evaluate properly */
-
   /* Set bounce info in case a light path node is used in the light shader graph. */
   INTEGRATOR_STATE_WRITE(state, path, transmission_bounce) = transmission_bounce + vertex_count -
                                                              1;
   INTEGRATOR_STATE_WRITE(state, path, bounce) = bounce + vertex_count;
 
-  const Spectrum light_eval = light_sample_shader_eval(kg, state, sd_mnee, ls, sd->time);
-  bsdf_eval_mul(throughput, light_eval / ls->pdf);
+  if (sd_mnee->flag & SD_CACHE_MISS) {
+    /* Restore original state path bounce info. */
+    INTEGRATOR_STATE_WRITE(state, path, transmission_bounce) = transmission_bounce;
+    INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce;
+    INTEGRATOR_STATE_WRITE(state, path, bounce) = bounce;
+
+    return SHADER_EVAL_CACHE_MISS;
+  }
+  bsdf_eval_mul(throughput, ls->eval_fac / ls->pdf);
 
   /* Generalized geometry term. */
-
   float dh_dx;
   float dx1_dxlight;
   if (!mnee_compute_transfer_matrix(
           sd, ls, light_fixed_direction, vertex_count, vertices, &dx1_dxlight, &dh_dx))
   {
-    return false;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* Receiver bsdf eval above already contains |n.wo|. */
@@ -888,7 +878,7 @@ ccl_device_forceinline bool mnee_path_contribution(KernelGlobals kg,
                                  probe_isect.object;
       /* Test whether the ray hit the appropriate object at its intended location. */
       if (hit_object != v.object || fabsf(probe_ray.tmax - probe_isect.t) > MNEE_MIN_DISTANCE) {
-        return false;
+        return SHADER_EVAL_EMPTY;
       }
     }
     probe_ray.self.object = v.object;
@@ -923,6 +913,13 @@ ccl_device_forceinline bool mnee_path_contribution(KernelGlobals kg,
     /* Evaluate shader nodes at solution vi. */
     surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
         kg, state, sd_mnee, nullptr, PATH_RAY_DIFFUSE, true);
+    if (sd_mnee->flag & SD_CACHE_MISS) {
+      /* Restore original state path bounce info. */
+      INTEGRATOR_STATE_WRITE(state, path, transmission_bounce) = transmission_bounce;
+      INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce;
+      INTEGRATOR_STATE_WRITE(state, path, bounce) = bounce;
+      return SHADER_EVAL_CACHE_MISS;
+    }
 
     /* Set light looking direction. */
     wo = (vi == vertex_count - 1) ? (light_fixed_direction ? ls->D : ls->P - v.p) :
@@ -941,17 +938,18 @@ ccl_device_forceinline bool mnee_path_contribution(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce;
   INTEGRATOR_STATE_WRITE(state, path, bounce) = bounce;
 
-  return true;
+  return SHADER_EVAL_OK;
 }
 
 /* Manifold next event estimation path sampling. */
-ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
-                                                   IntegratorState state,
-                                                   ccl_private ShaderData *sd,
-                                                   ccl_private ShaderData *sd_mnee,
-                                                   const ccl_private RNGState *rng_state,
-                                                   ccl_private LightSample *ls,
-                                                   ccl_private BsdfEval *throughput)
+ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
+                                                           IntegratorState state,
+                                                           ccl_private ShaderData *sd,
+                                                           ccl_private ShaderData *sd_mnee,
+                                                           const ccl_private RNGState *rng_state,
+                                                           ccl_private LightSample *ls,
+                                                           ccl_private BsdfEval *throughput,
+                                                           ccl_private int &r_vertex_count)
 {
   /*
    * 1. send seed ray from shading point to light sample position (or along sampled light
@@ -969,7 +967,7 @@ ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
   probe_ray.P = sd->P;
   probe_ray.tmin = 0.0f;
   if (ls->t == FLT_MAX) {
-    /* Distant / env light. */
+    /* Distant light. */
     probe_ray.D = ls->D;
     probe_ray.tmax = ls->t;
   }
@@ -992,17 +990,17 @@ ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
       break;
     }
 
-    const int object_flags = intersection_get_object_flags(kg, &probe_isect);
+    const uint object_flags = intersection_get_object_flags(kg, &probe_isect);
     if (object_flags & SD_OBJECT_CAUSTICS_CASTER) {
 
       /* Do we have enough slots. */
       if (vertex_count >= MNEE_MAX_CAUSTIC_CASTERS) {
-        return 0;
+        return SHADER_EVAL_EMPTY;
       }
 
       /* Reject caster if it is not a triangles mesh. */
       if (!(probe_isect.type & PRIMITIVE_TRIANGLE)) {
-        return 0;
+        return SHADER_EVAL_EMPTY;
       }
 
       ccl_private ManifoldVertex &mv = vertices[vertex_count++];
@@ -1014,12 +1012,15 @@ ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
        * differential geometry can be created at any point on the surface which is not possible if
        * normals are not smooth. */
       if (!(sd_mnee->shader & SHADER_SMOOTH_NORMAL)) {
-        return 0;
+        return SHADER_EVAL_EMPTY;
       }
 
       /* Last bool argument is the MNEE flag (for TINY_MAX_CLOSURE cap in kernel_shader.h). */
       surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
           kg, state, sd_mnee, nullptr, PATH_RAY_DIFFUSE, true);
+      if (sd_mnee->flag & SD_CACHE_MISS) {
+        return SHADER_EVAL_CACHE_MISS;
+      }
 
       /* Get and sample refraction bsdf */
       bool found_refractive_microfacet_bsdf = false;
@@ -1052,7 +1053,7 @@ ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
         }
       }
       if (!found_refractive_microfacet_bsdf) {
-        return 0;
+        return SHADER_EVAL_EMPTY;
       }
     }
 
@@ -1065,27 +1066,27 @@ ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, mnee) &= ~PATH_MNEE_VALID;
 
   if (vertex_count == 0) {
-    return 0;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* Check whether the transmission depth limit is reached before continuing. */
   if ((INTEGRATOR_STATE(state, path, transmission_bounce) + vertex_count - 1) >=
       kernel_data.integrator.max_transmission_bounce)
   {
-    return 0;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* Check whether the diffuse depth limit is reached before continuing. */
   if ((INTEGRATOR_STATE(state, path, diffuse_bounce) + 1) >=
       kernel_data.integrator.max_diffuse_bounce)
   {
-    return 0;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* Check whether the overall depth limit is reached before continuing. */
   if ((INTEGRATOR_STATE(state, path, bounce) + vertex_count) >= kernel_data.integrator.max_bounce)
   {
-    return 0;
+    return SHADER_EVAL_EMPTY;
   }
 
   /* Mark the manifold walk valid to turn off mollification regardless of how successful the walk
@@ -1094,7 +1095,7 @@ ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
    * discontinuity is visible between direct and indirect contributions */
   INTEGRATOR_STATE_WRITE(state, path, mnee) |= PATH_MNEE_VALID;
 
-  /* Distant or environment light. */
+  /* Distant light. */
   bool light_fixed_direction = (ls->t == FLT_MAX);
   if (ls->type == LIGHT_AREA) {
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
@@ -1108,16 +1109,21 @@ ccl_device_forceinline int kernel_path_mnee_sample(KernelGlobals kg,
    * each interface. */
   if (mnee_newton_solver(kg, sd, sd_mnee, ls, light_fixed_direction, vertex_count, vertices)) {
     /* 3. If a solution exists, calculate contribution of the corresponding path */
-    if (!mnee_path_contribution(
-            kg, state, sd, sd_mnee, ls, light_fixed_direction, vertex_count, vertices, throughput))
-    {
-      return 0;
+    ShaderEvalResult result = mnee_path_contribution(
+        kg, state, sd, sd_mnee, ls, light_fixed_direction, vertex_count, vertices, throughput);
+    /* TODO: Cache misses are not handled correctly.
+     * - PATH_MNEE_VALID flag is not handled properly
+     * - AOVs and other passes have already been written at this point
+     * MNEE should be moved into its own kernel to solve this problem. */
+    if (result != SHADER_EVAL_OK) {
+      return result;
     }
 
-    return vertex_count;
+    r_vertex_count = vertex_count;
+    return SHADER_EVAL_OK;
   }
 
-  return 0;
+  return SHADER_EVAL_EMPTY;
 }
 
 CCL_NAMESPACE_END

@@ -18,12 +18,12 @@ if(WIN32 AND NOT WITH_WINDOWS_EXTERNAL_MANIFEST)
 endif()
 
 set(LIB
-  PRIVATE PRIVATE bf::blenlib
+  PRIVATE bf::blenlib
   PRIVATE bf::intern::guardedalloc
-  ${ZLIB_LIBRARIES}
+  PRIVATE bf::dependencies::zlib
   ${PLATFORM_LINKLIBS})
 
-add_cc_flags_custom_test(msgfmt)
+add_c_and_cxx_flags_custom_test(msgfmt)
 
 if(WIN32)
   string(APPEND CMAKE_EXE_LINKER_FLAGS_DEBUG " /nodefaultlib:MSVCRT.lib")

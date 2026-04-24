@@ -22,6 +22,8 @@
 #include "BLI_enum_flags.hh"
 #include "BLI_fileops_types.h"
 
+namespace blender {
+
 #ifndef PATH_MAX
 #  define PATH_MAX 4096
 #endif
@@ -31,10 +33,15 @@
  * \{ */
 
 /**
+ * Returns true if the path (file or directory) exists.
+ */
+bool BLI_exists(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+
+/**
  * Returns the st_mode from stat-ing the specified path name, or 0 if stat fails
  * (most likely doesn't exist or no access).
  */
-int BLI_exists(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+int BLI_file_stat_mode(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 /**
  * \return 0 on success.
@@ -137,7 +144,7 @@ int64_t BLI_lseek(int fd, int64_t offset, int whence);
 int BLI_wstat(const wchar_t *path, BLI_stat_t *buffer);
 #endif
 
-typedef enum eFileAttributes {
+enum eFileAttributes {
   FILE_ATTR_READONLY = 1 << 0,        /* Read-only or Immutable. */
   FILE_ATTR_HIDDEN = 1 << 1,          /* Hidden or invisible. */
   FILE_ATTR_SYSTEM = 1 << 2,          /* Used by the Operating System. */
@@ -154,7 +161,7 @@ typedef enum eFileAttributes {
   FILE_ATTR_JUNCTION_POINT = 1 << 13, /* Folder Symbolic-link. */
   FILE_ATTR_MOUNT_POINT = 1 << 14,    /* Volume mounted as a folder. */
   FILE_ATTR_HARDLINK = 1 << 15,       /* Duplicated directory entry. */
-} eFileAttributes;
+};
 ENUM_OPERATORS(eFileAttributes);
 
 #define FILE_ATTR_ANY_LINK \
@@ -167,7 +174,7 @@ ENUM_OPERATORS(eFileAttributes);
 /** \name External File Operations
  * \{ */
 
-typedef enum FileExternalOperation {
+enum FileExternalOperation {
   FILE_EXTERNAL_OPERATION_OPEN = 1,
   FILE_EXTERNAL_OPERATION_FOLDER_OPEN,
   /* Following are Windows-only: */
@@ -184,7 +191,7 @@ typedef enum FileExternalOperation {
   FILE_EXTERNAL_OPERATION_PROPERTIES,
   FILE_EXTERNAL_OPERATION_FOLDER_FIND,
   FILE_EXTERNAL_OPERATION_FOLDER_CMD,
-} FileExternalOperation;
+};
 
 bool BLI_file_external_operation_supported(const char *filepath, FileExternalOperation operation);
 bool BLI_file_external_operation_execute(const char *filepath, FileExternalOperation operation);
@@ -235,7 +242,7 @@ char *BLI_current_working_dir(char *dir, size_t maxncpy) ATTR_WARN_UNUSED_RESULT
  * instead of attempting to create a fallback such as `/`, `/tmp`, `C:\` ... etc.
  * Although there may be rare cases where a fallback is appropriate.
  */
-const char *BLI_dir_home(void);
+const char *BLI_dir_home();
 
 eFileAttributes BLI_file_attributes(const char *path);
 /**
@@ -413,7 +420,7 @@ void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
                                             size_t pad_bytes,
                                             size_t *r_size);
 
-void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size);
+char *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size);
 /**
  * Return the text file data with:
  *
@@ -442,7 +449,7 @@ void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *
  * }
  * \endcode
  */
-void *BLI_file_read_text_as_mem_with_newline_as_nil(const char *filepath,
+char *BLI_file_read_text_as_mem_with_newline_as_nil(const char *filepath,
                                                     bool trim_trailing_space,
                                                     size_t pad_bytes,
                                                     size_t *r_size);
@@ -462,3 +469,5 @@ void BLI_get_short_name(char short_name[256], const char *filepath);
 #endif
 
 /** \} */
+
+}  // namespace blender

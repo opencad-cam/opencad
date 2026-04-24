@@ -14,6 +14,8 @@
 
 #include "BLI_noise.h" /* Own include. */
 
+namespace blender {
+
 /* local */
 static float noise3_perlin(const float vec[3]);
 // static float turbulence_perlin(const float point[3], float lofreq, float hifreq);
@@ -856,7 +858,7 @@ float BLI_noise_hnoisep(float noisesize, float x, float y, float z)
  * \{ */
 
 /* distance metrics for voronoi, e parameter only used in Minkowski */
-/* Camberra omitted, didn't seem useful */
+/* Canberra omitted, didn't seem useful. */
 
 /* distance squared */
 static float dist_Squared(float x, float y, float z, float e)
@@ -1689,3 +1691,5 @@ float BLI_noise_mg_variable_lacunarity(
 }
 
 /** \} */
+
+}  // namespace blender

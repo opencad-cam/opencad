@@ -229,6 +229,7 @@ const bTheme U_theme_default = {
       .text_sel = RGBA(0xffffffff),
       .roundness = 0.2f,
     },
+    .link = RGBA(0x6FA9E6ff),
     .wcol_state = {
       .error = RGBA(0x771111ff),
       .warning = RGBA(0xac8737ff),
@@ -371,6 +372,7 @@ const bTheme U_theme_default = {
     .header_text = RGBA(0xeeeeeeff),
     .header_text_hi = RGBA(0xffffffff),
     .grid = RGBA(0x54545480),
+    .grid_major = RGBA(0x545454ff),
     .wire = RGBA(0x000000ff),
     .wire_edit = RGBA(0x000000ff),
     .select = RGBA(0xed5700ff),
@@ -704,6 +706,7 @@ const bTheme U_theme_default = {
     .vertex_size = 3,
     .outline_width = 1,
     .facedot_size = 4,
+    .match = RGBA(0x4772b3ff),
   },
   .space_console = {
     .back = RGBA(0x1d1d1d00),

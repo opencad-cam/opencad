@@ -67,16 +67,16 @@ void template_preview(Layout *layout,
 
   if (id && (GS(id->name) == ID_TE)) {
     if (parent && (GS(parent->name) == ID_MA)) {
-      pr_texture = &((Material *)parent)->pr_texture;
+      pr_texture = &(id_cast<Material *>(parent))->pr_texture;
     }
     else if (parent && (GS(parent->name) == ID_WO)) {
-      pr_texture = &((World *)parent)->pr_texture;
+      pr_texture = &(id_cast<World *>(parent))->pr_texture;
     }
     else if (parent && (GS(parent->name) == ID_LA)) {
-      pr_texture = &((Light *)parent)->pr_texture;
+      pr_texture = &(id_cast<Light *>(parent))->pr_texture;
     }
     else if (parent && (GS(parent->name) == ID_LS)) {
-      pr_texture = &((FreestyleLineStyle *)parent)->pr_texture;
+      pr_texture = &(id_cast<FreestyleLineStyle *>(parent))->pr_texture;
     }
 
     if (pr_texture) {
@@ -101,7 +101,7 @@ void template_preview(Layout *layout,
       BLI_findstring(&region->ui_previews, preview_id, offsetof(uiPreview, preview_id)));
 
   if (!ui_preview) {
-    ui_preview = MEM_new_for_free<uiPreview>(__func__);
+    ui_preview = MEM_new<uiPreview>(__func__);
     STRNCPY_UTF8(ui_preview->preview_id, preview_id);
     ui_preview->height = short(UI_UNIT_Y * 7.6f);
     ui_preview->id_session_uid = pid->session_uid;
@@ -150,10 +150,10 @@ void template_preview(Layout *layout,
   if (pid && show_buttons) {
     if (GS(pid->name) == ID_MA || (pparent && GS(pparent->name) == ID_MA)) {
       if (GS(pid->name) == ID_MA) {
-        ma = (Material *)pid;
+        ma = id_cast<Material *>(pid);
       }
       else {
-        ma = (Material *)pparent;
+        ma = id_cast<Material *>(pparent);
       }
 
       /* Create RNA Pointer */
