@@ -1,15 +1,18 @@
 [submodule "opencad/external/sam3d"]
 	path = opencad/external/sam3d
 	url = https://github.com/Pointcept/SegmentAnything3D.git
-[submodule "ElmerFEM"]
-	path = ElmerFEM
-	url = https://github.com/ElmerCSC/elmerfem.git
-[submodule "OpenFOAM"]
-	path = OpenFOAM
-	url = https://github.com/OpenFOAM/OpenFOAM-dev.git
 [submodule "OpenFOAM-13"]
 	path = OpenFOAM-13
 	url = https://github.com/OpenFOAM/OpenFOAM-13.git
 [submodule "CalculiX"]
 	path = CalculiX
 	url = https://github.com/Dhondtguido/CalculiX.git
+[submodule "elmerfem"]
+	path = elmerfem
+	url = https://github.com/ElmerCSC/elmerfem.git
+[submodule "OpenModelica"]
+	path = OpenModelica
+	url = https://github.com/OpenModelica/OpenModelica.git
+[submodule "blender"]
+	path = blender
+	url = https://projects.blender.org/blender/blender.git
